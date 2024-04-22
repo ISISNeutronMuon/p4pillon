@@ -7,19 +7,16 @@ from p4p.server.thread import Handler, SharedPV
 from .utils import time_in_seconds_and_nanoseconds
 
 
-class BaseHandler(Handler):
+class RWHandler(Handler):
+    """A handler that allows two methods of changing the value of a PV"""
     def __init__(self) -> None:
         super().__init__()
-
+    
     def _update_timestamp(self, value: Value) -> Value:
         if not value.changed("timeStamp"):
             seconds, nanoseconds = time_in_seconds_and_nanoseconds(time.time())
             value.timeStamp = {"secondsPastEpoch": seconds, "nanoseconds": nanoseconds}
         return value
-
-
-class RWHandler(BaseHandler):
-    """A handler that allows two methods of changing the value of a PV"""
 
     def put(self, pv_: SharedPV, op: ServerOperation):
         """This callback is run whenever you do `ctx.put` on the PV"""
