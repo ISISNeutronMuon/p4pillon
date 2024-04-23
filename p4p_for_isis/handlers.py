@@ -9,9 +9,10 @@ from .utils import time_in_seconds_and_nanoseconds
 
 class RWHandler(Handler):
     """A handler that allows two methods of changing the value of a PV"""
+
     def __init__(self) -> None:
         super().__init__()
-    
+
     def _update_timestamp(self, value: Value) -> Value:
         if not value.changed("timeStamp"):
             seconds, nanoseconds = time_in_seconds_and_nanoseconds(time.time())
