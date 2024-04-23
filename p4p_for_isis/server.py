@@ -41,6 +41,8 @@ class ISISServer:
         self._pvs[pv_name] = pv_object
 
     def removePV(self, pv_name: str):
+        if not pv_name.startswith(self.prefix):
+            pv_name = self.prefix + pv_name
         del self._pvs[pv_name]
 
     @property
