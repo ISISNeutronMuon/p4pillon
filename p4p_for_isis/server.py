@@ -7,7 +7,32 @@ from .utils import validate_pv_name
 
 
 class ISISServer:
-    def __init__(self, prefix="") -> None:
+    def __init__(
+        self, ioc_name: str, section: str, description: str, prefix=""
+    ) -> None:
+        """
+        Initialize the ISIS Server instance.
+
+        Parameters:
+        - ioc_name (str): A PV naming convention compatible name for the IOC (Input/Output Controller).
+        - section (str): The section or group responsible for the server e.g. Controls Software Applications, Diagnostics etc.
+        - description (str): A detailed description of the server and what it does.
+        - prefix (str, optional): The prefix to be added to the PVs (Process Variables) of the server e.g. DEV: Defaults to "".
+
+        Attributes:
+        - ioc_name (str): The name of the IOC (Input/Output Controller).
+        - section (str): The section of the server.
+        - description (str): A description of the server.
+        - prefix (str): The prefix to be added to the PVs (Process Variables) of the server.
+        - _provider (StaticProvider): The provider responsible for serving PVs.
+        - _server (None): Placeholder for the server instance.
+        - _pvs (dict): Dictionary to store PVs. NOTE these do not necessarily have to be initialised or opened yet
+        """
+        # provide information for IOC stats PVs
+        self.ioc_name = ioc_name
+        self.section = section
+        self.description = description
+        # the prefix determines the prefix of the PVs to be added to the server e.g. DEV:
         self.prefix = prefix
         self._provider = StaticProvider()
         self._server = None
@@ -15,9 +40,9 @@ class ISISServer:
 
     def start(self):
         # iterate over all the PVs and initialise them if they haven't
-        # been already
-        # then add them to the provider
-        # then start the server
+        # been already, add them to the provider and start the server
+        # this means that PVs are only 'opened' and given a time stamp
+        # at the time the server itself is started
         for pv_name, pv in self._pvs.items():
             pv.initialise()
             self._provider.add(pv_name, pv)
