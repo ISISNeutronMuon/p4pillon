@@ -73,3 +73,8 @@ class ISISServer:
     @property
     def pvlist(self) -> List[str]:
         return list(self._pvs.keys())
+
+    def __getitem__(self, pv_name: str) -> BasePV:
+        if not pv_name.startswith(self.prefix):
+            pv_name = self.prefix + pv_name
+        return self._pvs.get(pv_name)
