@@ -1,8 +1,10 @@
 from typing import Dict, List
 
+from p4p.nt import NTBase
 from p4p.server import Server, StaticProvider
 
-from .pvs import BasePV
+from p4p_for_isis.pvrecipe import PVScalarRecipe
+
 from .utils import validate_pv_name
 
 
@@ -44,7 +46,7 @@ class ISISServer:
         # this means that PVs are only 'opened' and given a time stamp
         # at the time the server itself is started
         for pv_name, pv in self._pvs.items():
-            pv.initialise()
+            # pv.initialise()
             self._provider.add(pv_name, pv)
 
         self._server = Server(providers=[self._provider])
@@ -59,11 +61,13 @@ class ISISServer:
         self._server.stop()
         print("\nStopped server")
 
-    def addPV(self, pv_name: str, pv_object: BasePV):
+    def addPV(self, pv_name: str, pv_recipe: PVScalarRecipe) -> NTBase:
         if not pv_name.startswith(self.prefix):
             pv_name = self.prefix + pv_name
         pv_name = validate_pv_name(pv_name)
-        self._pvs[pv_name] = pv_object
+        returnval = self._pvs[pv_name] = pv_recipe.create_pv()
+
+        return returnval
 
     def removePV(self, pv_name: str):
         if not pv_name.startswith(self.prefix):
@@ -74,7 +78,7 @@ class ISISServer:
     def pvlist(self) -> List[str]:
         return list(self._pvs.keys())
 
-    def __getitem__(self, pv_name: str) -> BasePV:
+    def __getitem__(self, pv_name: str) -> NTBase:
         if not pv_name.startswith(self.prefix):
             pv_name = self.prefix + pv_name
         return self._pvs.get(pv_name)
