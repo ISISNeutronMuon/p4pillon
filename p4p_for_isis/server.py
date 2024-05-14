@@ -65,7 +65,7 @@ class ISISServer:
         if not pv_name.startswith(self.prefix):
             pv_name = self.prefix + pv_name
         pv_name = validate_pv_name(pv_name)
-        returnval = self._pvs[pv_name] = pv_recipe.create_pv()
+        returnval = self._pvs[pv_name] = pv_recipe.create_pv(pv_name)
 
         return returnval
 
