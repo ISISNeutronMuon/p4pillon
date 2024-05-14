@@ -36,7 +36,7 @@ class NTScalarRulesHandler(Handler):
             Callable[[dict, Value], Value]
         ]()
         self._init_rules = { 
-            'control' : self.evaluate_alarm_limits,
+            'control' : self.evaluate_control_limits,
             'alarm_limit' : self.evaluate_alarm_limits
         }
 
@@ -143,7 +143,7 @@ class NTScalarRulesHandler(Handler):
 
         # Check if there are any controls!
         if "control" not in newpvstate and "control" not in oldpvstate:
-            logger.info("control not present in structure")
+            logger.debug("control not present in structure")
             return self.RulesFlow.CONTINUE
 
         combinedvals = self._combined_pvstates(oldpvstate, newpvstate, "control")
@@ -167,6 +167,7 @@ class NTScalarRulesHandler(Handler):
         """ Check whether a value should be clipped by the control limits """
 
         if not 'control' in combinedvals:
+            logger.debug("control not present in structure")
             return None
 
         # A philosophical question! What should we do when lowLimit = highLimit = 0?
@@ -248,7 +249,6 @@ class NTScalarRulesHandler(Handler):
         """ Evaluate alarm value limits """
         if 'valueAlarm' not in combinedvals:
             logger.debug("valueAlarm not present in structure")
-            print(combinedvals)
             return None
 
         # Check if valueAlarms are present and active!
