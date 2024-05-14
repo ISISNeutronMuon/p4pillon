@@ -31,25 +31,40 @@ class NTScalarRulesHandler(Handler):
     def __init__(self) -> None:
         super().__init__()
         self._name = None
+
+        self._init_rules = OrderedDict[
+            Callable[[dict, Value], Value]
+        ]()
+        self._init_rules = { 
+            'control' : self.evaluate_alarm_limits,
+            'alarm_limit' : self.evaluate_alarm_limits
+        }
+
         self._put_rules = OrderedDict[
             Callable[[SharedPV, ServerOperation], self.RulesFlow]
         ]()
-
         self._put_rules["control"] = self._controls_rule
         self._put_rules["alarm_limit"] = self._alarm_limit_rule
         self._put_rules["timestamp"] = self._timestamp_rule
+
+    def _post_init(self, pv : SharedPV):
+        for post_init_rule_name, post_init_rule in self._init_rules.items():
+            logger.debug('Processing post init rule %s', post_init_rule_name)
+            value = post_init_rule(pv.current().raw, pv.current().raw)
+            if value:
+                pv.post(value=value)
 
 
     def put(self, pv: SharedPV, op: ServerOperation) -> None:
         """Put that applies a set of rules"""
         self._name = op.name()
+        logger.debug("Processing attempt to change PV %s by %s (member of %s) at %s", op.name(), op.account(), op.roles(), op.peer())
 
         # oldpvstate : Value = pv.current().raw
         newpvstate: Value = op.value().raw
 
-        logger.info("Processing changes to PV %s", op.name())
         logger.debug(
-            "Changes to the following fields: %r (%s)",
+            "Processing changes to the following fields: %r (value = %s)",
             newpvstate.changedSet(),
             newpvstate["value"],
         )
@@ -65,9 +80,11 @@ class NTScalarRulesHandler(Handler):
         pv.post(op.value())  # just store and update subscribers
 
         op.done()
+        logger.info("Processed change to PV %s by %s (member of %s) at %s", op.name(), op.account(), op.roles(), op.peer())
 
     def _apply_rules(self, pv: SharedPV, op: ServerOperation) -> bool:
         for rule_name, put_rule in self._put_rules.items():
+            logger.debug('Applying rule %s', rule_name)
             rule_flow = put_rule(pv, op)
 
             match (rule_flow):
@@ -100,16 +117,22 @@ class NTScalarRulesHandler(Handler):
 
         # Note that timestamps are not automatically handled so we may need to set them ourselves
         newpvstate: Value = op.value().raw
+        self.evaluate_timestamp(_, newpvstate)
 
+        return self.RulesFlow.CONTINUE
+
+    def evaluate_timestamp(self, _ : dict, newpvstate : Value):
+        """ Update the timeStamp of a PV """
         if newpvstate.changed("timeStamp"):
             logger.debug("Using timeStamp from put operation")
         else:
-            logger.debug("Generating timeStamp")
+            logger.debug("Generating timeStamp from time.time()")
             sec, nsec = time_in_seconds_and_nanoseconds(time.time())
             newpvstate["timeStamp.secondsPastEpoch"] = sec
             newpvstate["timeStamp.nanoseconds"] = nsec
 
-        return self.RulesFlow.CONTINUE
+        return newpvstate
+
 
     def _controls_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
         """Check whether control limits should trigger and restrict values appropriately"""
@@ -132,6 +155,19 @@ class NTScalarRulesHandler(Handler):
         ):
             logger.debug("<minStep")
             newpvstate["value"] = oldpvstate["value"]
+            return self.RulesFlow.CONTINUE
+
+        value = self.evaluate_control_limits(combinedvals, None)
+        if value:
+            newpvstate["value"] = value
+
+        return self.RulesFlow.CONTINUE
+
+    def evaluate_control_limits(self, combinedvals : dict, _):
+        """ Check whether a value should be clipped by the control limits """
+
+        if not 'control' in combinedvals:
+            return None
 
         # A philosophical question! What should we do when lowLimit = highLimit = 0?
         # This almost certainly means the structure hasn't been initialised, but it could
@@ -145,20 +181,21 @@ class NTScalarRulesHandler(Handler):
             logger.info(
                 "control.limitLow and control.LimitHigh set to 0, so ignoring control limits"
             )
-            return self.RulesFlow.CONTINUE
+            return None
 
         # Check lower and upper control limits
         if combinedvals["value"] < combinedvals["control.limitLow"]:
-            logger.debug("Lower limit")
-            newpvstate["value"] = combinedvals["control.limitLow"]
-            return self.RulesFlow.CONTINUE
+            value = combinedvals["control.limitLow"]
+            logger.debug("Lower control limit exceeded, changing value to %s", value)
+            return value
 
         if combinedvals["value"] > combinedvals["control.limitHigh"]:
-            logger.debug("Upper limit")
-            newpvstate["value"] = combinedvals["control.limitHigh"]
-            return self.RulesFlow.CONTINUE
+            value = combinedvals["control.limitHigh"]
+            logger.debug("Upper control limit exceeded, changing value to %s", value)
+            return value
 
-        return True
+        return None
+
 
     def __alarm_state_check(
         self, combinedvals: dict, newpvstate: Value, alarm_type: str, op=None
@@ -193,6 +230,7 @@ class NTScalarRulesHandler(Handler):
         return False
 
     def _alarm_limit_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
+        """ Evaluate alarm limits to see if we should change severity or message"""
         oldpvstate: Value = pv.current().raw
         newpvstate: Value = op.value().raw
 
@@ -201,57 +239,62 @@ class NTScalarRulesHandler(Handler):
             logger.debug("valueAlarm not present in structure")
             return self.RulesFlow.CONTINUE
 
-        logger.debug(
-            "Changes to the following fields: %r (%s)",
-            newpvstate.changedSet(),
-            newpvstate["value"],
-        )
-        combinedvals = self._combined_pvstates(oldpvstate, newpvstate, "valueAlarm")
+        combinedvals = self._combined_pvstates(oldpvstate, newpvstate, ["valueAlarm", "alarm"])
+
+        self.evaluate_alarm_limits(combinedvals, newpvstate)
+        return self.RulesFlow.CONTINUE
+
+    def evaluate_alarm_limits(self, combinedvals, pvstate : Value):
+        """ Evaluate alarm value limits """
+        if 'valueAlarm' not in combinedvals:
+            logger.debug("valueAlarm not present in structure")
+            print(combinedvals)
+            return None
 
         # Check if valueAlarms are present and active!
         if not combinedvals["valueAlarm.active"]:
             logger.debug("\tvalueAlarm not active")
-            return self.RulesFlow.CONTINUE
+            return None
 
         logger.debug("Processing valueAlarm for %s", self._name)
 
         try:
             # The order of these tests is defined in the Normative Types document
-            if self.__alarm_state_check(combinedvals, newpvstate, "highAlarm"):
-                return self.RulesFlow.CONTINUE
-            if self.__alarm_state_check(combinedvals, newpvstate, "lowAlarm"):
-                return self.RulesFlow.CONTINUE
-            if self.__alarm_state_check(combinedvals, newpvstate, "highWarning"):
-                return self.RulesFlow.CONTINUE
-            if self.__alarm_state_check(combinedvals, newpvstate, "lowWarning"):
-                return self.RulesFlow.CONTINUE
+            if self.__alarm_state_check(combinedvals, pvstate, "highAlarm"):
+                return pvstate
+            if self.__alarm_state_check(combinedvals, pvstate, "lowAlarm"):
+                return pvstate
+            if self.__alarm_state_check(combinedvals, pvstate, "highWarning"):
+                return pvstate
+            if self.__alarm_state_check(combinedvals, pvstate, "lowWarning"):
+                return pvstate
         except SyntaxError:
             # TODO: Need more specific error than SyntaxError
-            return self.RulesFlow.CONTINUE
+            return None
 
         # If we made it here then there are no alarms or warnings and we need to indicate that
         # possibly by resetting any existing ones
-        combinedvals = self._combined_pvstates(oldpvstate, newpvstate, "alarm")
+        #combinedvals = self._combined_pvstates(oldpvstate, newpvstate, "alarm")
         alarms_changed = False
         if combinedvals["alarm.severity"]:
-            newpvstate["alarm.severity"] = 0
+            pvstate["alarm.severity"] = 0
             alarms_changed = True
         if combinedvals["alarm.message"]:
-            newpvstate["alarm.message"] = ""
+            pvstate["alarm.message"] = ""
             alarms_changed = True
 
         if alarms_changed:
             logger.info(
                 "Setting %s to severity %i with message '%s'",
-                self._name, newpvstate['alarm.severity'], newpvstate['alarm.message']
+                self._name, pvstate['alarm.severity'], pvstate['alarm.message']
             )
-        else:
-            logger.info("Made no automatic changes to alarm state of %s", self._name)
+            return pvstate
 
-        return self.RulesFlow.CONTINUE
+        logger.debug("Made no automatic changes to alarm state of %s", self._name)
+        return None
 
     def _combined_pvstates(
-        self, oldpvstate: Value, newpvstate: Value, interest: str
+        self, oldpvstate: Value, newpvstate: Value, interests: str | list[str]
     ) -> dict:
         # This is complicated! We may need to process alarms based on either
         # the oldstate or the newstate of the PV. Suppose, for example, the
@@ -268,17 +311,24 @@ class NTScalarRulesHandler(Handler):
             and if it is return the new PV state value
             """
             if newpvstate.changed(key):
-                logger.debug("changed key, value = %s, %s", key, newpvstate[key])
                 return newpvstate[key]
 
             return oldpvstate[key]
 
         combinedvals = {}
         combinedvals["value"] = extract_combined_value(newpvstate, oldpvstate, "value")
-        for key in newpvstate[interest]:
-            fullkey = f"{interest}.{key}"
-            combinedvals[fullkey] = extract_combined_value(
-                newpvstate, oldpvstate, fullkey
-            )
+
+        if isinstance(interests, str):
+            interests = [interests]
+
+        for interest in interests:
+            combinedvals[interest] =  extract_combined_value(
+                    newpvstate, oldpvstate, interest
+                )
+            for key in newpvstate[interest]:
+                fullkey = f"{interest}.{key}"
+                combinedvals[fullkey] = extract_combined_value(
+                    newpvstate, oldpvstate, fullkey
+                )
 
         return combinedvals
