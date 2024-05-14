@@ -139,7 +139,7 @@ class PVScalarRecipe:
                 raise SyntaxError('Alarm limits not supported on enum PVs')
 
 
-    def create_pv(self) -> NTScalar | NTEnum:
+    def create_pv(self, pv_name : str) -> NTScalar | NTEnum:
         ''' Turn the recipe into an actual NTScalar, NTEnum, or 
         other BasePV derived object'''
         construct_settings = {}
@@ -171,6 +171,7 @@ class PVScalarRecipe:
                         timestamp=time.time(),
                         handler=handler)
         pvobj.post(config_settings)
+        handler._name = pv_name
 
         if self.read_only:
             handler._put_rules['read_only'] = lambda new,old: NTScalarRulesHandler.RulesFlow.ABORT
@@ -178,7 +179,6 @@ class PVScalarRecipe:
 
         handler._post_init(pvobj)
         handler._init_rules['timestamp'] = handler.evaluate_timestamp
-        handler._post_init(pvobj)
 
         return pvobj
 
