@@ -1,4 +1,4 @@
-''' Example of simplifed interface for NTScalar creation '''
+""" Example of simplifed interface for NTScalar creation """
 import dataclasses
 import logging
 import time
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Timestamp:
-    ''' Very simple timestamp class '''
+    """ Very simple timestamp class """
     time: float
 
     def time_in_seconds_and_nanoseconds(self) -> tuple[int,int]:
@@ -32,7 +32,7 @@ T = TypeVar('T')
 
 @dataclass
 class Control(Generic[T]):
-    ''' Set limits '''
+    """ Set limits on permitted values """
     limit_low: T
     limit_high: T
     min_step: T
@@ -41,12 +41,13 @@ class Control(Generic[T]):
 
 @dataclass
 class Display(Generic[T]):
+    """ Set limits on values that will be displayed """
     limit_low: T = None
     limit_high: T = None
 
 @dataclass
 class AlarmLimit(Generic[T]):
-    ''' Conditions to test for alarms '''
+    """ Conditions to test for alarms """
     active : bool = True
     low_alarm_limit : T = None
     low_warning_limit : T = None
@@ -70,7 +71,7 @@ class PVScalarRecipe:
 
     # Alarm: alarm = field(init=False)
     timestamp : Timestamp = field(init=False)
-    display: Display = None
+    display : Display = None
     control : Control = None
     alarm_limit : AlarmLimit = None
 
@@ -88,7 +89,7 @@ class PVScalarRecipe:
         ''' Return a shallow copy of this instance '''
         return dataclasses.replace(self)
 
-    def add_control_limits(self, low : Numeric, high : Numeric, min_step : Numeric = 0):
+    def set_control_limits(self, low : Numeric, high : Numeric, min_step : Numeric = 0):
         ''' Add control limits '''
         match self.pvtype:
             case PVTypes.DOUBLE:
@@ -100,7 +101,7 @@ class PVScalarRecipe:
             case PVTypes.ENUM:
                 raise SyntaxError('Control limits not supported on enum PVs')
 
-    def add_display_limits(self, low_limit=None, high_limit=None):
+    def set_display_limits(self, low_limit : Numeric = None , high_limit : Numeric = None ):
         ''' Add display limits '''
         match self.pvtype:
             case PVTypes.DOUBLE: 
@@ -115,9 +116,9 @@ class PVScalarRecipe:
                 raise SyntaxError('Control limits not supported on string PVs')
             case PVTypes.ENUM:
                 raise SyntaxError('Control limits not supported on enum PVs')
-            
 
-    def add_alarm_limits(self, low_warning=None, high_warning=None, low_alarm=None, high_alarm=None):
+
+    def set_alarm_limits(self, low_warning : Numeric = None, high_warning : Numeric = None, low_alarm : Numeric = None, high_alarm : Numeric = None):
         ''' Add alarm limits '''
         match self.pvtype:
             case PVTypes.DOUBLE:
@@ -133,10 +134,10 @@ class PVScalarRecipe:
                 if high_alarm is None: high_alarm = 2147483647
                 self.alarm_limit = AlarmLimit[int](low_alarm_limit=low_alarm, low_warning_limit=low_warning, high_warning_limit=high_warning, high_alarm_limit=high_alarm)
             case PVTypes.STRING:
-                raise SyntaxError('Control limits not supported on string PVs')
+                raise SyntaxError('Alarm limits not supported on string PVs')
             case PVTypes.ENUM:
-                raise SyntaxError('Control limits not supported on enum PVs')
-        
+                raise SyntaxError('Alarm limits not supported on enum PVs')
+
 
     def create_pv(self) -> NTScalar | NTEnum:
         ''' Turn the recipe into an actual NTScalar, NTEnum, or 
@@ -157,7 +158,15 @@ class PVScalarRecipe:
             self._config_alarm_limit(construct_settings, config_settings)
 
         handler = NTScalarRulesHandler()
-        pvobj = SharedPV(nt=NTScalar(**construct_settings),
+        match self.pvtype:
+            case PVTypes.DOUBLE | PVTypes.INTEGER:
+                nt = NTScalar(**construct_settings)
+            case PVTypes.ENUM:
+                nt = NTEnum(**construct_settings)
+            case _:
+                raise NotImplementedError()
+
+        pvobj = SharedPV(nt=nt,
                         initial=self.initial_value,
                         timestamp=time.time(),
                         handler=handler)
@@ -167,7 +176,9 @@ class PVScalarRecipe:
             handler._put_rules['read_only'] = lambda new,old: NTScalarRulesHandler.RulesFlow.ABORT
             handler._put_rules.move_to_end('read_only', last=False)
 
-        # TODO: Need to handle the case where limits and alarms already apply!
+        handler._post_init(pvobj)
+        handler._init_rules['timestamp'] = handler.evaluate_timestamp
+        handler._post_init(pvobj)
 
         return pvobj
 
@@ -193,7 +204,7 @@ class PVScalarRecipe:
                 construct_settings['form'] = True
                 config_settings['display.form.index'] = self.format.value[0]
                 config_settings['display.form.choices'] = ["Default", "String", "Binary", "Decimal", "Hex", "Exponential", "Engineering"]
-     
+
         if self.display:
             construct_settings['display'] = True
             config_settings['display.description'] = self.description
