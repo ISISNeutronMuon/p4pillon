@@ -17,6 +17,11 @@ from .handlers import NTScalarRulesHandler
 
 logger = logging.getLogger(__name__)
 
+MIN_FLOAT = float('-inf')
+MAX_FLOAT = float('inf')
+MIN_INT32 = -2147483648
+MAX_INT32 =  2147483647
+
 @dataclass
 class Timestamp:
     """ Very simple timestamp class """
@@ -104,13 +109,13 @@ class PVScalarRecipe:
     def set_display_limits(self, low_limit : Numeric = None , high_limit : Numeric = None ):
         ''' Add display limits '''
         match self.pvtype:
-            case PVTypes.DOUBLE: 
-                if low_limit is None: low_limit = float('-inf')
-                if high_limit is None: high_limit = float('inf')
+            case PVTypes.DOUBLE:
+                if low_limit is None:  low_limit  = MIN_FLOAT
+                if high_limit is None: high_limit = MAX_FLOAT
                 self.display = Display[float](limit_low=low_limit, limit_high=high_limit)
             case PVTypes.INTEGER:
-                if low_limit is None: low_limit = -2147483648
-                if high_limit is None: high_limit = 2147483647
+                if low_limit is None:  low_limit  = MIN_INT32
+                if high_limit is None: high_limit = MAX_INT32
                 self.display = Display[float](limit_low=low_limit, limit_high=high_limit)
             case PVTypes.STRING:
                 raise SyntaxError('Control limits not supported on string PVs')
@@ -122,16 +127,16 @@ class PVScalarRecipe:
         ''' Add alarm limits '''
         match self.pvtype:
             case PVTypes.DOUBLE:
-                if low_warning is None: low_warning = float('-inf')
-                if high_warning is None: high_warning = float('inf')
-                if low_alarm is None: low_alarm = float('-inf')
-                if high_alarm is None: high_alarm = float('inf')
+                if low_warning is None:  low_warning  = MIN_FLOAT
+                if high_warning is None: high_warning = MAX_FLOAT
+                if low_alarm is None:  low_alarm  = MIN_FLOAT
+                if high_alarm is None: high_alarm = MAX_FLOAT
                 self.alarm_limit = AlarmLimit[float](low_alarm_limit=low_alarm, low_warning_limit=low_warning, high_warning_limit=high_warning, high_alarm_limit=high_alarm)
             case PVTypes.INTEGER:
-                if low_warning is None: low_warning = -2147483648
-                if high_warning is None: high_warning = 2147483647
-                if low_alarm is None: low_alarm = -2147483648
-                if high_alarm is None: high_alarm = 2147483647
+                if low_warning is None:  low_warning  = MIN_INT32
+                if high_warning is None: high_warning = MAX_INT32
+                if low_alarm is None:  low_alarm  = MIN_INT32
+                if high_alarm is None: high_alarm = MAX_INT32
                 self.alarm_limit = AlarmLimit[int](low_alarm_limit=low_alarm, low_warning_limit=low_warning, high_warning_limit=high_warning, high_alarm_limit=high_alarm)
             case PVTypes.STRING:
                 raise SyntaxError('Alarm limits not supported on string PVs')
