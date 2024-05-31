@@ -1,4 +1,4 @@
-""" Example of simplifed interface for NTScalar creation """
+"""Example of simplifed interface for NTScalar creation"""
 
 import dataclasses
 import logging
@@ -13,7 +13,7 @@ from p4p.server.thread import Handler, SharedPV
 from p4p.server import ServerOperation
 from p4p import Value
 
-from .pvs import *
+from .metadata import *
 from .handlers import NTScalarRulesHandler
 
 logger = logging.getLogger(__name__)
@@ -133,9 +133,7 @@ class PVScalarRecipe:
                     low_limit = MIN_INT32
                 if high_limit is None:
                     high_limit = MAX_INT32
-                self.display = Display[int](
-                    limit_low=low_limit, limit_high=high_limit
-                )
+                self.display = Display[int](limit_low=low_limit, limit_high=high_limit)
             case PVTypes.STRING:
                 raise SyntaxError("Control limits not supported on string PVs")
             case PVTypes.ENUM:
