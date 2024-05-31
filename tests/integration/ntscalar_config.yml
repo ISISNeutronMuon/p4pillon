@@ -1,0 +1,13 @@
+TEST:NTSCALAR:RW:DOUBLE:NO_ALARM:
+  read-only: False
+  type: d
+  initial: 1.0
+  display: 
+    description: example PV used for testing NTScalar behaviour
+  
+TEST:NTSCALAR:RO:DOUBLE:NO_ALARM:
+  read-only: True
+  type: d
+  initial: 2.0
+  display: 
+    description: example read-only PV used for testing NTScalar behaviour
