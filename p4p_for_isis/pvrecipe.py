@@ -105,8 +105,21 @@ class PVScalarRecipe:
         """Return a shallow copy of this instance"""
         return dataclasses.replace(self)
 
-    def set_control_limits(self, low: Numeric, high: Numeric, min_step: Numeric = 0):
+    def set_control_limits(self, low: Numeric = None, high: Numeric = None, min_step: Numeric = 0, config: dict = None):
         """Add control limits"""
+        
+        # If config is supplied, use those values. Primarily used for reading in from YAML
+        if config is not None:
+            low = config.get('low')
+            high = config.get('high')
+            if config.get('min_step') is not None:
+                min_step = config.get('min_step')
+
+        if low is None:
+            raise ValueError("low limit not set")
+        if high is None:
+            raise ValueError("high limit not set")
+        
         match self.pvtype:
             case PVTypes.DOUBLE:
                 self.control = Control[float](low, high, min_step)
@@ -117,8 +130,12 @@ class PVScalarRecipe:
             case PVTypes.ENUM:
                 raise SyntaxError("Control limits not supported on enum PVs")
 
-    def set_display_limits(self, low_limit: Numeric = None, high_limit: Numeric = None):
+    def set_display_limits(self, low_limit: Numeric = None, high_limit: Numeric = None, config: dict = None):
         """Add display limits"""
+        if config is not None:
+            low_limit = config.get('limitLow')
+            high_limit = config.get('limitHigh')
+
         match self.pvtype:
             case PVTypes.DOUBLE:
                 if low_limit is None:
@@ -145,8 +162,16 @@ class PVScalarRecipe:
         high_warning: Numeric = None,
         low_alarm: Numeric = None,
         high_alarm: Numeric = None,
+        config: dict = None
     ):
         """Add alarm limits"""
+        print(f"config is {config}")
+        if config is not None:
+            low_warning = config.get('lowWarningLimit')
+            high_warning = config.get('highWarningLimit')
+            low_alarm = config.get('lowAlarmLimit')
+            high_alarm = config.get('highAlarmLimit')
+            
         match self.pvtype:
             case PVTypes.DOUBLE:
                 if low_warning is None:
@@ -201,6 +226,7 @@ class PVScalarRecipe:
         if self.alarm_limit:
             self._config_alarm_limit(construct_settings, config_settings)
 
+        print(f"construct settings are: \n {construct_settings} \n and config settings are:\n {config_settings} ")
         handler = NTScalarRulesHandler()
         match self.pvtype:
             case PVTypes.DOUBLE | PVTypes.INTEGER:
