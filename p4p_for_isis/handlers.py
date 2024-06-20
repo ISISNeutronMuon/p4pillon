@@ -17,10 +17,10 @@ from p4p_for_isis.utils import time_in_seconds_and_nanoseconds
 
 logger = logging.getLogger(__name__)
 
-
-class NTScalarRulesHandler(Handler):
-    """Implement the most common rules for NTScalars"""
-
+class BaseRulesHandler(Handler):
+    """
+    Base class for rules that includes rules common to all PV types.
+    """
     class RulesFlow(Enum):
         """What to do after a rule has been evaluated"""
 
@@ -35,16 +35,11 @@ class NTScalarRulesHandler(Handler):
         self._init_rules = OrderedDict[
             Callable[[dict, Value], Value]
         ]()
-        self._init_rules = { 
-            'control' : self.evaluate_control_limits,
-            'alarm_limit' : self.evaluate_alarm_limits
-        }
-
+        
         self._put_rules = OrderedDict[
             Callable[[SharedPV, ServerOperation], self.RulesFlow]
         ]()
-        self._put_rules["control"] = self._controls_rule
-        self._put_rules["alarm_limit"] = self._alarm_limit_rule
+        
         self._put_rules["timestamp"] = self._timestamp_rule
 
     def _post_init(self, pv : SharedPV):
@@ -53,7 +48,6 @@ class NTScalarRulesHandler(Handler):
             value = post_init_rule(pv.current().raw, pv.current().raw)
             if value:
                 pv.post(value=value)
-
 
     def put(self, pv: SharedPV, op: ServerOperation) -> None:
         """Put that applies a set of rules"""
@@ -133,8 +127,21 @@ class NTScalarRulesHandler(Handler):
 
         return newpvstate
 
+class NTScalarRulesHandler(BaseRulesHandler):
+    
+    def __init__(self) -> None:
+        super().__init__()
 
-    def _controls_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
+        self._init_rules = { 
+            'control' : self.evaluate_control_limits,
+            'alarm_limit' : self.evaluate_alarm_limits
+        }
+
+        self._put_rules["control"] = self._controls_rule
+        self._put_rules["alarm_limit"] = self._alarm_limit_rule
+        self._put_rules.move_to_end("timestamp")        
+
+    def _controls_rule(self, pv: SharedPV, op: ServerOperation) -> BaseRulesHandler.RulesFlow:
         """Check whether control limits should trigger and restrict values appropriately"""
         logger.debug("Evaluating control limits")
 
@@ -197,7 +204,6 @@ class NTScalarRulesHandler(Handler):
 
         return None
 
-
     def __alarm_state_check(
         self, combinedvals: dict, newpvstate: Value, alarm_type: str, op=None
     ) -> bool:
@@ -230,7 +236,7 @@ class NTScalarRulesHandler(Handler):
 
         return False
 
-    def _alarm_limit_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
+    def _alarm_limit_rule(self, pv: SharedPV, op: ServerOperation) -> BaseRulesHandler.RulesFlow:
         """ Evaluate alarm limits to see if we should change severity or message"""
         oldpvstate: Value = pv.current().raw
         newpvstate: Value = op.value().raw
@@ -332,3 +338,4 @@ class NTScalarRulesHandler(Handler):
                 )
 
         return combinedvals
+    
