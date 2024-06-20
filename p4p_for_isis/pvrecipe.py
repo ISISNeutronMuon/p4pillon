@@ -4,6 +4,8 @@ import dataclasses
 import logging
 import time
 
+from abc import abstractmethod
+
 from dataclasses import dataclass, field
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
 from typing import TypeVar, Generic
@@ -74,9 +76,8 @@ class AlarmLimit(Generic[T]):
     high_alarm_severity: AlarmSeverity = AlarmSeverity.MAJOR_ALARM
     hysteresis: T = 0
 
-
 @dataclass
-class PVScalarRecipe:
+class BasePVRecipe:
     """A description of how to build a PV"""
 
     pvtype: PVTypes
@@ -101,10 +102,21 @@ class PVScalarRecipe:
         # Specifically these are the ones tagged with field(init=False)
         self.timestamp = None
 
-    def copy(self) -> "PVScalarRecipe":
+    @abstractmethod
+    def create_pv(self, pv_name: str) -> NTScalar | NTEnum:
+        raise NotImplementedError
+    
+    def copy(self) -> "BasePVRecipe":
         """Return a shallow copy of this instance"""
         return dataclasses.replace(self)
 
+class PVScalarRecipe(BasePVRecipe):
+
+    def __post_init__(self):
+        super().__post_init__()
+        if (self.pvtype != PVTypes.DOUBLE) and (self.pvtype != PVTypes.INTEGER):
+            raise ValueError(f"Unsupported pv type {self.pvtype} for class {self.__class__.__name__}")
+    
     def set_control_limits(self, low: Numeric = None, high: Numeric = None, min_step: Numeric = 0, config: dict = None):
         """Add control limits"""
         
@@ -113,6 +125,7 @@ class PVScalarRecipe:
             low = config.get('low')
             high = config.get('high')
             if config.get('min_step') is not None:
+                # NB if min_step is not in config then the default, min_step=0, is used. 
                 min_step = config.get('min_step')
 
         if low is None:
@@ -208,6 +221,7 @@ class PVScalarRecipe:
             case PVTypes.ENUM:
                 raise SyntaxError("Alarm limits not supported on enum PVs")
 
+    @abstractmethod
     def create_pv(self, pv_name: str) -> NTScalar | NTEnum:
         """Turn the recipe into an actual NTScalar, NTEnum, or
         other BasePV derived object"""
