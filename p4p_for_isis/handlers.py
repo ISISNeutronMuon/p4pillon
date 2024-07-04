@@ -36,6 +36,8 @@ class BaseRulesHandler(Handler):
             Callable[[dict, Value], Value]
         ]()
         
+        self._init_rules["timestamp"] = self.evaluate_timestamp
+
         self._put_rules = OrderedDict[
             Callable[[SharedPV, ServerOperation], self.RulesFlow]
         ]()
@@ -43,6 +45,12 @@ class BaseRulesHandler(Handler):
         self._put_rules["timestamp"] = self._timestamp_rule
 
     def _post_init(self, pv : SharedPV):
+        """
+        This method is called by the pvrecipe after the pv has been created
+        """
+        #Evaluate the timestamp last
+        self._init_rules.move_to_end("timestamp")
+
         for post_init_rule_name, post_init_rule in self._init_rules.items():
             logger.debug('Processing post init rule %s', post_init_rule_name)
             value = post_init_rule(pv.current().raw, pv.current().raw)
@@ -128,14 +136,16 @@ class BaseRulesHandler(Handler):
         return newpvstate
 
 class NTScalarRulesHandler(BaseRulesHandler):
-    
+    """
+    Rules handler for NTScalar PVs.
+    """
     def __init__(self) -> None:
         super().__init__()
 
-        self._init_rules = { 
+        self._init_rules.update({ 
             'control' : self.evaluate_control_limits,
             'alarm_limit' : self.evaluate_alarm_limits
-        }
+        })
 
         self._put_rules["control"] = self._controls_rule
         self._put_rules["alarm_limit"] = self._alarm_limit_rule
@@ -338,4 +348,11 @@ class NTScalarRulesHandler(BaseRulesHandler):
                 )
 
         return combinedvals
-    
+
+class NTScalarArrayRulesHandler(NTScalarRulesHandler):
+    """
+    Rules handler for NTScalarArray PVs.
+    """
+    def __init__(self) -> None:
+        super().__init__()
+        self.is_array = True
