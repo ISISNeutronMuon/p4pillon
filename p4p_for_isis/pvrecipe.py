@@ -263,7 +263,8 @@ class PVScalarRecipe(BasePVRecipe):
             handler._put_rules.move_to_end("read_only", last=False)
 
         handler._post_init(pvobj)
-        handler._init_rules["timestamp"] = handler.evaluate_timestamp
+        # AK: This is now done in the handler. The rule is evaluated last in the above call to _post_init()
+        # handler._init_rules["timestamp"] = handler.evaluate_timestamp
 
         return pvobj
 
