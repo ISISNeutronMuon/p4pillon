@@ -2,7 +2,7 @@ import logging
 import yaml
 from typing import Tuple, List
 
-from .pvrecipe import PVScalarRecipe
+from .pvrecipe import BasePVRecipe, PVScalarRecipe, PVScalarArrayRecipe, PVEnumRecipe
 from .metadata import *
 from p4p_for_isis.server import ISISServer
 
@@ -33,7 +33,7 @@ def get_config(filename:str) -> dict:
 
     return pvconfigs
 
-def process_config(pvconfig : Tuple[str, dict]) -> PVScalarRecipe:
+def process_config(pvconfig : Tuple[str, dict]) -> BasePVRecipe:
     """ 
     Process the configuration of a single PV and update pvrecipe accordingly.
 
@@ -58,7 +58,7 @@ def process_config(pvconfig : Tuple[str, dict]) -> PVScalarRecipe:
     pvdetails = pvconfig[1]
 
     logger.debug(f"Processing configuration for pv {pvname}, config is {pvdetails}")
-    print(f"Processing configuration for pv {pvname}, config is {pvdetails}")
+    
     # Check that type and description are specified, absence is a syntax error
     if 'type' not in pvdetails:
         raise SyntaxError(f"'type' not specified in record {pvname}")
@@ -78,7 +78,12 @@ def process_config(pvconfig : Tuple[str, dict]) -> PVScalarRecipe:
         else:
             raise SyntaxError(f"for PV {pvname} of type '{type}' an initial value must be supplied")
     
-    pvrecipe = PVScalarRecipe(PVTypes[pvdetails['type']], pvdetails['description'], initial)
+    if pvdetails['type'].endswith('_ARR'):
+        pvrecipe = PVScalarArrayRecipe(PVTypes[pvdetails['type']], pvdetails['description'], initial)
+    elif pvdetails['type'] == 'ENUM':
+        pvrecipe = PVEnumRecipe(PVTypes[pvdetails['type']], pvdetails['description'], initial)
+    else:
+        pvrecipe = PVScalarRecipe(PVTypes[pvdetails['type']], pvdetails['description'], initial)
     
     supported_configs = [('units',str), ('precision', int), ('format', str), ('read_only', bool)]
     for conf in supported_configs:
