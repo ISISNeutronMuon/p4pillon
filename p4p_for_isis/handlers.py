@@ -114,6 +114,15 @@ class BaseRulesHandler(Handler):
 
         return True
 
+    def setReadOnly(self):
+        """
+        Make this PV read only.
+        """
+        self._put_rules["read_only"] = (
+            lambda new, old: BaseRulesHandler.RulesFlow.ABORT
+        )
+        self._put_rules.move_to_end("read_only", last=False)
+
     def _timestamp_rule(self, _, op: ServerOperation) -> RulesFlow:
         """Handle updating the timestamps"""
 
@@ -349,10 +358,18 @@ class NTScalarRulesHandler(BaseRulesHandler):
 
         return combinedvals
 
-class NTScalarArrayRulesHandler(NTScalarRulesHandler):
+class NTScalarArrayRulesHandler(BaseRulesHandler):
     """
     Rules handler for NTScalarArray PVs.
     """
     def __init__(self) -> None:
         super().__init__()
         self.is_array = True
+
+class NTEnumRulesHandler(BaseRulesHandler):
+    """
+    Rules handler for NTScalarArray PVs.
+    """
+    def __init__(self) -> None:
+        super().__init__()
+
