@@ -16,7 +16,7 @@ from p4p.server import ServerOperation
 from p4p import Value
 
 from .metadata import *
-from .handlers import NTScalarRulesHandler
+from .handlers import BaseRulesHandler, NTScalarRulesHandler, NTEnumRulesHandler, NTScalarArrayRulesHandler
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ class BasePVRecipe:
 
     pvtype: PVTypes
     description: str
-    initial_value: Numeric
+    initial_value: Numeric | list | str
     units: str = ""
     format: Format = Format.DEFAULT
     precision: int = -1
@@ -102,9 +102,43 @@ class BasePVRecipe:
         # Specifically these are the ones tagged with field(init=False)
         self.timestamp = None
 
+        self.construct_settings = {}
+        self.config_settings = {}
+
+        self.construct_settings["valtype"] = self.pvtype.value
+        self.construct_settings["extra"] = [("descriptor", "s")]
+        self.config_settings["descriptor"] = self.description
+
     @abstractmethod
     def create_pv(self, pv_name: str) -> NTScalar | NTEnum:
         raise NotImplementedError
+    
+    def build_pv(self, pv_name: str, handler: BaseRulesHandler) -> SharedPV:
+        """
+        This method is called by create_pv in the child classes after construct settings is set.
+        """
+        
+        logger.debug(f"Building pv. Construct settings are: \n {self.construct_settings} \n and config settings are:\n {self.config_settings} ")
+        
+        if self.pvtype == PVTypes.ENUM:
+            nt = NTEnum(**self.construct_settings)
+        else:
+            nt = NTScalar(**self.construct_settings)
+
+        pvobj = SharedPV(
+            nt=nt, initial=self.initial_value, timestamp=time.time(), handler=handler
+        )
+        pvobj.post(self.config_settings)
+        handler._name = pv_name
+
+        if self.read_only:
+            handler.setReadOnly()
+
+        handler._post_init(pvobj)
+        # AK: The line below is now done in the handler. The rule is evaluated last in the above call to _post_init()
+        # handler._init_rules["timestamp"] = handler.evaluate_timestamp
+
+        return pvobj
     
     def copy(self) -> "BasePVRecipe":
         """Return a shallow copy of this instance"""
@@ -118,7 +152,10 @@ class PVScalarRecipe(BasePVRecipe):
             raise ValueError(f"Unsupported pv type {self.pvtype} for class {self.__class__.__name__}")
     
     def set_control_limits(self, low: Numeric = None, high: Numeric = None, min_step: Numeric = 0, config: dict = None):
-        """Add control limits"""
+        """
+        Add control limits
+        config is a dictionary of low, high, min_step. This is used by the config_reader
+        """
         
         # If config is supplied, use those values. Primarily used for reading in from YAML
         if config is not None:
@@ -144,7 +181,10 @@ class PVScalarRecipe(BasePVRecipe):
                 raise SyntaxError("Control limits not supported on enum PVs")
 
     def set_display_limits(self, low_limit: Numeric = None, high_limit: Numeric = None, config: dict = None):
-        """Add display limits"""
+        """
+        Add display limits
+        config is a dictionary of low_limit and high_limit. This is used by the config_reader.
+        """
         if config is not None:
             low_limit = config.get('limitLow')
             high_limit = config.get('limitHigh')
@@ -178,7 +218,6 @@ class PVScalarRecipe(BasePVRecipe):
         config: dict = None
     ):
         """Add alarm limits"""
-        print(f"config is {config}")
         if config is not None:
             low_warning = config.get('lowWarningLimit')
             high_warning = config.get('highWarningLimit')
@@ -220,76 +259,46 @@ class PVScalarRecipe(BasePVRecipe):
                 raise SyntaxError("Alarm limits not supported on string PVs")
             case PVTypes.ENUM:
                 raise SyntaxError("Alarm limits not supported on enum PVs")
-
+    
     @abstractmethod
-    def create_pv(self, pv_name: str) -> NTScalar | NTEnum:
+    def create_pv(self, pv_name: str) -> NTScalar:
         """Turn the recipe into an actual NTScalar, NTEnum, or
         other BasePV derived object"""
-        construct_settings = {}
-        config_settings = {}
 
-        construct_settings["valtype"] = self.pvtype.value
-        construct_settings["extra"] = [("descriptor", "s")]
-        config_settings["descriptor"] = self.description
-
-        self._config_display(construct_settings, config_settings)
+        self._config_display()
 
         if self.control:
-            self._config_control(construct_settings, config_settings)
+            self._config_control()
 
         if self.alarm_limit:
-            self._config_alarm_limit(construct_settings, config_settings)
+            self._config_alarm_limit()
 
-        print(f"construct settings are: \n {construct_settings} \n and config settings are:\n {config_settings} ")
         handler = NTScalarRulesHandler()
-        match self.pvtype:
-            case PVTypes.DOUBLE | PVTypes.INTEGER:
-                nt = NTScalar(**construct_settings)
-            case PVTypes.ENUM:
-                nt = NTEnum(**construct_settings)
-            case _:
-                raise NotImplementedError()
+        
+        return super().build_pv(pv_name, handler)
 
-        pvobj = SharedPV(
-            nt=nt, initial=self.initial_value, timestamp=time.time(), handler=handler
-        )
-        pvobj.post(config_settings)
-        handler._name = pv_name
-
-        if self.read_only:
-            handler._put_rules["read_only"] = (
-                lambda new, old: NTScalarRulesHandler.RulesFlow.ABORT
-            )
-            handler._put_rules.move_to_end("read_only", last=False)
-
-        handler._post_init(pvobj)
-        # AK: This is now done in the handler. The rule is evaluated last in the above call to _post_init()
-        # handler._init_rules["timestamp"] = handler.evaluate_timestamp
-
-        return pvobj
-
-    def _config_display(self, construct_settings, config_settings):
+    def _config_display(self):
         if self.units:
-            construct_settings["display"] = True
-            config_settings["display.description"] = self.description
-            config_settings["display.units"] = self.units
+            self.construct_settings["display"] = True
+            self.config_settings["display.description"] = self.description
+            self.config_settings["display.units"] = self.units
 
         # Precision doesn't actually seem to be supported in Phoebus
         if self.precision != -1:
-            construct_settings["display"] = True
-            construct_settings["form"] = True
-            config_settings["display.description"] = self.description
-            config_settings["display.precision"] = self.precision
+            self.construct_settings["display"] = True
+            self.construct_settings["form"] = True
+            self.config_settings["display.description"] = self.description
+            self.config_settings["display.precision"] = self.precision
 
         if self.format != Format.DEFAULT:
-            construct_settings["display"] = True
-            config_settings["display.description"] = self.description
-            if "display.precision" not in config_settings:
-                config_settings["display.format"] = self.format.value[1]
+            self.construct_settings["display"] = True
+            self.config_settings["display.description"] = self.description
+            if "display.precision" not in self.config_settings:
+                self.config_settings["display.format"] = self.format.value[1]
             else:
-                construct_settings["form"] = True
-                config_settings["display.form.index"] = self.format.value[0]
-                config_settings["display.form.choices"] = [
+                self.construct_settings["form"] = True
+                self.config_settings["display.form.index"] = self.format.value[0]
+                self.config_settings["display.form.choices"] = [
                     "Default",
                     "String",
                     "Binary",
@@ -300,38 +309,69 @@ class PVScalarRecipe(BasePVRecipe):
                 ]
 
         if self.display:
-            construct_settings["display"] = True
-            config_settings["display.description"] = self.description
-            config_settings["display.limitLow"] = self.display.limit_low
-            config_settings["display.limitHigh"] = self.display.limit_high
+            self.construct_settings["display"] = True
+            self.config_settings["display.description"] = self.description
+            self.config_settings["display.limitLow"] = self.display.limit_low
+            self.config_settings["display.limitHigh"] = self.display.limit_high
 
-    def _config_alarm_limit(self, construct_settings, config_settings):
-        construct_settings["valueAlarm"] = True
-        config_settings["valueAlarm.active"] = self.alarm_limit.active
-        config_settings["valueAlarm.lowAlarmLimit"] = self.alarm_limit.low_alarm_limit
-        config_settings["valueAlarm.lowWarningLimit"] = (
+    def _config_alarm_limit(self):
+        self.construct_settings["valueAlarm"] = True
+        self.config_settings["valueAlarm.active"] = self.alarm_limit.active
+        self.config_settings["valueAlarm.lowAlarmLimit"] = self.alarm_limit.low_alarm_limit
+        self.config_settings["valueAlarm.lowWarningLimit"] = (
             self.alarm_limit.low_warning_limit
         )
-        config_settings["valueAlarm.highWarningLimit"] = (
+        self.config_settings["valueAlarm.highWarningLimit"] = (
             self.alarm_limit.high_warning_limit
         )
-        config_settings["valueAlarm.highAlarmLimit"] = self.alarm_limit.high_alarm_limit
-        config_settings["valueAlarm.lowAlarmSeverity"] = (
+        self.config_settings["valueAlarm.highAlarmLimit"] = self.alarm_limit.high_alarm_limit
+        self.config_settings["valueAlarm.lowAlarmSeverity"] = (
             self.alarm_limit.low_alarm_severity.value
         )
-        config_settings["valueAlarm.lowWarningSeverity"] = (
+        self.config_settings["valueAlarm.lowWarningSeverity"] = (
             self.alarm_limit.low_warning_severity.value
         )
-        config_settings["valueAlarm.highWarningSeverity"] = (
+        self.config_settings["valueAlarm.highWarningSeverity"] = (
             self.alarm_limit.high_warning_severity.value
         )
-        config_settings["valueAlarm.highAlarmSeverity"] = (
+        self.config_settings["valueAlarm.highAlarmSeverity"] = (
             self.alarm_limit.high_alarm_severity.value
         )
-        config_settings["valueAlarm.hysteresis"] = self.alarm_limit.hysteresis
+        self.config_settings["valueAlarm.hysteresis"] = self.alarm_limit.hysteresis
 
-    def _config_control(self, construct_settings, config_settings):
-        construct_settings["control"] = True
-        config_settings["control.limitLow"] = self.control.limit_low
-        config_settings["control.limitHigh"] = self.control.limit_high
-        config_settings["control.minStep"] = self.control.min_step
+    def _config_control(self):
+        self.construct_settings["control"] = True
+        self.config_settings["control.limitLow"] = self.control.limit_low
+        self.config_settings["control.limitHigh"] = self.control.limit_high
+        self.config_settings["control.minStep"] = self.control.min_step
+
+class PVScalarArrayRecipe(BasePVRecipe):
+
+    def __post_init__(self):
+        super().__post_init__()
+        if (self.pvtype.value.startswith('a') != True):
+            raise ValueError(f"Unsupported pv type {self.pvtype} for class {self.__class__.__name__}")
+    
+    @abstractmethod
+    def create_pv(self, pv_name: str) -> NTScalar:
+        """Turn the recipe into an actual NTNDArray"""
+        
+        handler = NTScalarArrayRulesHandler()
+        
+        return super().build_pv(pv_name, handler)
+
+class PVEnumRecipe(BasePVRecipe):
+
+    def __post_init__(self):
+        super().__post_init__()
+        if (self.pvtype != PVTypes.ENUM):
+            raise ValueError(f"Unsupported pv type {self.pvtype} for class {self.__class__.__name__}")
+
+    @abstractmethod
+    def create_pv(self, pv_name: str) -> NTEnum:
+        """Turn the recipe into an actual NTEnum"""
+
+        handler = NTEnumRulesHandler()
+
+        return super().build_pv(pv_name, handler)
+    
