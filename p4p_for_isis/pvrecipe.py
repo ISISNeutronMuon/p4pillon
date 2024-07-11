@@ -118,8 +118,15 @@ class BasePVRecipe:
         This method is called by create_pv in the child classes after construct settings is set.
         """
         
-        logger.debug(f"Building pv. Construct settings are: \n {self.construct_settings} \n and config settings are:\n {self.config_settings} ")
-        
+        logger.debug("Building pv. Construct settings are: \n %r \n"
+                     "and config settings are:\n %r",
+                     self.construct_settings, self.config_settings)
+
+        if (self.construct_settings['valtype'] not in ['s', 'e']
+            and isinstance(self.initial_value, collections.abc.Sequence)
+            ):
+            self.construct_settings['valtype'] = 'a' + self.construct_settings['valtype']
+
         if self.pvtype == PVTypes.ENUM:
             nt = NTEnum(**self.construct_settings)
         else:
@@ -349,9 +356,7 @@ class PVScalarArrayRecipe(BasePVRecipe):
 
     def __post_init__(self):
         super().__post_init__()
-        if (self.pvtype.value.startswith('a') != True):
-            raise ValueError(f"Unsupported pv type {self.pvtype} for class {self.__class__.__name__}")
-    
+
     @abstractmethod
     def create_pv(self, pv_name: str) -> NTScalar:
         """Turn the recipe into an actual NTNDArray"""
