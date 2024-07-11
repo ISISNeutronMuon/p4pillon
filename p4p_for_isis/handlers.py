@@ -6,6 +6,7 @@ import time
 
 from collections import OrderedDict
 from enum import Enum
+from typing import SupportsFloat as Numeric  # Hack to type hint number types
 from typing import Callable
 
 from p4p import Value
@@ -35,16 +36,16 @@ class BaseRulesHandler(Handler):
         self._init_rules = OrderedDict[
             Callable[[dict, Value], Value]
         ]()
-        
+
         self._init_rules["timestamp"] = self.evaluate_timestamp
 
         self._put_rules = OrderedDict[
             Callable[[SharedPV, ServerOperation], self.RulesFlow]
         ]()
-        
+
         self._put_rules["timestamp"] = self._timestamp_rule
 
-    def _post_init(self, pv : SharedPV):
+    def _post_init(self, pv : SharedPV) -> None:
         """
         This method is called by the pvrecipe after the pv has been created
         """
@@ -60,7 +61,8 @@ class BaseRulesHandler(Handler):
     def put(self, pv: SharedPV, op: ServerOperation) -> None:
         """Put that applies a set of rules"""
         self._name = op.name()
-        logger.debug("Processing attempt to change PV %s by %s (member of %s) at %s", op.name(), op.account(), op.roles(), op.peer())
+        logger.debug("Processing attempt to change PV %s by %s (member of %s) at %s",
+                     op.name(), op.account(), op.roles(), op.peer())
 
         # oldpvstate : Value = pv.current().raw
         newpvstate: Value = op.value().raw
@@ -82,9 +84,13 @@ class BaseRulesHandler(Handler):
         pv.post(op.value())  # just store and update subscribers
 
         op.done()
-        logger.info("Processed change to PV %s by %s (member of %s) at %s", op.name(), op.account(), op.roles(), op.peer())
+        logger.info("Processed change to PV %s by %s (member of %s) at %s",
+                    op.name(), op.account(), op.roles(), op.peer())
 
     def _apply_rules(self, pv: SharedPV, op: ServerOperation) -> bool:
+        """
+        Apply the rules, usually when a put operation is attempted
+        """
         for rule_name, put_rule in self._put_rules.items():
             logger.debug('Applying rule %s', rule_name)
             rule_flow = put_rule(pv, op)
@@ -114,7 +120,7 @@ class BaseRulesHandler(Handler):
 
         return True
 
-    def setReadOnly(self):
+    def set_read_only(self):
         """
         Make this PV read only.
         """
@@ -132,7 +138,7 @@ class BaseRulesHandler(Handler):
 
         return self.RulesFlow.CONTINUE
 
-    def evaluate_timestamp(self, _ : dict, newpvstate : Value):
+    def evaluate_timestamp(self, _ : dict, newpvstate : Value) -> Value:
         """ Update the timeStamp of a PV """
         if newpvstate.changed("timeStamp"):
             logger.debug("Using timeStamp from put operation")
@@ -151,14 +157,14 @@ class NTScalarRulesHandler(BaseRulesHandler):
     def __init__(self) -> None:
         super().__init__()
 
-        self._init_rules.update({ 
+        self._init_rules.update({
             'control' : self.evaluate_control_limits,
             'alarm_limit' : self.evaluate_alarm_limits
         })
 
         self._put_rules["control"] = self._controls_rule
         self._put_rules["alarm_limit"] = self._alarm_limit_rule
-        self._put_rules.move_to_end("timestamp")        
+        self._put_rules.move_to_end("timestamp")
 
     def _controls_rule(self, pv: SharedPV, op: ServerOperation) -> BaseRulesHandler.RulesFlow:
         """Check whether control limits should trigger and restrict values appropriately"""
@@ -189,7 +195,7 @@ class NTScalarRulesHandler(BaseRulesHandler):
 
         return self.RulesFlow.CONTINUE
 
-    def evaluate_control_limits(self, combinedvals : dict, _):
+    def evaluate_control_limits(self, combinedvals : dict, _) -> None | int | Numeric:
         """ Check whether a value should be clipped by the control limits """
 
         if not 'control' in combinedvals:
@@ -270,7 +276,7 @@ class NTScalarRulesHandler(BaseRulesHandler):
         self.evaluate_alarm_limits(combinedvals, newpvstate)
         return self.RulesFlow.CONTINUE
 
-    def evaluate_alarm_limits(self, combinedvals, pvstate : Value):
+    def evaluate_alarm_limits(self, combinedvals, pvstate : Value) -> None | Value:
         """ Evaluate alarm value limits """
         if 'valueAlarm' not in combinedvals:
             logger.debug("valueAlarm not present in structure")
@@ -372,4 +378,3 @@ class NTEnumRulesHandler(BaseRulesHandler):
     """
     def __init__(self) -> None:
         super().__init__()
-
