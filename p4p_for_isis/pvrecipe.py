@@ -122,6 +122,7 @@ class BasePVRecipe:
 
         if (self.construct_settings['valtype'] not in ['s', 'e']
             and isinstance(self.initial_value, collections.abc.Sequence)
+            and not self.construct_settings['valtype'].startswith('a')
             ):
             self.construct_settings['valtype'] = 'a' + self.construct_settings['valtype']
 
