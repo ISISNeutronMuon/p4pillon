@@ -138,7 +138,7 @@ class BasePVRecipe:
         handler._name = pv_name
 
         if self.read_only:
-            handler.setReadOnly()
+            handler.set_read_only()
 
         handler._post_init(pvobj)
         # AK: The line below is now done in the handler. The rule is evaluated last in the
