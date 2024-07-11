@@ -45,6 +45,9 @@ class ISISServer:
         self._provider = StaticProvider()
         self._server = None
         self._pvs : dict[str, NTBase] = {}
+
+        self._running = False
+
     def start(self) -> None:
         """ Start the ISISServer """
 
@@ -70,7 +73,9 @@ class ISISServer:
             pv.close()
             self._provider.remove(pv_name)
         self._server.stop()
-        print("\nStopped server")
+        logger.debug("\nStopped server")
+
+        self._running = False
 
     def addPV(self, pv_name: str, pv_recipe: PVScalarRecipe) -> NTBase:
         """ Add a PV to the server """
@@ -80,6 +85,11 @@ class ISISServer:
         pv_name = validate_pv_name(pv_name)
         returnval = self._pvs[pv_name] = pv_recipe.create_pv(pv_name)
 
+        # If the server is already running then we need to add this PV to
+        # the live system
+        if self._running:
+            self._provider.add(pv_name, returnval)
+
         return returnval
 
     def removePV(self, pv_name: str):
@@ -87,6 +97,14 @@ class ISISServer:
 
         if not pv_name.startswith(self.prefix):
             pv_name = self.prefix + pv_name
+
+        # If the server is already running then we need to remove this PV
+        # from the live system
+        if self._running:
+            # TODO: Consider the implications if this throws and exception
+            # we won't reach the next del for our internal list
+            self._provider.remove(pv_name)
+
         del self._pvs[pv_name]
 
     @property
