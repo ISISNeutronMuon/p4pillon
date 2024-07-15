@@ -140,9 +140,9 @@ class BasePVRecipe:
         if self.read_only:
             handler.set_read_only()
 
-        handler._post_init(pvobj)
+        handler._rules_init(pvobj)
         # AK: The line below is now done in the handler. The rule is evaluated last in the
-        # above call to _post_init()
+        # above call to _rules_init()
         # handler._init_rules["timestamp"] = handler.evaluate_timestamp
 
         return pvobj
