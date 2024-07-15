@@ -3,7 +3,7 @@ import yaml
 from typing import Tuple, List
 
 from .pvrecipe import BasePVRecipe, PVScalarRecipe, PVScalarArrayRecipe, PVEnumRecipe
-from .metadata import *
+from .definitions import *
 from p4p_for_isis.server import ISISServer
 
 logger = logging.getLogger(__name__)
