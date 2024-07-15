@@ -45,7 +45,7 @@ class BaseRulesHandler(Handler):
 
         self._put_rules["timestamp"] = self._timestamp_rule
 
-    def _post_init(self, pv : SharedPV) -> None:
+    def _rules_init(self, pv : SharedPV) -> None:
         """
         This method is called by the pvrecipe after the pv has been created
         """
@@ -120,14 +120,18 @@ class BaseRulesHandler(Handler):
 
         return True
 
-    def set_read_only(self):
+    def set_read_only(self, read_only: bool = True):
         """
         Make this PV read only.
+        If read_only == False then the PV is made writable
         """
-        self._put_rules["read_only"] = (
-            lambda new, old: BaseRulesHandler.RulesFlow.ABORT
-        )
-        self._put_rules.move_to_end("read_only", last=False)
+        if read_only == False and 'read_only' in self._put_rules:
+            self._put_rules.pop('read_only')
+        else:
+            self._put_rules["read_only"] = (
+                lambda new, old: BaseRulesHandler.RulesFlow.ABORT
+            )
+            self._put_rules.move_to_end("read_only", last=False)
 
     def _timestamp_rule(self, _, op: ServerOperation) -> RulesFlow:
         """Handle updating the timestamps"""
