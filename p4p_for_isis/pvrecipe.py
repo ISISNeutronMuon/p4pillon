@@ -14,7 +14,7 @@ from typing import TypeVar, Generic
 from p4p.nt import NTEnum, NTScalar
 from p4p.server.thread import SharedPV
 
-from .metadata import PVTypes, AlarmSeverity, Format
+from .definitions import PVTypes, AlarmSeverity, Format
 from .handlers import BaseRulesHandler, NTScalarRulesHandler, \
                       NTEnumRulesHandler, NTScalarArrayRulesHandler
 
