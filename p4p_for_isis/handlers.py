@@ -5,7 +5,7 @@ import operator
 import time
 
 from collections import OrderedDict
-from enum import Enum
+from enum import Enum, auto
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
 from typing import Callable
 
@@ -17,6 +17,33 @@ from p4p_for_isis.utils import time_in_seconds_and_nanoseconds
 
 
 logger = logging.getLogger(__name__)
+
+class RulesFlow(Enum):
+    """ 
+    Used by the BaseRulesHandler to control continuing or stopping
+    evaluation of rules in the defined sequence.
+    """
+
+    CONTINUE  = auto()  # Continue rules processing
+    TERMINATE = auto()  # Do not process more rules but apply timestamp and complete
+    TERMINATE_WO_TIMESTAMP = auto() # Do not process further rules; do not apply timestamp rule
+    ABORT     = auto()  # Stop rules processing and abort put
+
+    def __init__(self, value) -> None:
+        super().__init__(value)
+
+        # We include an error string so that we can indicate why an ABORT
+        # has been triggered
+        self.error : str = None
+
+    def set_errormsg(self, errormsg : str) -> RulesFlow:
+        """ 
+        Set an error message to explain an ABORT
+        This function returns the class instance so it may be used in lambdas
+        """
+        self.error = errormsg
+
+        return self
 
 class BaseRulesHandler(Handler):
     """
@@ -95,39 +122,53 @@ class BaseRulesHandler(Handler):
             logger.debug('Applying rule %s', rule_name)
             rule_flow = put_rule(pv, op)
 
-            match (rule_flow):
-                case self.RulesFlow.CONTINUE:
-                    pass
-                case self.RulesFlow.ABORT:
-                    logger.debug("Rule %s triggered handler abort", rule_name)
-                    op.done()
-                    return False
-                case self.RulesFlow.TERMINATE:
-                    logger.debug("Rule %s triggered handler terminate", rule_name)
-                    break
-                case None:
-                    logger.warning(
+            # Originally a more elegant match (rule_flow): but we need
+            # to support versions of Python prior to 3.10
+            if not rule_flow:
+                logger.warning(
                         "Rule %s did not return rule flow. Defaulting to "
                         "CONTINUE, but this behaviour may change in "
                         "future.",
                         rule_name,
-                    )
-                case _:
-                    logger.critical("Rule %s returned unhandled return type", rule_name)
-                    raise TypeError(
-                        f"Rule {rule_name} returned unhandled return type {type(rule_flow)}"
-                    )
+                )
+            elif rule_flow == RulesFlow.CONTINUE:
+                pass
+            elif rule_flow == RulesFlow.ABORT:
+                logger.debug("Rule %s triggered handler abort", rule_name)
+
+                errormsg = None
+                if rule_flow.error:
+                    errormsg = rule_flow.error
+
+                op.done(error=errormsg)
+                return False
+            elif rule_flow == RulesFlow.TERMINATE:
+                logger.debug("Rule %s triggered handler terminate", rule_name)
+                self._put_rules['timestamp'](pv, op)
+                break
+            elif rule_flow == RulesFlow.TERMINATE_WO_TIMESTAMP:
+                logger.debug("Rule %s triggered handler terminate without timestamp", rule_name)
+                break
+            else:
+                logger.critical("Rule %s returned unhandled return type", rule_name)
+                raise TypeError(
+                    f"Rule {rule_name} returned unhandled return type {type(rule_flow)}"
+                )
 
         return True
 
-    def set_read_only(self):
+    def set_read_only(self, onoff : bool = True):
         """
         Make this PV read only.
         """
-        self._put_rules["read_only"] = (
-            lambda new, old: BaseRulesHandler.RulesFlow.ABORT
-        )
-        self._put_rules.move_to_end("read_only", last=False)
+        if onoff:
+            # Switch on the read-only rule and make sure it's the first rule
+            self._put_rules["read_only"] = \
+                lambda new, old: RulesFlow(RulesFlow.ABORT).set_errormsg("read only PV")
+            self._put_rules.move_to_end("read_only", last=False)
+        else:
+            # Switch off the read-only rule by deleting it
+            self._put_rules.pop("read_only", None)
 
     def _timestamp_rule(self, _, op: ServerOperation) -> RulesFlow:
         """Handle updating the timestamps"""
@@ -136,7 +177,7 @@ class BaseRulesHandler(Handler):
         newpvstate: Value = op.value().raw
         self.evaluate_timestamp(_, newpvstate)
 
-        return self.RulesFlow.CONTINUE
+        return RulesFlow.CONTINUE
 
     def evaluate_timestamp(self, _ : dict, newpvstate : Value) -> Value:
         """ Update the timeStamp of a PV """
@@ -166,7 +207,7 @@ class NTScalarRulesHandler(BaseRulesHandler):
         self._put_rules["alarm_limit"] = self._alarm_limit_rule
         self._put_rules.move_to_end("timestamp")
 
-    def _controls_rule(self, pv: SharedPV, op: ServerOperation) -> BaseRulesHandler.RulesFlow:
+    def _controls_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
         """Check whether control limits should trigger and restrict values appropriately"""
         logger.debug("Evaluating control limits")
 
@@ -176,7 +217,7 @@ class NTScalarRulesHandler(BaseRulesHandler):
         # Check if there are any controls!
         if "control" not in newpvstate and "control" not in oldpvstate:
             logger.debug("control not present in structure")
-            return self.RulesFlow.CONTINUE
+            return RulesFlow.CONTINUE
 
         combinedvals = self._combined_pvstates(oldpvstate, newpvstate, "control")
 
@@ -187,13 +228,13 @@ class NTScalarRulesHandler(BaseRulesHandler):
         ):
             logger.debug("<minStep")
             newpvstate["value"] = oldpvstate["value"]
-            return self.RulesFlow.CONTINUE
+            return RulesFlow.CONTINUE
 
         value = self.evaluate_control_limits(combinedvals, None)
         if value:
             newpvstate["value"] = value
 
-        return self.RulesFlow.CONTINUE
+        return RulesFlow.CONTINUE
 
     def evaluate_control_limits(self, combinedvals : dict, _) -> None | int | Numeric:
         """ Check whether a value should be clipped by the control limits """
@@ -269,7 +310,7 @@ class NTScalarRulesHandler(BaseRulesHandler):
         # Check if there are any value alarms!
         if "valueAlarm" not in newpvstate and "valueAlarm" not in oldpvstate:
             logger.debug("valueAlarm not present in structure")
-            return self.RulesFlow.CONTINUE
+            return RulesFlow.CONTINUE
 
         combinedvals = self._combined_pvstates(oldpvstate, newpvstate, ["valueAlarm", "alarm"])
 
