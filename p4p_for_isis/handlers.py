@@ -153,6 +153,46 @@ class BaseRulesHandler(Handler):
             newpvstate["timeStamp.nanoseconds"] = nsec
 
         return newpvstate
+    
+    def _combined_pvstates(
+        self, oldpvstate: Value, newpvstate: Value, interests: str | list[str]
+    ) -> dict:
+        # This is complicated! We may need to process alarms based on either
+        # the oldstate or the newstate of the PV. Suppose, for example, the
+        # valueAlarm limits have all been set in the PV but it is not yet active.
+        # Now a value change and valueAlarms.active=True comes in. We have to
+        # act on the new value of the PV (and its active state) but using the
+        # old values for the limits!
+        # NOTE: We can get away without deepcopies because we never change any
+        #       of these values
+        # TODO: What if valueAlarm has been added or removed?
+
+        def extract_combined_value(newpvstate, oldpvstate, key):
+            """Check a key. If it isn't marked as changed return the old PV state value,
+            and if it is return the new PV state value
+            """
+            if newpvstate.changed(key):
+                return newpvstate[key]
+
+            return oldpvstate[key]
+
+        combinedvals = {}
+        combinedvals["value"] = extract_combined_value(newpvstate, oldpvstate, "value")
+
+        if isinstance(interests, str):
+            interests = [interests]
+
+        for interest in interests:
+            combinedvals[interest] =  extract_combined_value(
+                    newpvstate, oldpvstate, interest
+                )
+            for key in newpvstate[interest]:
+                fullkey = f"{interest}.{key}"
+                combinedvals[fullkey] = extract_combined_value(
+                    newpvstate, oldpvstate, fullkey
+                )
+
+        return combinedvals
 
 class NTScalarRulesHandler(BaseRulesHandler):
     """
@@ -328,45 +368,7 @@ class NTScalarRulesHandler(BaseRulesHandler):
         logger.debug("Made no automatic changes to alarm state of %s", self._name)
         return None
 
-    def _combined_pvstates(
-        self, oldpvstate: Value, newpvstate: Value, interests: str | list[str]
-    ) -> dict:
-        # This is complicated! We may need to process alarms based on either
-        # the oldstate or the newstate of the PV. Suppose, for example, the
-        # valueAlarm limits have all been set in the PV but it is not yet active.
-        # Now a value change and valueAlarms.active=True comes in. We have to
-        # act on the new value of the PV (and its active state) but using the
-        # old values for the limits!
-        # NOTE: We can get away without deepcopies because we never change any
-        #       of these values
-        # TODO: What if valueAlarm has been added or removed?
-
-        def extract_combined_value(newpvstate, oldpvstate, key):
-            """Check a key. If it isn't marked as changed return the old PV state value,
-            and if it is return the new PV state value
-            """
-            if newpvstate.changed(key):
-                return newpvstate[key]
-
-            return oldpvstate[key]
-
-        combinedvals = {}
-        combinedvals["value"] = extract_combined_value(newpvstate, oldpvstate, "value")
-
-        if isinstance(interests, str):
-            interests = [interests]
-
-        for interest in interests:
-            combinedvals[interest] =  extract_combined_value(
-                    newpvstate, oldpvstate, interest
-                )
-            for key in newpvstate[interest]:
-                fullkey = f"{interest}.{key}"
-                combinedvals[fullkey] = extract_combined_value(
-                    newpvstate, oldpvstate, fullkey
-                )
-
-        return combinedvals
+    
 
 class NTScalarArrayRulesHandler(BaseRulesHandler):
     """
@@ -374,7 +376,96 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
     """
     def __init__(self) -> None:
         super().__init__()
-        self.is_array = True
+    
+        self._init_rules.update({'control' : self.evaluate_control_limits})
+        self._put_rules["control"] = self._controls_rule
+    
+    def _controls_rule(self, pv: SharedPV, op: ServerOperation) -> BaseRulesHandler.RulesFlow:
+        """Check whether control limits should trigger and restrict values appropriately"""
+        logger.debug("Evaluating control limits")
+
+        oldpvstate: Value = pv.current().raw
+        newpvstate: Value = op.value().raw
+
+        # Check if there are any controls!
+        if "control" not in newpvstate and "control" not in oldpvstate:
+            logger.debug("control not present in structure")
+            return self.RulesFlow.CONTINUE
+
+        combinedvals = self._combined_pvstates(oldpvstate, newpvstate, "control")
+
+        # The numpy array used by the Value object is write protected so we need to create a copy 
+        # of the value (using a list for simplicity) so individual elements can be assigned.
+        newpvstateval = list(newpvstate["value"])
+
+        for i in range(len(newpvstate["value"])):
+
+            # Check minimum step first
+            if (
+                abs(newpvstate["value"][i] - oldpvstate["value"][i])
+                < combinedvals["control.minStep"]
+            ):
+                logger.debug(f"Value at array index {i} is less than minStep {combinedvals['control.minStep']}")
+                newpvstateval[i] = oldpvstate["value"][i]
+            else: 
+                value = self.evaluate_control_limits(combinedvals, None, index = i)
+                if value:
+                    logger.debug(f"Setting value to {value}")
+                    newpvstateval[i] = value
+
+        newpvstate["value"] = newpvstateval
+        
+        return self.RulesFlow.CONTINUE
+
+    def evaluate_control_limits(self, combinedvals : dict, _, index : int = None) -> None | int | Numeric:
+        """ Check whether a value should be clipped by the control limits """
+
+        if not 'control' in combinedvals:
+            logger.debug("control not present in structure")
+            return None
+
+        # A philosophical question! What should we do when lowLimit = highLimit = 0?
+        # This almost certainly means the structure hasn't been initialised, but it could
+        # be an attempt (for some reason) to lock the value to 0. For now we treat this
+        # as uninitialised and ignore limits in this case. Users will have to handle
+        # keeping the PV constant at 0 themselves
+        if (
+            combinedvals["control.limitLow"] == 0
+            and combinedvals["control.limitHigh"] == 0
+        ):
+            logger.info(
+                "control.limitLow and control.LimitHigh set to 0, so ignoring control limits"
+            )
+            return None
+        
+        if index is None:
+            # This part is normally called when the rules are initialised
+            value = list(combinedvals["value"])
+            for i in range(len(combinedvals["value"])):
+                # Check lower and upper control limits
+                if combinedvals["value"][i] < combinedvals["control.limitLow"]:
+                    value[i] = combinedvals["control.limitLow"]
+                    logger.debug(f"Lower control limit exceeded for index {i}, changing value to {value[i]}")
+
+                if combinedvals["value"][i] > combinedvals["control.limitHigh"]:
+                    value[i] = combinedvals["control.limitHigh"]
+                    logger.debug(f"Upper control limit exceeded for index {i}, changing value to {value[i]}")
+            
+            return value
+        else:
+            # Check lower and upper control limits
+            if combinedvals["value"][index] < combinedvals["control.limitLow"]:
+                value = combinedvals["control.limitLow"]
+                logger.debug(f"Lower control limit exceeded for index {index}, changing value to {value}")
+                return value
+
+            if combinedvals["value"][index] > combinedvals["control.limitHigh"]:
+                value = combinedvals["control.limitHigh"]
+                logger.debug(f"Upper control limit exceeded for index {index}, changing value to {value}")
+                return value
+
+        return None
+
 
 class NTEnumRulesHandler(BaseRulesHandler):
     """
