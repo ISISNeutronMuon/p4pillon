@@ -156,7 +156,8 @@ class PVScalarRecipe(BasePVRecipe):
 
     def __post_init__(self):
         super().__post_init__()
-        if self.pvtype != PVTypes.DOUBLE and self.pvtype != PVTypes.INTEGER:
+        if self.pvtype != PVTypes.DOUBLE and self.pvtype != PVTypes.INTEGER \
+            and self.pvtype != PVTypes.STRING:
             raise ValueError(f"Unsupported pv type {self.pvtype} "
                              "for class {self.__class__.__name__}")
 
@@ -188,9 +189,7 @@ class PVScalarRecipe(BasePVRecipe):
                 self.control = Control[int](low, high, min_step)
             case PVTypes.STRING:
                 raise SyntaxError("Control limits not supported on string PVs")
-            case PVTypes.ENUM:
-                raise SyntaxError("Control limits not supported on enum PVs")
-
+            
     def set_display_limits(self,
                            low_limit: Numeric = None, high_limit: Numeric = None,
                            config: dict = None):
@@ -365,9 +364,48 @@ class PVScalarArrayRecipe(BasePVRecipe):
     def create_pv(self, pv_name: str) -> NTScalar:
         """ Turn the recipe into an actual NTScalar with an array """
 
+        if self.control:
+            self._config_control()
+
         handler = NTScalarArrayRulesHandler()
 
         return super().build_pv(pv_name, handler)
+    
+    def set_control_limits(self,
+                           low: Numeric = None, high: Numeric = None, min_step: Numeric = 0,
+                           config: dict = None):
+        """
+        Add control limits
+        config is a dictionary of low, high, min_step. This is used by the config_reader
+        """
+
+        # If config is supplied, use those values. Primarily used for reading in from YAML
+        if config is not None:
+            low = config.get('low')
+            high = config.get('high')
+            if config.get('min_step') is not None:
+                # NB if min_step is not in config then the default, min_step=0, is used.
+                min_step = config.get('min_step')
+
+        if low is None:
+            raise ValueError("low limit not set")
+        if high is None:
+            raise ValueError("high limit not set")
+
+        match self.pvtype:
+            case PVTypes.DOUBLE:
+                self.control = Control[float](low, high, min_step)
+            case PVTypes.INTEGER:
+                self.control = Control[int](low, high, min_step)
+            case PVTypes.STRING:
+                raise SyntaxError("Control limits not supported on string PVs")
+
+    def _config_control(self):
+        self.construct_settings["control"] = True
+        self.config_settings["control.limitLow"] = self.control.limit_low
+        self.config_settings["control.limitHigh"] = self.control.limit_high
+        self.config_settings["control.minStep"] = self.control.min_step
+        
 
 class PVEnumRecipe(BasePVRecipe):
     """ Recipe to create an NTEnum """
