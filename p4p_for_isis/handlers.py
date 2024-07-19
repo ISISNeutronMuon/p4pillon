@@ -245,7 +245,7 @@ class BaseRulesHandler(Handler):
             newpvstate["timeStamp.nanoseconds"] = nanoseconds
 
         return newpvstate
-    
+
     def _combined_pvstates(
         self, oldpvstate: Value, newpvstate: Value, interests: str | list[str]
     ) -> dict:
@@ -468,7 +468,7 @@ class NTScalarRulesHandler(BaseRulesHandler):
         logger.debug("Made no automatic changes to alarm state of %s", self._name)
         return None
 
-    
+
 
 class NTScalarArrayRulesHandler(BaseRulesHandler):
     """
@@ -476,11 +476,11 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
     """
     def __init__(self) -> None:
         super().__init__()
-    
+
         self._init_rules.update({'control' : self.evaluate_control_limits})
         self._put_rules["control"] = self._controls_rule
-    
-    def _controls_rule(self, pv: SharedPV, op: ServerOperation) -> BaseRulesHandler.RulesFlow:
+
+    def _controls_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
         """Check whether control limits should trigger and restrict values appropriately"""
         logger.debug("Evaluating control limits")
 
@@ -505,19 +505,24 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
                 abs(newpvstate["value"][i] - oldpvstate["value"][i])
                 < combinedvals["control.minStep"]
             ):
-                logger.debug(f"Value at array index {i} is less than minStep {combinedvals['control.minStep']}")
+                logger.debug("Value at array index %i is less than minStep %r",
+                              i, combinedvals['control.minStep'])
                 newpvstateval[i] = oldpvstate["value"][i]
             else: 
                 value = self.evaluate_control_limits(combinedvals, None, index = i)
                 if value:
-                    logger.debug(f"Setting value to {value}")
+                    logger.debug("Setting value to %r", value)
                     newpvstateval[i] = value
 
         newpvstate["value"] = newpvstateval
-        
-        return self.RulesFlow.CONTINUE
 
-    def evaluate_control_limits(self, combinedvals : dict, _, index : int = None) -> None | int | Numeric:
+        return RulesFlow.CONTINUE
+
+    def evaluate_control_limits(self,
+                                combinedvals : dict,
+                                _,
+                                index : int = None
+                                ) -> None | int | Numeric:
         """ Check whether a value should be clipped by the control limits """
 
         if not 'control' in combinedvals:
@@ -545,23 +550,27 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
                 # Check lower and upper control limits
                 if combinedvals["value"][i] < combinedvals["control.limitLow"]:
                     value[i] = combinedvals["control.limitLow"]
-                    logger.debug(f"Lower control limit exceeded for index {i}, changing value to {value[i]}")
+                    logger.debug("Lower control limit exceeded for index %i,"
+                                 " changing value to %r")
 
                 if combinedvals["value"][i] > combinedvals["control.limitHigh"]:
                     value[i] = combinedvals["control.limitHigh"]
-                    logger.debug(f"Upper control limit exceeded for index {i}, changing value to {value[i]}")
-            
+                    logger.debug("Upper control limit exceeded for index %i,"
+                                 " changing value to %r", i, value[i])
+
             return value
         else:
             # Check lower and upper control limits
             if combinedvals["value"][index] < combinedvals["control.limitLow"]:
                 value = combinedvals["control.limitLow"]
-                logger.debug(f"Lower control limit exceeded for index {index}, changing value to {value}")
+                logger.debug("Lower control limit exceeded for index %i,"
+                             " changing value to %r", index, value)
                 return value
 
             if combinedvals["value"][index] > combinedvals["control.limitHigh"]:
                 value = combinedvals["control.limitHigh"]
-                logger.debug(f"Upper control limit exceeded for index {index}, changing value to {value}")
+                logger.debug("Upper control limit exceeded for index %i,"
+                             " changing value to %r", index, value)
                 return value
 
         return None
