@@ -123,16 +123,16 @@ class BaseRulesHandler(Handler):
 
         self._put_rules["timestamp"] = self._timestamp_rule
 
-    def _post_init(self, pv : SharedPV) -> None:
+    def onFirstConnect(self, pv : SharedPV) -> None: # pylint: disable=invalid-name
         """
-        This method is called by the pvrecipe after the pv has been created
+        This method is called when the PV is first accessed. It applies the init_rules
         """
         # Evaluate the timestamp last
         self._init_rules.move_to_end("timestamp")
 
-        for post_init_rule_name, post_init_rule in self._init_rules.items():
-            logger.debug('Processing post init rule %s', post_init_rule_name)
-            value = post_init_rule(pv.current().raw, pv.current().raw)
+        for init_rule_name, init_rule in self._init_rules.items():
+            logger.debug('Processing post init rule %s', init_rule_name)
+            value = init_rule(pv.current().raw, pv.current().raw)
             if value:
                 pv.post(value=value)
 
