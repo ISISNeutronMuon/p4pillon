@@ -78,7 +78,7 @@ def process_config(pvconfig : Tuple[str, dict]) -> BasePVRecipe:
         else:
             raise SyntaxError(f"for PV {pvname} of type '{type}' an initial value must be supplied")
     
-    if pvdetails['type'].endswith('_ARR'):
+    if isinstance(pvdetails['initial'],list) :
         pvrecipe = PVScalarArrayRecipe(PVTypes[pvdetails['type']], pvdetails['description'], initial)
     elif pvdetails['type'] == 'ENUM':
         pvrecipe = PVEnumRecipe(PVTypes[pvdetails['type']], pvdetails['description'], initial)
@@ -87,6 +87,7 @@ def process_config(pvconfig : Tuple[str, dict]) -> BasePVRecipe:
     
     supported_configs = [('units',str), ('precision', int), ('format', str), ('read_only', bool)]
     for conf in supported_configs:
+        # Process variables in the configuration that are attributes of the pvrecipe class
         tmpConfig = pvdetails.get(conf[0])
         if tmpConfig is not None and isinstance(tmpConfig, conf[1]):
             if conf[0] == 'format':
