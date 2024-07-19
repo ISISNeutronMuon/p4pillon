@@ -14,8 +14,6 @@ from p4p import Value
 from p4p.server import ServerOperation
 from p4p.server.thread import Handler, SharedPV
 
-from p4p_for_isis.utils import time_in_seconds_and_nanoseconds
-
 
 logger = logging.getLogger(__name__)
 
@@ -236,9 +234,13 @@ class BaseRulesHandler(Handler):
             logger.debug("Using timeStamp from put operation")
         else:
             logger.debug("Generating timeStamp from time.time()")
-            sec, nsec = time_in_seconds_and_nanoseconds(time.time())
-            newpvstate["timeStamp.secondsPastEpoch"] = sec
-            newpvstate["timeStamp.nanoseconds"] = nsec
+
+            timenow = time.time()
+            seconds = int(timenow // 1)
+            nanoseconds = int((timenow % 1) * 1e9)
+
+            newpvstate["timeStamp.secondsPastEpoch"] = seconds
+            newpvstate["timeStamp.nanoseconds"] = nanoseconds
 
         return newpvstate
 
@@ -353,12 +355,17 @@ class NTScalarRulesHandler(BaseRulesHandler):
 
         return False
 
-    def _alarm_limit_rule(self, pv: SharedPV, op: ServerOperation) -> BaseRulesHandler.RulesFlow:
+    def _alarm_limit_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
         """ Evaluate alarm limits to see if we should change severity or message"""
         oldpvstate: Value = pv.current().raw
         newpvstate: Value = op.value().raw
 
-        # Check if there are any value alarms!
+        # Check if there are alarms are present in the structure!
+        if "alarm" not in newpvstate and "alarm" not in oldpvstate:
+            logger.debug("alarm not present in structure")
+            return RulesFlow.CONTINUE
+
+        # Check if valueAlarms are present
         if "valueAlarm" not in newpvstate and "valueAlarm" not in oldpvstate:
             logger.debug("valueAlarm not present in structure")
             return RulesFlow.CONTINUE
@@ -366,10 +373,13 @@ class NTScalarRulesHandler(BaseRulesHandler):
         combinedvals = self._combined_pvstates(oldpvstate, newpvstate, ["valueAlarm", "alarm"])
 
         self.evaluate_alarm_limits(combinedvals, newpvstate)
-        return self.RulesFlow.CONTINUE
+        return RulesFlow.CONTINUE
 
     def evaluate_alarm_limits(self, combinedvals, pvstate : Value) -> None | Value:
         """ Evaluate alarm value limits """
+        # TODO: Apply the rule for hysteresis. Unfortunately I don't understand the
+
+
         if 'valueAlarm' not in combinedvals:
             logger.debug("valueAlarm not present in structure")
             return None
