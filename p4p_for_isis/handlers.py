@@ -47,18 +47,68 @@ class RulesFlow(Enum):
 
 class BaseRulesHandler(Handler):
     """
-    Base class for rules that includes rules common to all PV types.
+    Base class for use as a handler which appplies named rules in a defined order.
     """
-    class RulesFlow(Enum):
-        """What to do after a rule has been evaluated"""
 
-        CONTINUE = 1  # Continue rules processing
-        TERMINATE = 2  # Do not process more rules but we're good to here
-        ABORT = 3  # Stop rules processing and abort put
+    # The BaseRulesHandler uses two OrderedDicts of functions to evaluate
+    # handler rules. The BaseRulesHandler only includes built-in rules to
+    # handle read only PVs and to apply timeStamps. Subclasses implement
+    # rules to handle the standard fields of Normative Types. This base
+    # class is already able to handle modifications of its existing rules
+    # and addition of custom user generated rules (though it is expected
+    # that users will anyway use the provided derived classes in most cases).
+    #
+    # There are two types of rule applied by the BaseRulesHandler, but these
+    # two kinds of rules are usually interconnected as we'll see.
+    #
+    ### MERGING
+    # But first we need to address an issue which complicates handler logic.
+    # Imagine a PV which has a value and a control field:
+    #    'example:pv': {
+    #       'value': 3,
+    #       'control': {
+    #           'limitLow' : -1,
+    #           'limitHigh' : 10,
+    #           'minStep' : 1
+    #       }
+    #    }
+    #
+    # In the case of a put of '{value: 11}' the value will become 10.
+    # In the case of a put of '{limitHigh: 2}' the value will become 2 and the
+    # limitHigh will become 2. Note that in this case the value will change
+    # even though the put operation did not directly change it.
+    # In the case of a put of '{value: -3, limitLow: -5}' the value will
+    # become -3 and the limitLow will become -5. But the *order of evaluation
+    # now matters*. We need to evaluate the value against the new limitLow and
+    # not the old one.
+    #
+    # In general we must merge the old and new state of a field such as control
+    # during a put and only then can the handler correctly evaluate the results.
+    #
+    ### RULES
+    # As noted the BaseRulesHandler maintains two different OrderedDict queues
+    # of named rules (i.e. functions). Note that the call signatures of these
+    # two types of rules are different.
+    #
+    # The first kind of rules is an init rule which is directly called when the
+    # handler's onFirstCall is called, i.e. the first time the state of the PV
+    # must be resolved, usually prompted by a first get/put/monitor. The PV has
+    # only its initial state and no prior state
+    # The init rules have function signature of
+    #    evaluate_field(self, combinedvals, pvstate : Value) -> None | Value:
+    # where combinedvals is a merger of the previous state of the PV and the
+    # new state of the PV for the relevant field(s).
+    #
+    ### SPECIAL RULES
+    # The two rules automatically included by BaseRulesHandler are given special
+    # treatment during rules evaluation. The rule 'read_only' is always evaluated
+    # first. The rule 'timestamp' is always evaluated last. These are included
+    # as otherwise ordinary rules so that they may be replaced if desired.
+    #
 
     def __init__(self) -> None:
         super().__init__()
-        self._name = None
+        self._name = None   # Used purely for logging
 
         self._init_rules = OrderedDict[
             Callable[[dict, Value], Value]
@@ -76,7 +126,7 @@ class BaseRulesHandler(Handler):
         """
         This method is called by the pvrecipe after the pv has been created
         """
-        #Evaluate the timestamp last
+        # Evaluate the timestamp last
         self._init_rules.move_to_end("timestamp")
 
         for post_init_rule_name, post_init_rule in self._init_rules.items():
@@ -380,7 +430,7 @@ class NTScalarRulesHandler(BaseRulesHandler):
 
         def extract_combined_value(newpvstate, oldpvstate, key):
             """Check a key. If it isn't marked as changed return the old PV state value,
-            and if it is return the new PV state value
+            and if it is marked as changed then return the new PV state value instead
             """
             if newpvstate.changed(key):
                 return newpvstate[key]
