@@ -1,4 +1,5 @@
 """ Handler for NTScalar (so far) """
+from __future__ import annotations # for older version of Python
 
 import logging
 import operator
@@ -110,15 +111,15 @@ class BaseRulesHandler(Handler):
         super().__init__()
         self._name = None   # Used purely for logging
 
-        self._init_rules = OrderedDict[
+        self._init_rules : OrderedDict[
             Callable[[dict, Value], Value]
-        ]()
+        ] = OrderedDict()
 
         self._init_rules["timestamp"] = self.evaluate_timestamp
 
-        self._put_rules = OrderedDict[
-            Callable[[SharedPV, ServerOperation], self.RulesFlow]
-        ]()
+        self._put_rules : OrderedDict[
+            Callable[[SharedPV, ServerOperation], RulesFlow]
+        ] = OrderedDict()
 
         self._put_rules["timestamp"] = self._timestamp_rule
 
