@@ -490,7 +490,7 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
         # Check if there are any controls!
         if "control" not in newpvstate and "control" not in oldpvstate:
             logger.debug("control not present in structure")
-            return self.RulesFlow.CONTINUE
+            return RulesFlow.CONTINUE
 
         combinedvals = self._combined_pvstates(oldpvstate, newpvstate, "control")
 
