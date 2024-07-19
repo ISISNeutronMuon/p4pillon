@@ -28,10 +28,10 @@ root_dir = Path(__file__).parents[2]
 
 sys.path.append(str(root_dir))
 
-from p4p_for_isis import metadata
+from p4p_for_isis import definitions
 from p4p_for_isis.pvrecipe import PVScalarRecipe
 from p4p_for_isis.server import ISISServer
-from p4p_for_isis.metadata import PVTypes
+from p4p_for_isis.definitions import PVTypes
 
 with open("ntscalar_config.yml", "r") as f:
     ntscalar_config = yaml.load(f, Loader=yaml.SafeLoader)
@@ -49,7 +49,7 @@ def start_server(ntscalar_config):
 
     for pvname, config in ntscalar_config.items():
         pv_double = PVScalarRecipe(
-            metadata.PVTypes.DOUBLE, config["description"], config["initial"]
+            definitions.PVTypes.DOUBLE, config["description"], config["initial"]
         )
         server.addPV(pvname, pv_double)
 
