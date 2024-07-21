@@ -19,8 +19,9 @@ logger = logging.getLogger(__name__)
 
 class RulesFlow(Enum):
     """ 
-    Used by the BaseRulesHandler to control continuing or stopping
-    evaluation of rules in the defined sequence.
+    Used by the BaseRulesHandler to control whether to continue or stop
+    evaluation of rules in the defined sequence. It may also be used to
+    set an error message if rule evaluation is aborted.
     """
 
     CONTINUE  = auto()  # Continue rules processing
@@ -128,6 +129,8 @@ class BaseRulesHandler(Handler):
         # Evaluate the timestamp last
         self._init_rules.move_to_end("timestamp")
 
+        # TODO: Why is this different to _apply_rules? It doesn't have the same
+        # RulesFlow logic and it posts step by step rather than once at the end
         for init_rule_name, init_rule in self._init_rules.items():
             logger.debug('Processing post init rule %s', init_rule_name)
             value = init_rule(pv.current().raw, pv.current().raw)
@@ -420,7 +423,7 @@ class NTScalarRulesHandler(BaseRulesHandler):
     def evaluate_alarm_limits(self, combinedvals, pvstate : Value) -> None | Value:
         """ Evaluate alarm value limits """
         # TODO: Apply the rule for hysteresis. Unfortunately I don't understand the
-
+        # explanation in the Normative Types specification...
 
         if 'valueAlarm' not in combinedvals:
             logger.debug("valueAlarm not present in structure")
@@ -477,7 +480,7 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
     def __init__(self) -> None:
         super().__init__()
 
-        self._init_rules.update({'control' : self.evaluate_control_limits})
+        self._init_rules["control"] = self.evaluate_control_limits
         self._put_rules["control"] = self._controls_rule
 
     def _controls_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
@@ -494,7 +497,7 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
 
         combinedvals = self._combined_pvstates(oldpvstate, newpvstate, "control")
 
-        # The numpy array used by the Value object is write protected so we need to create a copy 
+        # The numpy array used by the Value object is write protected so we need to create a copy
         # of the value (using a list for simplicity) so individual elements can be assigned.
         newpvstateval = list(newpvstate["value"])
 
@@ -508,7 +511,7 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
                 logger.debug("Value at array index %i is less than minStep %r",
                               i, combinedvals['control.minStep'])
                 newpvstateval[i] = oldpvstate["value"][i]
-            else: 
+            else:
                 value = self.evaluate_control_limits(combinedvals, None, index = i)
                 if value:
                     logger.debug("Setting value to %r", value)
@@ -542,7 +545,7 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
                 "control.limitLow and control.LimitHigh set to 0, so ignoring control limits"
             )
             return None
-        
+
         if index is None:
             # This part is normally called when the rules are initialised
             value = list(combinedvals["value"])
