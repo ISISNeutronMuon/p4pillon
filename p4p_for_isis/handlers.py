@@ -562,19 +562,19 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
                                  " changing value to %r", i, value[i])
 
             return value
-        else:
-            # Check lower and upper control limits
-            if combinedvals["value"][index] < combinedvals["control.limitLow"]:
-                value = combinedvals["control.limitLow"]
-                logger.debug("Lower control limit exceeded for index %i,"
-                             " changing value to %r", index, value)
-                return value
 
-            if combinedvals["value"][index] > combinedvals["control.limitHigh"]:
-                value = combinedvals["control.limitHigh"]
-                logger.debug("Upper control limit exceeded for index %i,"
-                             " changing value to %r", index, value)
-                return value
+        # Check lower and upper control limits
+        if combinedvals["value"][index] < combinedvals["control.limitLow"]:
+            value = combinedvals["control.limitLow"]
+            logger.debug("Lower control limit exceeded for index %i,"
+                            " changing value to %r", index, value)
+            return value
+
+        if combinedvals["value"][index] > combinedvals["control.limitHigh"]:
+            value = combinedvals["control.limitHigh"]
+            logger.debug("Upper control limit exceeded for index %i,"
+                            " changing value to %r", index, value)
+            return value
 
         return None
 
