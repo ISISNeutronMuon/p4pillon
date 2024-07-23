@@ -29,9 +29,7 @@ class RulesFlow(Enum):
     TERMINATE_WO_TIMESTAMP = auto() # Do not process further rules; do not apply timestamp rule
     ABORT     = auto()  # Stop rules processing and abort put
 
-    def __init__(self, value) -> None:
-        super().__init__(value)
-
+    def __init__(self, _) -> None:
         # We include an error string so that we can indicate why an ABORT
         # has been triggered
         self.error : str = None
@@ -74,8 +72,8 @@ class BaseRulesHandler(Handler):
     #    }
     #
     # In the case of a put of '{value: 11}' the value will become 10.
-    # In the case of a put of '{limitHigh: 2}' the value will become 2 and the
-    # limitHigh will become 2. Note that in this case the value will change
+    # In the case of a put of '{limitHigh: 5}' the value will become 5 and the
+    # limitHigh will become 5. Note that in this case the value will change
     # even though the put operation did not directly change it.
     # In the case of a put of '{value: -3, limitLow: -5}' the value will
     # become -3 and the limitLow will become -5. But the *order of evaluation
@@ -90,14 +88,36 @@ class BaseRulesHandler(Handler):
     # of named rules (i.e. functions). Note that the call signatures of these
     # two types of rules are different.
     #
-    # The first kind of rules is an init rule which is directly called when the
+    ## 1. Init Rules
+    # The first kind of rule is an init rule which is directly called when the
     # handler's onFirstCall is called, i.e. the first time the state of the PV
     # must be resolved, usually prompted by a first get/put/monitor. The PV has
-    # only its initial state and no prior state
-    # The init rules have function signature of
-    #    evaluate_field(self, combinedvals, pvstate : Value) -> None | Value:
-    # where combinedvals is a merger of the previous state of the PV and the
-    # new state of the PV for the relevant field(s).
+    # only its initial state and no prior state, nor does it have a ServerOperation
+    # describing an operation in progress.
+    #
+    # The init rules have a function signature of
+    #    evaluate_init_rule(combinedvals, pvstate : Value) -> None | Value:
+    # where 
+    # - combinedvals is a merger of the previous state of the PV and the
+    # new state of the PV for the relevant field(s). For evaluation during an
+    # init this is not required.
+    # - pvstate is the p4p.Value to be evaluated
+    #
+    # The init rule should return None if no action is to be taken, and a
+    # p4p.Value which will be p4p.post() if a change in the state of the PV
+    # is required.
+    #
+    # 2. Put Rules
+    # Put rules are those rules evaluated when a put operation is performed.
+    #
+    # The put rules have a function signature of
+    #    evaluate_put_rule(pv, op) -> RulesFlow
+    # - pv is a p4p.Value which encapsulates the current state of the pv
+    # - op is a p4p.ServerOperation which describes the changes requested by
+    #   the post
+    #
+    # A return value of RulesFlow allows control of the rules, including
+    # ABORTing if the put performs an illegal operation.
     #
     ### SPECIAL RULES
     # The two rules automatically included by BaseRulesHandler are given special
@@ -108,6 +128,10 @@ class BaseRulesHandler(Handler):
 
     def __init__(self) -> None:
         super().__init__()
+
+        # Name is used purely for logging. Because the name of the PV is stored by
+        # the Server and not the PV object associated with this handler we can't
+        # determine the name until the first put operation
         self._name = None   # Used purely for logging
 
         self._init_rules : OrderedDict[
@@ -252,6 +276,16 @@ class BaseRulesHandler(Handler):
     def _combined_pvstates(
         self, oldpvstate: Value, newpvstate: Value, interests: str | list[str]
     ) -> dict:
+        """ 
+        Combine the current state of the PV and that in progress from a
+        ServerOperation, extracting the specified list of interests (e.g. 
+        "control", "valueAlarm", etc.). Note that value is always included.
+        The merger prioritises infromation from the ServerOperation, using 
+        the current state of the PV to fill in any information not in the
+        ServerOperation.
+        A dictionary with the merged interests is returned.
+        """
+
         # This is complicated! We may need to process alarms based on either
         # the oldstate or the newstate of the PV. Suppose, for example, the
         # valueAlarm limits have all been set in the PV but it is not yet active.
@@ -371,7 +405,7 @@ class NTScalarRulesHandler(BaseRulesHandler):
     def __alarm_state_check(
         self, combinedvals: dict, newpvstate: Value, alarm_type: str, op=None
     ) -> bool:
-        """Check whether"""
+        """Check whether the PV should be in an alarm state """
         if not op:
             if alarm_type.startswith("low"):
                 op = operator.le
