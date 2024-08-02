@@ -14,16 +14,23 @@ from typing import TypeVar, Generic
 from p4p.nt import NTEnum, NTScalar
 from p4p.server.thread import SharedPV
 
-from .definitions import PVTypes, AlarmSeverity, Format
-from .handlers import BaseRulesHandler, NTScalarRulesHandler, \
-                      NTEnumRulesHandler, NTScalarArrayRulesHandler
+from .definitions import (
+    PVTypes,
+    AlarmSeverity,
+    Format,
+    MAX_FLOAT,
+    MIN_FLOAT,
+    MAX_INT32,
+    MIN_INT32,
+)
+from .handlers import (
+    BaseRulesHandler,
+    NTScalarRulesHandler,
+    NTEnumRulesHandler,
+    NTScalarArrayRulesHandler,
+)
 
 logger = logging.getLogger(__name__)
-
-MIN_FLOAT = float("-inf")
-MAX_FLOAT = float("inf")
-MIN_INT32 = -2147483648
-MAX_INT32 = 2147483647
 
 
 @dataclass
@@ -39,18 +46,16 @@ class Timestamp:
         return (seconds, nanoseconds)
 
 
-T = TypeVar('T', int, Numeric)
+T = TypeVar("T", int, Numeric)
 
 
 @dataclass
 class Control(Generic[T]):
     """Set limits on permitted values"""
 
-    limit_low: T
-    limit_high: T
-    min_step: T
-
-    # read_only = False
+    limit_low: T = None
+    limit_high: T = None
+    min_step: T = 0
 
 
 @dataclass
@@ -59,6 +64,9 @@ class Display(Generic[T]):
 
     limit_low: T = None
     limit_high: T = None
+    units: str = ""
+    format: Format = Format.DEFAULT
+    precision: int = -1
 
 
 @dataclass
@@ -76,6 +84,7 @@ class AlarmLimit(Generic[T]):
     high_alarm_severity: AlarmSeverity = AlarmSeverity.MAJOR_ALARM
     hysteresis: T = 0
 
+
 @dataclass
 class BasePVRecipe:
     """A description of how to build a PV"""
@@ -83,9 +92,6 @@ class BasePVRecipe:
     pvtype: PVTypes
     description: str
     initial_value: Numeric | list | str
-    units: str = ""
-    format: Format = Format.DEFAULT
-    precision: int = -1
 
     # Alarm: alarm = field(init=False)
     timestamp: Timestamp | None = None
@@ -116,15 +122,21 @@ class BasePVRecipe:
         This method is called by create_pv in the child classes after construct settings is set.
         """
 
-        logger.debug("Building pv. Construct settings are: \n %r \n"
-                     "and config settings are:\n %r",
-                     self.construct_settings, self.config_settings)
+        logger.debug(
+            "Building pv. Construct settings are: \n %r \n"
+            "and config settings are:\n %r",
+            self.construct_settings,
+            self.config_settings,
+        )
 
-        if (self.construct_settings['valtype'] not in ['s', 'e']
+        if (
+            self.construct_settings["valtype"] not in ["s", "e"]
             and isinstance(self.initial_value, collections.abc.Sequence)
-            and not self.construct_settings['valtype'].startswith('a')
-            ):
-            self.construct_settings['valtype'] = 'a' + self.construct_settings['valtype']
+            and not self.construct_settings["valtype"].startswith("a")
+        ):
+            self.construct_settings["valtype"] = (
+                "a" + self.construct_settings["valtype"]
+            )
 
         if self.pvtype == PVTypes.ENUM:
             nt = NTEnum(**self.construct_settings)
@@ -151,75 +163,103 @@ class BasePVRecipe:
         """Return a shallow copy of this instance"""
         return dataclasses.replace(self)
 
+
 class PVScalarRecipe(BasePVRecipe):
-    """ Recipe to build an NTScalar """
+    """Recipe to build an NTScalar"""
 
     def __post_init__(self):
         super().__post_init__()
-        if self.pvtype != PVTypes.DOUBLE and self.pvtype != PVTypes.INTEGER \
-            and self.pvtype != PVTypes.STRING:
-            raise ValueError(f"Unsupported pv type {self.pvtype} "
-                             "for class {self.__class__.__name__}")
+        if (
+            self.pvtype != PVTypes.DOUBLE
+            and self.pvtype != PVTypes.INTEGER
+            and self.pvtype != PVTypes.STRING
+        ):
+            raise ValueError(
+                f"Unsupported pv type {self.pvtype} "
+                "for class {self.__class__.__name__}"
+            )
 
-    def set_control_limits(self,
-                           low: Numeric = None, high: Numeric = None, min_step: Numeric = 0,
-                           config: dict = None):
+    def set_control_limits(self, low: Numeric = None, high: Numeric = None, min_step=0):
         """
         Add control limits
-        config is a dictionary of low, high, min_step. This is used by the config_reader
+        config is a dictionary of low_limit and high_limit. This is used by the config_reader.
         """
-
-        # If config is supplied, use those values. Primarily used for reading in from YAML
-        if config is not None:
-            low = config.get('low')
-            high = config.get('high')
-            if config.get('min_step') is not None:
-                # NB if min_step is not in config then the default, min_step=0, is used.
-                min_step = config.get('min_step')
-
-        if low is None:
-            raise ValueError("low limit not set")
-        if high is None:
-            raise ValueError("high limit not set")
-
         match self.pvtype:
             case PVTypes.DOUBLE:
-                self.control = Control[float](low, high, min_step)
+                if low is None:
+                    low = MIN_FLOAT
+                if high is None:
+                    high = MAX_FLOAT
+                self.control = Control[float](
+                    limit_low=low, limit_high=high, min_step=min_step
+                )
             case PVTypes.INTEGER:
-                self.control = Control[int](low, high, min_step)
+                if low is None:
+                    low = MIN_INT32
+                if high is None:
+                    high = MAX_INT32
+                self.control = Control[int](
+                    limit_low=low, limit_high=high, min_step=min_step
+                )
             case PVTypes.STRING:
                 raise SyntaxError("Control limits not supported on string PVs")
-            
-    def set_display_limits(self,
-                           low_limit: Numeric = None, high_limit: Numeric = None,
-                           config: dict = None):
+            case PVTypes.ENUM:
+                # NOTE this won't be raised if using the PVEnum recipe
+                raise SyntaxError("Control limits not supported on enum PVs")
+
+    def set_display_limits(
+        self,
+        low: Numeric = None,
+        high: Numeric = None,
+        units: str = "",
+        format: Format = Format.DEFAULT,
+        precision: int = -1,
+    ):
         """
         Add display limits
         config is a dictionary of low_limit and high_limit. This is used by the config_reader.
         """
-        if config is not None:
-            low_limit = config.get('limitLow')
-            high_limit = config.get('limitHigh')
+        if isinstance(format, str):
+            # check if it's in the available options
+            try:
+                choices = [form.value[1] for form in Format]
+                idx = choices.index(format.title())
+                format = list(Format)[idx]
+            except ValueError as e:
+                raise ValueError(
+                    f"{format} not an available format, choices are: {choices}"
+                ) from e
 
         match self.pvtype:
             case PVTypes.DOUBLE:
-                if low_limit is None:
-                    low_limit = MIN_FLOAT
-                if high_limit is None:
-                    high_limit = MAX_FLOAT
+                if low is None:
+                    low = MIN_FLOAT
+                if high is None:
+                    high = MAX_FLOAT
                 self.display = Display[float](
-                    limit_low=low_limit, limit_high=high_limit
+                    limit_low=low,
+                    limit_high=high,
+                    units=units,
+                    format=format,
+                    precision=precision,
                 )
             case PVTypes.INTEGER:
-                if low_limit is None:
-                    low_limit = MIN_INT32
-                if high_limit is None:
-                    high_limit = MAX_INT32
-                self.display = Display[int](limit_low=low_limit, limit_high=high_limit)
+                if low is None:
+                    low = MIN_INT32
+                if high is None:
+                    high = MAX_INT32
+                self.display = Display[int](
+                    limit_low=low,
+                    limit_high=high,
+                    units=units,
+                    format=format,
+                    precision=precision,
+                )
             case PVTypes.STRING:
-                raise SyntaxError("Control limits not supported on string PVs")
+                raise SyntaxError("Display limits not supported on string PVs")
             case PVTypes.ENUM:
-                raise SyntaxError("Control limits not supported on enum PVs")
+                # NOTE this won't be raised if using the PVEnum recipe
+                raise SyntaxError("Display limits not supported on enum PVs")
 
     def set_alarm_limits(
         self,
@@ -227,15 +267,11 @@ class PVScalarRecipe(BasePVRecipe):
         high_warning: Numeric = None,
         low_alarm: Numeric = None,
         high_alarm: Numeric = None,
-        config: dict = None
     ):
-        """Add alarm limits"""
-        if config is not None:
-            low_warning = config.get('lowWarningLimit')
-            high_warning = config.get('highWarningLimit')
-            low_alarm = config.get('lowAlarmLimit')
-            high_alarm = config.get('highAlarmLimit')
-
+        """
+        Add display limits
+        config is a dictionary of low_limit and high_limit. This is used by the config_reader.
+        """
         match self.pvtype:
             case PVTypes.DOUBLE:
                 if low_warning is None:
@@ -261,7 +297,7 @@ class PVScalarRecipe(BasePVRecipe):
                     low_alarm = MIN_INT32
                 if high_alarm is None:
                     high_alarm = MAX_INT32
-                self.alarm_limit = AlarmLimit[int](
+                self.alarm_limit = AlarmLimit[float](
                     low_alarm_limit=low_alarm,
                     low_warning_limit=low_warning,
                     high_warning_limit=high_warning,
@@ -270,6 +306,7 @@ class PVScalarRecipe(BasePVRecipe):
             case PVTypes.STRING:
                 raise SyntaxError("Alarm limits not supported on string PVs")
             case PVTypes.ENUM:
+                # NOTE this won't be raised if using the PVEnum recipe
                 raise SyntaxError("Alarm limits not supported on enum PVs")
 
     @abstractmethod
@@ -277,7 +314,8 @@ class PVScalarRecipe(BasePVRecipe):
         """Turn the recipe into an actual NTScalar, NTEnum, or
         other BasePV derived object"""
 
-        self._config_display()
+        if self.display:
+            self._config_display()
 
         if self.control:
             self._config_control()
@@ -290,53 +328,35 @@ class PVScalarRecipe(BasePVRecipe):
         return super().build_pv(pv_name, handler)
 
     def _config_display(self):
-        if self.units:
-            self.construct_settings["display"] = True
-            self.config_settings["display.description"] = self.description
-            self.config_settings["display.units"] = self.units
-
-        # Precision doesn't actually seem to be supported in Phoebus
-        if self.precision != -1:
-            self.construct_settings["display"] = True
-            self.construct_settings["form"] = True
-            self.config_settings["display.description"] = self.description
-            self.config_settings["display.precision"] = self.precision
-
-        if self.format != Format.DEFAULT:
-            self.construct_settings["display"] = True
-            self.config_settings["display.description"] = self.description
-            if "display.precision" not in self.config_settings:
-                self.config_settings["display.format"] = self.format.value[1]
-            else:
-                self.construct_settings["form"] = True
-                self.config_settings["display.form.index"] = self.format.value[0]
-                self.config_settings["display.form.choices"] = [
-                    "Default",
-                    "String",
-                    "Binary",
-                    "Decimal",
-                    "Hex",
-                    "Exponential",
-                    "Engineering",
-                ]
-
-        if self.display:
-            self.construct_settings["display"] = True
-            self.config_settings["display.description"] = self.description
-            self.config_settings["display.limitLow"] = self.display.limit_low
-            self.config_settings["display.limitHigh"] = self.display.limit_high
+        # we configure the display settings if a Display object is configured or if all of
+        # units, format and precision are not configured as the defaults
+        self.construct_settings["display"] = True
+        self.construct_settings["form"] = True
+        self.config_settings["display.description"] = self.description
+        self.config_settings["display.units"] = self.display.units
+        self.config_settings["display.precision"] = self.display.precision
+        self.config_settings["display.form.index"] = self.display.format.value[0]
+        self.config_settings["display.form.choices"] = [
+            form.value[1] for form in Format
+        ]
+        self.config_settings["display.limitLow"] = self.display.limit_low
+        self.config_settings["display.limitHigh"] = self.display.limit_high
 
     def _config_alarm_limit(self):
         self.construct_settings["valueAlarm"] = True
         self.config_settings["valueAlarm.active"] = self.alarm_limit.active
-        self.config_settings["valueAlarm.lowAlarmLimit"] = self.alarm_limit.low_alarm_limit
+        self.config_settings["valueAlarm.lowAlarmLimit"] = (
+            self.alarm_limit.low_alarm_limit
+        )
         self.config_settings["valueAlarm.lowWarningLimit"] = (
             self.alarm_limit.low_warning_limit
         )
         self.config_settings["valueAlarm.highWarningLimit"] = (
             self.alarm_limit.high_warning_limit
         )
-        self.config_settings["valueAlarm.highAlarmLimit"] = self.alarm_limit.high_alarm_limit
+        self.config_settings["valueAlarm.highAlarmLimit"] = (
+            self.alarm_limit.high_alarm_limit
+        )
         self.config_settings["valueAlarm.lowAlarmSeverity"] = (
             self.alarm_limit.low_alarm_severity.value
         )
@@ -357,64 +377,38 @@ class PVScalarRecipe(BasePVRecipe):
         self.config_settings["control.limitHigh"] = self.control.limit_high
         self.config_settings["control.minStep"] = self.control.min_step
 
-class PVScalarArrayRecipe(BasePVRecipe):
-    """ Recipe to create an NTScalarArray """
+
+class PVScalarArrayRecipe(PVScalarRecipe):
+    """Recipe to create an NTScalarArray"""
 
     @abstractmethod
     def create_pv(self, pv_name: str) -> NTScalar:
-        """ Turn the recipe into an actual NTScalar with an array """
+        """Turn the recipe into an actual NTScalar with an array"""
+
+        if self.display:
+            self._config_display()
 
         if self.control:
             self._config_control()
 
+        if self.alarm_limit:
+            self._config_alarm_limit()
+
         handler = NTScalarArrayRulesHandler()
 
         return super().build_pv(pv_name, handler)
-    
-    def set_control_limits(self,
-                           low: Numeric = None, high: Numeric = None, min_step: Numeric = 0,
-                           config: dict = None):
-        """
-        Add control limits
-        config is a dictionary of low, high, min_step. This is used by the config_reader
-        """
 
-        # If config is supplied, use those values. Primarily used for reading in from YAML
-        if config is not None:
-            low = config.get('low')
-            high = config.get('high')
-            if config.get('min_step') is not None:
-                # NB if min_step is not in config then the default, min_step=0, is used.
-                min_step = config.get('min_step')
-
-        if low is None:
-            raise ValueError("low limit not set")
-        if high is None:
-            raise ValueError("high limit not set")
-
-        match self.pvtype:
-            case PVTypes.DOUBLE:
-                self.control = Control[float](low, high, min_step)
-            case PVTypes.INTEGER:
-                self.control = Control[int](low, high, min_step)
-            case PVTypes.STRING:
-                raise SyntaxError("Control limits not supported on string PVs")
-
-    def _config_control(self):
-        self.construct_settings["control"] = True
-        self.config_settings["control.limitLow"] = self.control.limit_low
-        self.config_settings["control.limitHigh"] = self.control.limit_high
-        self.config_settings["control.minStep"] = self.control.min_step
-        
 
 class PVEnumRecipe(BasePVRecipe):
-    """ Recipe to create an NTEnum """
+    """Recipe to create an NTEnum"""
 
     def __post_init__(self):
         super().__post_init__()
         if self.pvtype != PVTypes.ENUM:
-            raise ValueError(f"Unsupported pv type {self.pvtype} "
-                             "for class {self.__class__.__name__}")
+            raise ValueError(
+                f"Unsupported pv type {self.pvtype} "
+                "for class {self.__class__.__name__}"
+            )
 
     @abstractmethod
     def create_pv(self, pv_name: str) -> NTEnum:
