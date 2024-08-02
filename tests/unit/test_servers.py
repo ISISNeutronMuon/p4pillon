@@ -2,9 +2,10 @@ import pytest
 from p4p.server import StaticProvider
 import os
 
-
+import logging
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 root_dir = Path(__file__).parents[2]
 
@@ -47,3 +48,99 @@ def test_server_retrieve_pvs(mock_recipe, pv_name):
     # we should be able to access the PV either with the full prefix added or without it
     assert server["TEST:PV"] == mock_recipe.create_pv.return_value
     assert server["DEV:TEST:PV"] == mock_recipe.create_pv.return_value
+
+
+@patch("p4p_for_isis.server.StaticProvider", autospec=True)
+@patch("p4p_for_isis.server.Server", autospec=True)
+def test_server_start(server, provider, caplog, mock_pv):
+    test_server = ISISServer(
+        ioc_name="TESTIOC",
+        section="controls testing",
+        description="server for unit tests",
+        prefix="DEV:",
+    )
+
+    test_server._pvs = {"DEV:TEST:PV:1": mock_pv}
+
+    assert test_server._running is False
+    with caplog.at_level(logging.DEBUG):
+        test_server.start()
+    assert len(caplog.records) == 1
+    provider.return_value.add.assert_called_once_with("DEV:TEST:PV:1", mock_pv)
+    server.assert_called_once_with(providers=[provider.return_value])
+    assert test_server._running is True
+
+
+@patch("p4p_for_isis.server.StaticProvider", autospec=True)
+@patch("p4p_for_isis.server.Server", autospec=True)
+@patch("p4p_for_isis.pvrecipe.PVScalarRecipe", autospec=True)
+def test_server_add_pv(recipe, server, provider, caplog):
+    test_server = ISISServer(
+        ioc_name="TESTIOC",
+        section="controls testing",
+        description="server for unit tests",
+        prefix="DEV:",
+    )
+
+    test_server.start()
+
+    with caplog.at_level(logging.DEBUG):
+        new_name = "TEST:PV:2"
+        test_server.addPV(new_name, recipe.return_value)
+    assert test_server["TEST:PV:2"] is recipe.return_value.create_pv.return_value
+    provider.return_value.add.assert_called_once_with(
+        "DEV:TEST:PV:2", recipe.return_value.create_pv.return_value
+    )
+
+    assert len(caplog.messages) == 1
+    assert caplog.messages[0] == "Added DEV:TEST:PV:2 to server"
+
+
+@patch("p4p_for_isis.server.StaticProvider", autospec=True)
+@patch("p4p_for_isis.server.Server", autospec=True)
+def test_server_stop(server, provider, caplog, mock_pv):
+    test_server = ISISServer(
+        ioc_name="TESTIOC",
+        section="controls testing",
+        description="server for unit tests",
+        prefix="DEV:",
+    )
+
+    test_server._running = True
+    test_server._server = server.return_value
+    test_server._pvs = {"DEV:TEST:PV:1": mock_pv}
+
+    with caplog.at_level(logging.DEBUG):
+        test_server.stop()
+
+    mock_pv.close.assert_called_once_with()
+    provider.return_value.remove.assert_called_once_with("DEV:TEST:PV:1")
+    server.return_value.stop.assert_called_once_with()
+    assert test_server._running is False
+
+
+@patch("p4p_for_isis.server.StaticProvider", autospec=True)
+@patch("p4p_for_isis.server.Server", autospec=True)
+@patch("p4p_for_isis.pvrecipe.PVScalarRecipe", autospec=True)
+def test_server_remove_pv(recipe, server, provider, caplog, mock_pv):
+    test_server = ISISServer(
+        ioc_name="TESTIOC",
+        section="controls testing",
+        description="server for unit tests",
+        prefix="DEV:",
+    )
+
+    test_server._pvs["DEV:TEST:PV:1"] = mock_pv
+    test_server._running = True
+    test_server._server = server.return_value
+
+    with caplog.at_level(logging.DEBUG):
+        test_server.removePV("TEST:PV:1")
+
+    mock_pv.close.assert_called_once_with()
+    provider.return_value.remove.assert_called_once_with("DEV:TEST:PV:1")
+
+    assert test_server._pvs.get("DEV:TEST:PV:1") is None
+
+    assert len(caplog.messages) == 1
+    assert caplog.messages[0] == "Removed DEV:TEST:PV:1 from server"
