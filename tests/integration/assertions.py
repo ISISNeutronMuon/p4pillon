@@ -6,43 +6,33 @@ from p4p.client.thread import Context
 root_dir = Path(__file__).parents[2]
 
 sys.path.append(str(root_dir))
+import numpy as np
+
+from p4p_for_isis.definitions import (
+    PVTypes,
+    Format,
+    MAX_FLOAT,
+    MAX_INT32,
+    MIN_FLOAT,
+    MIN_INT32,
+    AlarmSeverity,
+)
 
 
-def assert_value_changed(
-    pvname: str, put_value: float, put_timestamp: float, ctx: Context
-):
+def assert_value_changed(pvname: str, put_value, put_timestamp: float, ctx: Context):
     pv_state = ctx.get(pvname)
-    assert pv_state.real == put_value
+    current_value = pv_state.raw.todict()["value"]
+    assert np.array_equal(np.array(current_value), np.array(put_value))
     assert pv_state.timestamp > put_timestamp
 
 
 def assert_value_not_changed(
-    pvname: str, put_value: float, put_timestamp: float, ctx: Context
+    pvname: str, put_value, put_timestamp: float, ctx: Context
 ):
     pv_state = ctx.get(pvname)
-    assert pv_state.real != put_value
+    current_value = pv_state.raw.todict()["value"]
+    assert not np.array_equal(np.array(current_value), np.array(put_value))
     assert pv_state.timestamp < put_timestamp
-
-
-def assert_correct_display_config(
-    ctx: Context, pvname: str, display_config: dict, numeric: bool = True
-):
-    pv_state = ctx.get(pvname).raw.todict()
-    display_state = pv_state.get("display", {})
-    # the descriptor and the display description should in theory be the same
-    assert (
-        pv_state.get("descriptor", "")
-        == display_config.get("description", "")
-        == display_state.get("description")
-        == display_config.get("description", "")
-    )
-    assert display_state.get("units") == display_config.get("units", "")
-
-    # string NTScalars don't have these fields configured so we don't check them
-    if numeric:
-        assert display_state.get("format") == display_config.get("format", "")
-        assert display_state.get("limitHigh") == display_config.get("limitHigh", 0.0)
-        assert display_state.get("limitLow") == display_config.get("limitLow", 0.0)
 
 
 def assert_alarm_present(ctx: Context, pvname: str):
@@ -52,24 +42,74 @@ def assert_alarm_present(ctx: Context, pvname: str):
         assert pv_state.raw.todict().get("alarm").get(key) is not None
 
 
-def assert_correct_alarm_config(ctx: Context, pvname: str, alarm_config: dict):
-    value_alarm_state = ctx.get(pvname).raw.todict().get("valueAlarm", {})
+def assert_correct_display_config(pv_state: dict, pv_config: dict):
+    display_state = pv_state.get("display")
+    display_config = pv_config.get("display")
+    if display_config is None:
+        # this occurs when the entry in the yaml file is present but nothing
+        # listed within it
+        display_config = {}
 
-    assert value_alarm_state.get("active") is not None
-    assert value_alarm_state.get("hysteresis") is not None
-    assert value_alarm_state.get("highAlarmLimit") is not None
-    assert value_alarm_state.get("highWarningLimit") is not None
-    assert value_alarm_state.get("lowAlarmLimit") is not None
-    assert value_alarm_state.get("lowWarningLimit") is not None
-    assert value_alarm_state.get("highAlarmSeverity") is not None
-    assert value_alarm_state.get("highWarningSeverity") is not None
-    assert value_alarm_state.get("lowAlarmSeverity") is not None
-    assert value_alarm_state.get("lowWarningSeverity") is not None
+    assert display_state.get("description") == pv_config.get("description")
+    assert display_state.get("units") == display_config.get("units", "")
+    assert display_state.get("form") == {
+        "index": Format[display_config.get("format", "DEFAULT")].value[0],
+        "choices": [form.value[1] for form in Format],
+    }
+
+    assert display_state.get("precision") == display_config.get("precision", -1)
+    assert display_state.get("limitHigh") == display_config.get("high", MAX_FLOAT)
+    assert display_state.get("limitLow") == display_config.get("low", MIN_FLOAT)
 
 
-def assert_correct_control_config(ctx: Context, pvname: str, control_config: dict):
-    control_state = ctx.get(pvname).raw.todict().get("control", {})
+def assert_correct_control_config(pv_state: dict, pv_config: dict):
+    control_state = pv_state.get("control")
+    control_config = pv_config.get("control")
+    if control_config is None:
+        # this occurs when the entry in the yaml file is present but nothing
+        # listed within it
+        control_config = {}
 
-    assert control_state.get("limitHigh") is not None
-    assert control_state.get("limitLow") is not None
-    assert control_state.get("minStep") is not None
+    if pv_config["type"] == "DOUBLE":
+        default_max, default_min = MAX_FLOAT, MIN_FLOAT
+    else:
+        default_max, default_min = MAX_INT32, MIN_INT32
+
+    assert control_state.get("limitLow") == control_config.get("low", default_min)
+    assert control_state.get("limitHigh") == control_config.get("high", default_max)
+    assert control_state.get("minStep") == control_config.get("min_step", 0)
+
+
+def assert_correct_alarm_config(pv_state: dict, pv_config: dict):
+    valueAlarm_state = pv_state.get("valueAlarm")
+
+    valueAlarm_config = pv_config.get("valueAlarm")
+    if valueAlarm_config is None:
+        # this occurs when the entry in the yaml file is present but nothing
+        # listed within it
+        valueAlarm_config = {}
+
+    if pv_config["type"] == "DOUBLE":
+        default_max, default_min = MAX_FLOAT, MIN_FLOAT
+    else:
+        default_max, default_min = MAX_INT32, MIN_INT32
+
+    assert valueAlarm_state.get("lowAlarmLimit") == valueAlarm_config.get(
+        "low_alarm", default_min
+    )
+    assert valueAlarm_state.get("lowWarningLimit") == valueAlarm_config.get(
+        "low_warning", default_min
+    )
+    assert valueAlarm_state.get("highAlarmLimit") == valueAlarm_config.get(
+        "high_alarm", default_max
+    )
+    assert valueAlarm_state.get("highWarningLimit") == valueAlarm_config.get(
+        "high_warning", default_max
+    )
+    assert valueAlarm_state.get("lowAlarmSeverity") == AlarmSeverity.MAJOR_ALARM.value
+    assert valueAlarm_state.get("lowWarningSeverity") == AlarmSeverity.MINOR_ALARM.value
+    assert valueAlarm_state.get("highAlarmSeverity") == AlarmSeverity.MAJOR_ALARM.value
+    assert (
+        valueAlarm_state.get("highWarningSeverity") == AlarmSeverity.MINOR_ALARM.value
+    )
+    assert valueAlarm_state.get("hysteresis") == 0
