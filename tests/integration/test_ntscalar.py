@@ -21,6 +21,10 @@ from assertions import (
     assert_correct_control_config,
     assert_correct_display_config,
     assert_value_changed,
+    assert_pv_not_in_alarm_state,
+    assert_pv_in_minor_alarm_state,
+    assert_pv_in_major_alarm_state,
+    assert_pv_in_invalid_alarm_state,
     assert_value_not_changed,
 )
 
@@ -29,11 +33,10 @@ root_dir = Path(__file__).parents[2]
 sys.path.append(str(root_dir))
 
 from p4p_for_isis.server import ISISServer
-from p4p_for_isis.definitions import (
-    PVTypes,
-)
+from p4p_for_isis.definitions import PVTypes, AlarmSeverity
 
 from p4p_for_isis.config_reader import parse_config
+from p4p_for_isis.pvrecipe import PVScalarRecipe
 
 with open(f"{root_dir}/tests/integration/ntscalar_config.yml", "r") as f:
     ntscalar_config = yaml.load(f, Loader=yaml.SafeLoader)
@@ -190,15 +193,94 @@ def test_ntscalar_value_change(pvname, server_under_test, pv_config, ctx):
         assert_value_not_changed(pvname, put_val, put_timestamp, ctx)
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
-def test_ntscalar_alarm_logic(pvname, server_under_test, pv_config, ctx):
-    # TODO check alarm logic on relevant PVs e.g. putting a value in different
-    # states triggers the correct logic to be applied
-    pass
+class TestAlarms:
+    """Integration test case for validating alarm limit behaviour on a variety
+    of PV types"""
+
+    @pytest.mark.parametrize("pvtype", [(PVTypes.DOUBLE), (PVTypes.INTEGER)])
+    def test_ntscalar_basic_alarm_logic(self, ctx: Context, pvtype):
+        # here we have an example of a pretty standard range alarm configuration
+        pvname = "TEST:ALARM:PV"
+
+        server = ISISServer(
+            ioc_name="TESTIOC",
+            section="controls testing",
+            description="server for demonstrating Server use",
+            prefix="TEST:",
+        )
+
+        alarm_config = {
+            "low_alarm": -9,
+            "low_warning": -4,
+            "high_warning": 4,
+            "high_alarm": 9,
+        }
+        pv_double1 = PVScalarRecipe(pvtype, "An example alarmed PV", 0)
+        pv_double1.set_alarm_limits(**alarm_config)
+        server.addPV(pvname, pv_double1)
+
+        server.start()
+
+        ctx.put(pvname, -10)
+        assert_pv_in_major_alarm_state(pvname, ctx)
+        ctx.put(pvname, -5)
+        assert_pv_in_minor_alarm_state(pvname, ctx)
+        ctx.put(pvname, 0)
+        assert_pv_not_in_alarm_state(pvname, ctx)
+        ctx.put(pvname, 5)
+        assert_pv_in_minor_alarm_state(pvname, ctx)
+        ctx.put(pvname, 10)
+        assert_pv_in_major_alarm_state(pvname, ctx)
+
+        server.stop()
+
+    @pytest.mark.parametrize("pvtype", [(PVTypes.DOUBLE), (PVTypes.INTEGER)])
+    def test_ntscalar_defaults_alarm_logic(self, ctx: Context, pvtype):
+        # PVs that use the default values will never go into the alarm state
+        pvname = "TEST:ALARM:PV"
+
+        server = ISISServer(
+            ioc_name="TESTIOC",
+            section="controls testing",
+            description="server for demonstrating Server use",
+            prefix="TEST:",
+        )
+
+        alarm_config = {}
+        pv_double1 = PVScalarRecipe(pvtype, "An example double PV", 0)
+        pv_double1.set_alarm_limits(**alarm_config)
+        server.addPV(pvname, pv_double1)
+
+        server.start()
+
+        for val in [-10, -5, 0, 5, 10]:
+            ctx.put(pvname, val)
+            assert_pv_not_in_alarm_state(pvname, ctx)
+
+        server.stop()
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
-def test_ntscalar_control_logic(pvname, server_under_test, pv_config, ctx):
-    # TODO check control logic on relevant PVs e.g. trying to put a value above
-    # the limit will prevent it being applied
-    pass
+class TestControl:
+    """Integration test case for validating control limit behaviour on a variety
+    of PV types"""
+
+    @pytest.mark.parametrize("pvtype", [(PVTypes.DOUBLE), (PVTypes.INTEGER)])
+    def test_ntscalar_basic_control_logic(self, ctx: Context, pvtype):
+        # here we have an example of a pretty standard range alarm configuration
+        pvname = "TEST:CONTROL:PV"
+
+        server = ISISServer(
+            ioc_name="TESTIOC",
+            section="controls testing",
+            description="server for demonstrating Server use",
+            prefix="TEST:",
+        )
+
+        control_config = {"low": -10, "high": 10, "min_step": 1}
+        pv_double1 = PVScalarRecipe(pvtype, "An example PV with control limits", 0)
+        pv_double1.set_control_limits(**control_config)
+        server.addPV(pvname, pv_double1)
+
+        server.start()
+        # TODO implement test logic here
+        server.stop()

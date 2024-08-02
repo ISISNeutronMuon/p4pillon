@@ -113,3 +113,23 @@ def assert_correct_alarm_config(pv_state: dict, pv_config: dict):
         valueAlarm_state.get("highWarningSeverity") == AlarmSeverity.MINOR_ALARM.value
     )
     assert valueAlarm_state.get("hysteresis") == 0
+
+
+def assert_pv_in_major_alarm_state(pvname: str, ctx: Context):
+    val = ctx.get(pvname)
+    assert val.severity == AlarmSeverity.MAJOR_ALARM.value
+
+
+def assert_pv_in_minor_alarm_state(pvname: str, ctx: Context):
+    val = ctx.get(pvname)
+    assert val.severity == AlarmSeverity.MINOR_ALARM.value
+
+
+def assert_pv_in_invalid_alarm_state(pvname: str, ctx: Context):
+    val = ctx.get(pvname)
+    assert val.severity == AlarmSeverity.INVALID_ALARM.value
+
+
+def assert_pv_not_in_alarm_state(pvname: str, ctx: Context):
+    val = ctx.get(pvname)
+    assert val.severity == AlarmSeverity.NO_ALARM.value
