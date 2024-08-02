@@ -203,9 +203,6 @@ class PVScalarRecipe(BasePVRecipe):
                 )
             case PVTypes.STRING:
                 raise SyntaxError("Control limits not supported on string PVs")
-            case PVTypes.ENUM:
-                # NOTE this won't be raised if using the PVEnum recipe
-                raise SyntaxError("Control limits not supported on enum PVs")
 
     def set_display_limits(
         self,
@@ -257,9 +254,6 @@ class PVScalarRecipe(BasePVRecipe):
                 )
             case PVTypes.STRING:
                 raise SyntaxError("Display limits not supported on string PVs")
-            case PVTypes.ENUM:
-                # NOTE this won't be raised if using the PVEnum recipe
-                raise SyntaxError("Display limits not supported on enum PVs")
 
     def set_alarm_limits(
         self,
@@ -305,9 +299,6 @@ class PVScalarRecipe(BasePVRecipe):
                 )
             case PVTypes.STRING:
                 raise SyntaxError("Alarm limits not supported on string PVs")
-            case PVTypes.ENUM:
-                # NOTE this won't be raised if using the PVEnum recipe
-                raise SyntaxError("Alarm limits not supported on enum PVs")
 
     @abstractmethod
     def create_pv(self, pv_name: str) -> NTScalar:
@@ -395,6 +386,9 @@ class PVScalarArrayRecipe(PVScalarRecipe):
             self._config_alarm_limit()
 
         handler = NTScalarArrayRulesHandler()
+
+        if not isinstance(self.initial_value, list):
+            self.initial_value = [self.initial_value]
 
         return super().build_pv(pv_name, handler)
 
