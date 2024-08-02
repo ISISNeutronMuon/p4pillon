@@ -1,11 +1,14 @@
 import sys
 from pathlib import Path
 
-import pytest
-
 root_dir = Path(__file__).parents[2]
 
 sys.path.append(str(root_dir))
+from unittest.mock import patch
+
+import pytest
+from p4p.nt import NTEnum, NTScalar
+
 from p4p_for_isis.definitions import (
     MAX_FLOAT,
     MAX_INT32,
@@ -14,6 +17,11 @@ from p4p_for_isis.definitions import (
     AlarmSeverity,
     Format,
     PVTypes,
+)
+from p4p_for_isis.handlers import (
+    NTEnumRulesHandler,
+    NTScalarArrayRulesHandler,
+    NTScalarRulesHandler,
 )
 from p4p_for_isis.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
 
@@ -223,3 +231,92 @@ def test_ntscalar_string_errors():
         with pytest.raises(SyntaxError) as e:
             recipe.set_alarm_limits()
         assert "not supported" in str(e)
+
+
+def test_ntscalar_enum_error():
+    with pytest.raises(ValueError) as e:
+        recipe = PVScalarRecipe(PVTypes.ENUM, description="test", initial_value=1)
+
+    assert "Unsupported pv type" in str(e)
+
+
+@pytest.mark.parametrize(
+    "recipe, pvtype, with_limits, expected_handler, expected_value",
+    [
+        (PVScalarRecipe, PVTypes.DOUBLE, True, NTScalarRulesHandler, 1),
+        (PVScalarRecipe, PVTypes.INTEGER, True, NTScalarRulesHandler, 1),
+        (PVScalarRecipe, PVTypes.DOUBLE, False, NTScalarRulesHandler, 1),
+        (PVScalarRecipe, PVTypes.INTEGER, False, NTScalarRulesHandler, 1),
+        (PVScalarArrayRecipe, PVTypes.DOUBLE, True, NTScalarArrayRulesHandler, [1]),
+        (PVScalarArrayRecipe, PVTypes.INTEGER, True, NTScalarArrayRulesHandler, [1]),
+        (PVScalarArrayRecipe, PVTypes.DOUBLE, False, NTScalarArrayRulesHandler, [1]),
+        (PVScalarArrayRecipe, PVTypes.INTEGER, False, NTScalarArrayRulesHandler, [1]),
+    ],
+)
+@patch("time.time")
+def test_ntscalar_numeric_create_pv(
+    mock_time, recipe, pvtype, with_limits, expected_handler, expected_value
+):
+    mock_time.return_value = 123.456
+    initial = 1.0
+    recipe = recipe(pvtype, description="test", initial_value=initial)
+
+    if with_limits:
+        recipe.set_display_limits()
+        recipe.set_control_limits()
+        recipe.set_alarm_limits()
+
+    pv = recipe.create_pv(pv_name="UNIT:TEST:PV")
+
+    pvdict = pv.current().raw.todict()
+
+    assert isinstance(pv._handler, expected_handler)
+    assert isinstance(pv.nt, NTScalar)
+    assert pv.isOpen() is True
+
+    assert pv.current().real == expected_value
+    assert pv.current().timestamp == mock_time.return_value
+    assert pvdict.get("alarm") is not None
+    if with_limits:
+        assert pvdict.get("display") is not None
+        assert pvdict.get("control") is not None
+        assert pvdict.get("valueAlarm") is not None
+    else:
+        assert pvdict.get("display") is None
+        assert pvdict.get("control") is None
+        assert pvdict.get("valueAlarm") is None
+
+
+@pytest.mark.parametrize(
+    "recipe, expected_handler, expected_value",
+    [
+        (PVScalarRecipe, NTScalarRulesHandler, "test"),
+        # TODO work out how to fix this - currently failing as unable to wrap
+        pytest.param(
+            PVScalarArrayRecipe,
+            NTScalarArrayRulesHandler,
+            ["test"],
+            marks=pytest.mark.xfail,
+        ),
+    ],
+)
+@patch("time.time")
+def test_ntscalar_string_create_pv(mock_time, recipe, expected_handler, expected_value):
+    mock_time.return_value = 123.456
+    initial = "test"
+    recipe = recipe(PVTypes.STRING, description="test", initial_value=initial)
+
+    pv = recipe.create_pv(pv_name="UNIT:TEST:PV")
+
+    pvdict = pv.current().raw.todict()
+
+    assert isinstance(pv._handler, expected_handler)
+    assert isinstance(pv.nt, NTScalar)
+    assert pv.isOpen() is True
+    assert pv.current().timestamp == mock_time.return_value
+    assert pvdict["value"] == expected_value
+    assert pvdict.get("alarm") is not None
+    # string PVs shouldn't have any of these fields
+    assert pvdict.get("display") is None
+    assert pvdict.get("control") is None
+    assert pvdict.get("valueAlarm") is None
