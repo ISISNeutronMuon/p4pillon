@@ -4,31 +4,31 @@ import collections.abc
 import dataclasses
 import logging
 import time
-
 from abc import abstractmethod
-
 from dataclasses import dataclass
+from typing import Generic
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
-from typing import TypeVar, Generic
+from typing import TypeVar
 
 from p4p.nt import NTEnum, NTScalar
 from p4p.server.thread import SharedPV
 
 from .definitions import (
-    PVTypes,
+    MAX_FLOAT,
+    MAX_INT32,
+    MIN_FLOAT,
+    MIN_INT32,
     AlarmSeverity,
     Format,
-    MAX_FLOAT,
-    MIN_FLOAT,
-    MAX_INT32,
-    MIN_INT32,
+    PVTypes,
 )
 from .handlers import (
     BaseRulesHandler,
-    NTScalarRulesHandler,
     NTEnumRulesHandler,
     NTScalarArrayRulesHandler,
+    NTScalarRulesHandler,
 )
+from .utils import time_in_seconds_and_nanoseconds
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +41,7 @@ class Timestamp:
 
     def time_in_seconds_and_nanoseconds(self) -> tuple[int, int]:
         """Convert to EPICS style structured timestamp"""
-        seconds = int(self.time // 1)
-        nanoseconds = int((self.time % 1) * 1e9)
-        return (seconds, nanoseconds)
+        return time_in_seconds_and_nanoseconds(self.time)
 
 
 T = TypeVar("T", int, Numeric)
