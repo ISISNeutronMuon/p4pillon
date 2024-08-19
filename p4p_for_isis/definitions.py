@@ -1,7 +1,11 @@
+"""Enums used by p4p for ISIS"""
+
 from enum import Enum
 
 
 class PVTypes(Enum):
+    """Supported p4p Types"""
+
     DOUBLE = "d"
     INTEGER = "i"
     STRING = "s"
@@ -9,6 +13,8 @@ class PVTypes(Enum):
 
 
 class AlarmSeverity(Enum):
+    """PVAccess Normative Type alarm severities"""
+
     NO_ALARM = 0
     MINOR_ALARM = 1
     MAJOR_ALARM = 2
@@ -17,6 +23,8 @@ class AlarmSeverity(Enum):
 
 
 class AlarmStatus(Enum):
+    """PVAccess Normative Type alarm status codes"""
+
     NO_STATUS = 0
     DEVICE_STATUS = 1
     DRIVER_STATUS = 2
@@ -28,6 +36,8 @@ class AlarmStatus(Enum):
 
 
 class Format(Enum):
+    """PVAccess Normative Type display format mappings"""
+
     DEFAULT = (0, "Default")
     STRING = (1, "String")
     BINARY = (2, "Binary")
