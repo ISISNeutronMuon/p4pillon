@@ -1,7 +1,12 @@
-import logging
+"""
+ISISServer is used to create PVs and manage their lifetimes
+"""
 
-from p4p.nt import NTBase
+import logging
+from typing import List, Union
+
 from p4p.server import Server, StaticProvider
+from p4p.server.raw import SharedPV
 from p4p_for_isis.pvrecipe import PVScalarRecipe
 
 from .utils import validate_pv_name
@@ -12,9 +17,7 @@ logger = logging.getLogger(__name__)
 class ISISServer:
     """Creates PVs and manages their lifetimes"""
 
-    def __init__(
-        self, ioc_name: str, section: str, description: str, prefix=""
-    ) -> None:
+    def __init__(self, ioc_name: str, section: str, description: str, prefix="") -> None:
         """
         Initialize the ISIS Server instance.
 
@@ -44,8 +47,8 @@ class ISISServer:
         # the prefix determines the prefix of the PVs to be added to the server e.g. DEV:
         self.prefix = prefix
         self._provider = StaticProvider()
-        self._server = None
-        self._pvs: dict[str, NTBase] = {}
+        self._server: Server = None
+        self._pvs: dict[str, SharedPV] = {}
 
         self._running = False
 
@@ -77,7 +80,7 @@ class ISISServer:
 
         self._running = False
 
-    def addPV(self, pv_name: str, pv_recipe: PVScalarRecipe) -> NTBase:
+    def add_pv(self, pv_name: str, pv_recipe: PVScalarRecipe) -> SharedPV:
         """Add a PV to the server"""
 
         if not pv_name.startswith(self.prefix):
@@ -93,7 +96,7 @@ class ISISServer:
 
         return returnval
 
-    def removePV(self, pv_name: str):
+    def remove_pv(self, pv_name: str) -> None:
         """Remove a PV from the server"""
 
         if not pv_name.startswith(self.prefix):
@@ -109,11 +112,11 @@ class ISISServer:
         logger.debug("Removed %s from server", pv_name)
 
     @property
-    def pvlist(self) -> list[str]:
+    def pvlist(self) -> List[str]:
         """Return all the PVs managed by the server"""
         return list(self._pvs.keys())
 
-    def __getitem__(self, pv_name: str) -> NTBase:
+    def __getitem__(self, pv_name: str) -> Union[SharedPV, None]:
         """Return one of the PVs managed by the server given its name"""
         if not pv_name.startswith(self.prefix):
             pv_name = self.prefix + pv_name

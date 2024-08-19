@@ -43,7 +43,7 @@ def test_server_retrieve_pvs(mock_recipe, pv_name):
         description="server for unit tests",
         prefix="DEV:",
     )
-    server.addPV(pv_name, mock_recipe)
+    server.add_pv(pv_name, mock_recipe)
 
     # we should be able to access the PV either with the full prefix added or without it
     assert server["TEST:PV"] == mock_recipe.create_pv.return_value
@@ -86,7 +86,7 @@ def test_server_add_pv(recipe, server, provider, caplog):
 
     with caplog.at_level(logging.DEBUG):
         new_name = "TEST:PV:2"
-        test_server.addPV(new_name, recipe.return_value)
+        test_server.add_pv(new_name, recipe.return_value)
     assert test_server["TEST:PV:2"] is recipe.return_value.create_pv.return_value
     provider.return_value.add.assert_called_once_with(
         "DEV:TEST:PV:2", recipe.return_value.create_pv.return_value
@@ -135,7 +135,7 @@ def test_server_remove_pv(recipe, server, provider, caplog, mock_pv):
     test_server._server = server.return_value
 
     with caplog.at_level(logging.DEBUG):
-        test_server.removePV("TEST:PV:1")
+        test_server.remove_pv("TEST:PV:1")
 
     mock_pv.close.assert_called_once_with()
     provider.return_value.remove.assert_called_once_with("DEV:TEST:PV:1")
