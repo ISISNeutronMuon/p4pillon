@@ -1,17 +1,18 @@
+"""Read configuration from a YAML file"""
+
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import yaml
 
-from p4p_for_isis.server import ISISServer
-
-from .definitions import *
+from .definitions import PVTypes
+from .server import ISISServer
 from .pvrecipe import BasePVRecipe, PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
 
 logger = logging.getLogger(__name__)
 
 
-def parse_config(filename: str, server: ISISServer = None) -> List[PVScalarRecipe]:
+def parse_config(filename: str, server: Union[ISISServer, None] = None) -> List[PVScalarRecipe]:
     """
     Parse a yaml file and return a list of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
@@ -22,7 +23,7 @@ def parse_config(filename: str, server: ISISServer = None) -> List[PVScalarRecip
     if server is not None:
         for pvconfig in pvconfigs.items():
             pvrecipes.append(process_config(pvconfig))
-            server.addPV(pvconfig[0], pvrecipes[-1])
+            server.add_pv(pvconfig[0], pvrecipes[-1])
     else:
         for pvconfig in pvconfigs.items():
             pvrecipes.append(process_config(pvconfig))
@@ -31,8 +32,9 @@ def parse_config(filename: str, server: ISISServer = None) -> List[PVScalarRecip
 
 
 def read_config(filename: str) -> dict:
+    """Read the configuration file"""
     pvconfigs = {}
-    with open(filename) as f:
+    with open(filename, "r", encoding="utf8") as f:
         pvconfigs = yaml.load(f, yaml.SafeLoader)
 
     return pvconfigs
@@ -62,7 +64,7 @@ def process_config(pvconfig: Tuple[str, dict]) -> BasePVRecipe:
     pvname = pvconfig[0]
     pvdetails = pvconfig[1]
 
-    logger.debug(f"Processing configuration for pv {pvname}, config is {pvdetails}")
+    logger.debug("Processing configuration for pv %s, config is %r", pvname, pvdetails)
 
     # Check that type and description are specified, absence is a syntax error
     if "type" not in pvdetails:
@@ -72,38 +74,30 @@ def process_config(pvconfig: Tuple[str, dict]) -> BasePVRecipe:
 
     initial = pvdetails.get("initial")
     if not initial:
-        type = pvdetails["type"]
+        pvtype = pvdetails["type"]
         # If it's a number set it to 0, if it's a string make it empty
         # (This doesn't take into account syntax around arrays)
         # If it's something else an initial value needs to be supplied
-        if type == "DOUBLE" or type == "INT":
+        if pvtype == "DOUBLE" or pvtype == "INT":
             initial = 0
-        elif type == "STRING":
+        elif pvtype == "STRING":
             initial = ""
         else:
-            raise SyntaxError(
-                f"for PV {pvname} of type '{type}' an initial value must be supplied"
-            )
+            raise SyntaxError(f"for PV {pvname} of type '{pvtype}' an initial value must be supplied")
 
     if isinstance(pvdetails["initial"], list):
-        pvrecipe = PVScalarArrayRecipe(
-            PVTypes[pvdetails["type"]], pvdetails["description"], initial
-        )
+        pvrecipe = PVScalarArrayRecipe(PVTypes[pvdetails["type"]], pvdetails["description"], initial)
     elif pvdetails["type"] == "ENUM":
-        pvrecipe = PVEnumRecipe(
-            PVTypes[pvdetails["type"]], pvdetails["description"], initial
-        )
+        pvrecipe = PVEnumRecipe(PVTypes[pvdetails["type"]], pvdetails["description"], initial)
     else:
-        pvrecipe = PVScalarRecipe(
-            PVTypes[pvdetails["type"]], pvdetails["description"], initial
-        )
+        pvrecipe = PVScalarRecipe(PVTypes[pvdetails["type"]], pvdetails["description"], initial)
 
     supported_configs = [("read_only", bool)]
     for config, config_type in supported_configs:
         # Process variables in the configuration that are attributes of the pvrecipe class
-        tmpConfig = pvdetails.get(config)
-        if tmpConfig is not None and isinstance(tmpConfig, config_type):
-            setattr(pvrecipe, config, tmpConfig)
+        temp_config = pvdetails.get(config)
+        if temp_config is not None and isinstance(temp_config, config_type):
+            setattr(pvrecipe, config, temp_config)
 
     if "control" in pvdetails:
         pvrecipe.set_control_limits(**get_field_config(pvdetails, "control"))
@@ -116,6 +110,7 @@ def process_config(pvconfig: Tuple[str, dict]) -> BasePVRecipe:
 
 
 def get_field_config(pvdetails: dict, field_name: str) -> dict:
+    """Get a specified field from the configuration"""
     config = pvdetails.get(field_name)
     if config is None:
         config = {}
