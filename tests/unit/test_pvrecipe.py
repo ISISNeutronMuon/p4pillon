@@ -33,27 +33,27 @@ from p4p_for_isis.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
             # passing an empty display dictionary gives the defaults
             PVTypes.INTEGER,
             {},
-            (MIN_INT32, MAX_INT32, "", Format.DEFAULT, -1),
+            (MIN_INT32, MAX_INT32, "", Format.DEFAULT, 2),
         ),
         (
             PVTypes.INTEGER,
             {"units": "V"},
-            (MIN_INT32, MAX_INT32, "V", Format.DEFAULT, -1),
+            (MIN_INT32, MAX_INT32, "V", Format.DEFAULT, 2),
         ),
         (
             PVTypes.INTEGER,
             {"format": Format.ENGINEERING},
-            (MIN_INT32, MAX_INT32, "", Format.ENGINEERING, -1),
+            (MIN_INT32, MAX_INT32, "", Format.ENGINEERING, 2),
         ),
         (
             PVTypes.DOUBLE,
             {"units": "V"},
-            (MIN_FLOAT, MAX_FLOAT, "V", Format.DEFAULT, -1),
+            (MIN_FLOAT, MAX_FLOAT, "V", Format.DEFAULT, 2),
         ),
         (
             PVTypes.DOUBLE,
             {"low": -1.0, "high": 1.0},
-            (-1.0, 1.0, "", Format.DEFAULT, -1),
+            (-1.0, 1.0, "", Format.DEFAULT, 2),
         ),
         (
             PVTypes.DOUBLE,
@@ -63,7 +63,7 @@ from p4p_for_isis.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
         (
             PVTypes.DOUBLE,
             {"format": "ENGINEERING"},
-            (MIN_FLOAT, MAX_FLOAT, "", Format.ENGINEERING, -1),
+            (MIN_FLOAT, MAX_FLOAT, "", Format.ENGINEERING, 2),
         ),
     ],
 )
@@ -271,7 +271,7 @@ def test_ntscalar_numeric_create_pv(
     pvdict = pv.current().raw.todict()
 
     assert isinstance(pv._handler, expected_handler)
-    assert isinstance(pv.nt, NTScalar)
+    assert isinstance(pv.nt, NTScalar)  # change to check the name instead?
     assert pv.isOpen() is True
 
     assert pv.current().real == expected_value
