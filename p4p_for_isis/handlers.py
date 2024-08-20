@@ -144,6 +144,7 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
 
         self.rules["control"] = ScalarToArrayWrapperRule(ControlRule())
         self.rules["alarm"] = ScalarToArrayWrapperRule(AlarmRule())
+        self.rules["alarm_limit"] = ScalarToArrayWrapperRule(ValueAlarmRule())
         self.rules.move_to_end("timestamp")
 
 
