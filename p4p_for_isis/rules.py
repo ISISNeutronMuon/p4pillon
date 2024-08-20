@@ -7,18 +7,26 @@ are implementations of the logic of Normative Type
 # TODO: Consider adding Authentication class / callback for puts
 
 from abc import ABC, abstractmethod
+import itertools
 import logging
 import operator
 import time
 
 from enum import IntEnum, auto
-from typing import Dict, List, SupportsFloat as Numeric, Union  # Hack to type hint number types
+from typing import (
+    Dict,
+    List,
+    SupportsFloat as Numeric,  # Hack to type hint number types
+    Union,
+)
 
 from p4p import Type, Value
 from p4p.server import ServerOperation
 from p4p.server.thread import SharedPV
 
+from p4p_for_isis.definitions import AlarmSeverity
 from p4p_for_isis.utils import time_in_seconds_and_nanoseconds
+from p4p_for_isis.value_utils import overwrite_marked
 
 logger = logging.getLogger(__name__)
 
@@ -127,11 +135,14 @@ class BaseGatherableRule(BaseRule, ABC):
     Some Rules need additional support to allow use in ScalarToArrayWrapperRule
     """
 
+    def gather_init(self, gathered_value: Value) -> None:
+        """A gather may be optionally initialised."""
+
     @abstractmethod
-    def gather(self, scalar_value: Value, array_value: Value) -> None:
+    def gather(self, scalar_value: Value, gathered_value: Value) -> None:
         """
         Gather information from multiple individual applications of a Rule
-        across the elements of a NTScalarArray
+        across the elements of a NTScalarArray.
         """
 
 
@@ -188,7 +199,7 @@ class ControlRule(BaseRule):
     """
 
     _name = "control"
-    _fields = "control"
+    _fields = ["control"]
 
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         """Check whether a value should be clipped by the control limits
@@ -265,7 +276,7 @@ class ValueAlarmRule(BaseGatherableRule):
     """
 
     _name = "valueAlarm"
-    _fields = ["valueAlarm"]
+    _fields = ["alarm", "valueAlarm"]
 
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         """Evaluate alarm value limits"""
@@ -353,8 +364,22 @@ class ValueAlarmRule(BaseGatherableRule):
 
         return False
 
-    def gather(self, scalar_value: Value, array_value: Value) -> None:
-        pass
+    def gather_init(self, gathered_value: Value) -> None:
+        if all(x not in ["alarm", "valueAlarm"] for x in gathered_value):
+            return
+
+        if (
+            not gathered_value.changed("alarm.severity")
+            or gathered_value["alarm.severity"] != AlarmSeverity.INVALID_ALARM
+        ):
+            gathered_value["alarm.severity"] = AlarmSeverity.NO_ALARM
+
+    def gather(self, scalar_value: Value, gathered_value: Value) -> None:
+        if all(x not in ["alarm", "valueAlarm"] for x in scalar_value):
+            return
+
+        if scalar_value["alarm.severity"] > gathered_value["alarm.severity"]:
+            gathered_value["alarm.severity"] = scalar_value["alarm.severity"]
 
 
 class ScalarToArrayWrapperRule(BaseArrayRule):
@@ -437,9 +462,17 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
 
         return value
 
+    def _apply_gather(self, array_value: Value, scalar_value):
+        if all(x in array_value.keys() for x in self._fields):
+            overwrite_marked(array_value, scalar_value, self._fields)
+
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         # Convert the new Value into scalar versions
         scalared_new_state = self.scalarise(newpvstate)
+
+        gathered_value = self.scalarise(newpvstate)
+        if isinstance(self._wrapped, BaseGatherableRule):
+            self._wrapped.gather_init(gathered_value)
 
         # Loop through the array values applying the rules to each individual value
         newvals = []  # Use Ajit's trick to bypass the readonly value
@@ -454,24 +487,39 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
             if rule_flow > net_rule_flow:  # Set the overall state to the worst we have encountered!
                 net_rule_flow = rule_flow
 
+            if isinstance(self._wrapped, BaseGatherableRule):
+                self._wrapped.gather(scalared_new_state, gathered_value)
+
             newvals.append(scalared_new_state["value"])
 
+        # Apply what was gathered
         newpvstate["value"] = newvals
+        self._apply_gather(newpvstate, gathered_value)
 
         return net_rule_flow
 
+    # NOTE: Performance will be terrible! Every rule and every value has to be iterated every time!
     # TODO: What's the correct behaviour if the new and old PV states have different lengths?
+    # TODO: What is the correct behaviour for a Control Rule if the array size increases?
     # TODO: What if the Value["value"] has not changed?
     def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
         # Convert the current Value and new Value into scalar versions
         scalared_current_state = self.scalarise(oldpvstate)
         scalared_new_state = self.scalarise(newpvstate)
 
+        gathered_value = self.scalarise(newpvstate)
+        if isinstance(self._wrapped, BaseGatherableRule):
+            self._wrapped.gather_init(gathered_value)
+
         # Loop through the array values applying the rules to each individual value
         newvals = []  # Use Ajit's trick to bypass the readonly value
         net_rule_flow = RulesFlow.CONTINUE
-        for old_value, new_value in zip(oldpvstate["value"], newpvstate["value"]):
-            scalared_current_state["value"] = old_value
+        for old_value, new_value in itertools.zip_longest(oldpvstate["value"], newpvstate["value"]):
+            if old_value is not None:
+                scalared_current_state["value"] = old_value
+            else:
+                scalared_current_state = None
+
             scalared_new_state["value"] = new_value
 
             rule_flow = self._wrapped.post_rule(scalared_current_state, scalared_new_state)
@@ -482,10 +530,12 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
                 net_rule_flow = rule_flow
 
             if isinstance(self._wrapped, BaseGatherableRule):
-                self._wrapped.gather(scalared_new_state, newpvstate)
+                self._wrapped.gather(scalared_new_state, gathered_value)
 
             newvals.append(scalared_new_state["value"])
 
+        # Apply what was gathered
         newpvstate["value"] = newvals
+        self._apply_gather(newpvstate, gathered_value)
 
         return net_rule_flow
