@@ -11,10 +11,10 @@ import logging
 import operator
 import time
 
-from enum import Enum, auto
-from typing import List, SupportsFloat as Numeric  # Hack to type hint number types
+from enum import IntEnum, auto
+from typing import Dict, List, SupportsFloat as Numeric, Union  # Hack to type hint number types
 
-from p4p import Value
+from p4p import Type, Value
 from p4p.server import ServerOperation
 from p4p.server.thread import SharedPV
 
@@ -23,7 +23,7 @@ from p4p_for_isis.utils import time_in_seconds_and_nanoseconds
 logger = logging.getLogger(__name__)
 
 
-class RulesFlow(Enum):
+class RulesFlow(IntEnum):
     """
     Used by the BaseRulesHandler to control whether to continue or stop
     evaluation of rules in the defined sequence. It may also be used to
@@ -333,3 +333,132 @@ class ValueAlarmRule(BaseRule):
             return True
 
         return False
+
+
+class ScalarToArrayWrapperRule(BaseRule):
+    """
+    Wrap a rule designed to be applied to an NTScalar so that it works with
+    NTScalarArrays.
+    """
+
+    _name = "ScalarToArrayWrapperRule"
+    _fields = []
+
+    def __init__(self, to_wrap: BaseRule) -> None:
+        super().__init__()
+
+        self._wrapped = to_wrap
+
+        self._name = to_wrap._name
+        self._fields = to_wrap._fields
+
+    def _get_value_id(self, arrayval: Value) -> str:
+        return arrayval.type().aspy()[1]  # id of the structure, probably "epics:nt/NTScalarArray:1.0"
+
+    def _change_array_type_to_scalar_type(self, arrayval: Value) -> List:
+        """
+        Return the id and type of an NTScalarArray Value, changing the type of the
+        value field to be a scalar.
+        """
+
+        # The type of the scalar is essentially the same as the array with
+        # the value type modified. Extracting the type info of the input value
+        # and then making a change to it is surprisingly complicated!
+        val_aspy = arrayval.type().aspy()
+        val_type = dict(val_aspy[2])  # extract the actual structure recipe
+        val_type["value"] = val_type["value"][1:]  # change the value type to a scalar
+        val_type = list(val_type.items())  # back to a list
+
+        return val_type
+
+    def _value_without_value(self, arrayval: Value, index: Union[int, None] = None) -> Dict:
+        # It would be straightforward to use arrayval.todict() but the value
+        # could potentially be very large. So we use a more indirect way of
+        # constructing it by iterating through the keys
+        val_keys: list = arrayval.keys()
+        val_keys.remove("value")
+
+        val_dict = {}
+        for val_key in val_keys:
+            val_dict[val_key] = arrayval.todict(val_key)
+
+        # We don't always have a value if changes are being made to other parts of
+        # the structure, e.g. control limits
+
+        if index and "value" in arrayval and len(arrayval["value"]) >= index:
+            val_dict["value"] = arrayval["value"][index]
+        else:
+            # TODO: Default value isn't 0 for strings!
+            val_dict["value"] = 0
+
+        return val_dict
+
+    def scalarise(self, arrayval: Value, index: Union[int, None] = None) -> Value:
+        """
+        Convert the NTScalarArray into an NTScalar with the value of the
+        index element in the array. If no index is provided a default value
+        will be set.
+        """
+
+        # Constuct the new scalar value. This will have everything marked as changed
+        val_id = self._get_value_id(arrayval)
+        val_type = self._change_array_type_to_scalar_type(arrayval)
+        val_dict = self._value_without_value(arrayval, index)
+        value = Value(Type(val_type, id=val_id), val_dict)
+
+        # Fix the changedSet so it matches that of the array passed in
+        value.unmark()
+        changed_set = arrayval.changedSet()
+        for changed in changed_set:
+            value.mark(changed)
+
+        return value
+
+    def init_rule(self, newpvstate: Value) -> RulesFlow:
+        # Convert the new Value into scalar versions
+        scalared_new_state = self.scalarise(newpvstate)
+
+        # Loop through the array values applying the rules to each individual value
+        newvals = []  # Use Ajit's trick to bypass the readonly value
+        net_rule_flow = RulesFlow.CONTINUE
+        for new_value in newpvstate["value"]:
+            scalared_new_state["value"] = new_value
+
+            rule_flow = self._wrapped.init_rule(scalared_new_state)
+            if rule_flow == RulesFlow.ABORT:
+                return RulesFlow.ABORT
+
+            if rule_flow > net_rule_flow:  # Set the overall state to the worst we have encountered!
+                net_rule_flow = rule_flow
+
+            newvals.append(scalared_new_state["value"])
+
+        newpvstate["value"] = newvals
+
+        return net_rule_flow
+
+    # TODO: What's the correct behaviour if the new and old PV states have different lengths?
+    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
+        # Convert the current Value and new Value into scalar versions
+        scalared_current_state = self.scalarise(oldpvstate)
+        scalared_new_state = self.scalarise(newpvstate)
+
+        # Loop through the array values applying the rules to each individual value
+        newvals = []  # Use Ajit's trick to bypass the readonly value
+        net_rule_flow = RulesFlow.CONTINUE
+        for old_value, new_value in zip(oldpvstate["value"], newpvstate["value"]):
+            scalared_current_state["value"] = old_value
+            scalared_new_state["value"] = new_value
+
+            rule_flow = self._wrapped.post_rule(scalared_current_state, scalared_new_state)
+            if rule_flow == RulesFlow.ABORT:
+                return RulesFlow.ABORT
+
+            if rule_flow > net_rule_flow:  # Set the overall state to the worst we have encountered!
+                net_rule_flow = rule_flow
+
+            newvals.append(scalared_new_state["value"])
+
+        newpvstate["value"] = newvals
+
+        return net_rule_flow
