@@ -122,6 +122,25 @@ class BaseRule(ABC):
         return self.post_rule(oldpvstate, newpvstate)
 
 
+class BaseGatherableRule(BaseRule, ABC):
+    """
+    Some Rules need additional support to allow use in ScalarToArrayWrapperRule
+    """
+
+    @abstractmethod
+    def gather(self, scalar_value: Value, array_value: Value) -> None:
+        """
+        Gather information from multiple individual applications of a Rule
+        across the elements of a NTScalarArray
+        """
+
+
+class BaseArrayRule(BaseRule, ABC):
+    """
+    Rule to be applied to NTScalarArrays
+    """
+
+
 class ReadOnlyRule(BaseRule):
     """A rule which rejects all attempts to put values"""
 
@@ -237,7 +256,7 @@ class ControlRule(BaseRule):
         return abs(new_val - old_val) < min_step
 
 
-class ValueAlarmRule(BaseRule):
+class ValueAlarmRule(BaseGatherableRule):
     """
     Rule to check whether valueAlarm limits have been triggered, changing
     alarm.severity and alarm.message appropriately.
@@ -334,8 +353,11 @@ class ValueAlarmRule(BaseRule):
 
         return False
 
+    def gather(self, scalar_value: Value, array_value: Value) -> None:
+        pass
 
-class ScalarToArrayWrapperRule(BaseRule):
+
+class ScalarToArrayWrapperRule(BaseArrayRule):
     """
     Wrap a rule designed to be applied to an NTScalar so that it works with
     NTScalarArrays.
@@ -344,7 +366,7 @@ class ScalarToArrayWrapperRule(BaseRule):
     _name = "ScalarToArrayWrapperRule"
     _fields = []
 
-    def __init__(self, to_wrap: BaseRule) -> None:
+    def __init__(self, to_wrap: BaseRule | BaseGatherableRule) -> None:
         super().__init__()
 
         self._wrapped = to_wrap
@@ -389,7 +411,8 @@ class ScalarToArrayWrapperRule(BaseRule):
             val_dict["value"] = arrayval["value"][index]
         else:
             # TODO: Default value isn't 0 for strings!
-            val_dict["value"] = 0
+            # val_dict["value"] = 0
+            pass
 
         return val_dict
 
@@ -438,6 +461,7 @@ class ScalarToArrayWrapperRule(BaseRule):
         return net_rule_flow
 
     # TODO: What's the correct behaviour if the new and old PV states have different lengths?
+    # TODO: What if the Value["value"] has not changed?
     def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
         # Convert the current Value and new Value into scalar versions
         scalared_current_state = self.scalarise(oldpvstate)
@@ -451,11 +475,14 @@ class ScalarToArrayWrapperRule(BaseRule):
             scalared_new_state["value"] = new_value
 
             rule_flow = self._wrapped.post_rule(scalared_current_state, scalared_new_state)
+
             if rule_flow == RulesFlow.ABORT:
                 return RulesFlow.ABORT
-
             if rule_flow > net_rule_flow:  # Set the overall state to the worst we have encountered!
                 net_rule_flow = rule_flow
+
+            if isinstance(self._wrapped, BaseGatherableRule):
+                self._wrapped.gather(scalared_new_state, newpvstate)
 
             newvals.append(scalared_new_state["value"])
 
