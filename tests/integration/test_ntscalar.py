@@ -282,7 +282,6 @@ class TestAlarms:
             else:
                 assert_pv_in_major_alarm_state(pvname, ctx)
 
-    @pytest.mark.xfail(reason="Not implemented yet")
     @pytest.mark.parametrize("pvtype", [(PVTypes.DOUBLE), (PVTypes.INTEGER)])
     def test_basic_alarm_logic_array_vals(
         self, basic_server: ISISServer, ctx: Context, pvtype
@@ -299,7 +298,7 @@ class TestAlarms:
             "high_warning": 4,
             "high_alarm": 9,
         }
-        pv_double1 = PVScalarArrayRecipe(pvtype, "An example alarmed PV", 0)
+        pv_double1 = PVScalarArrayRecipe(pvtype, "An example alarmed PV", [0])
         pv_double1.set_alarm_limits(**alarm_config)
         basic_server.add_pv(pvname, pv_double1)
 
@@ -307,6 +306,19 @@ class TestAlarms:
 
         test_list = [0] * 5
 
+        # At start
+        ctx.put(pvname, [-10] + test_list)
+        assert_pv_in_major_alarm_state(pvname, ctx)
+        ctx.put(pvname, [-5] + test_list)
+        assert_pv_in_minor_alarm_state(pvname, ctx)
+        ctx.put(pvname, [0] + test_list)
+        assert_pv_not_in_alarm_state(pvname, ctx)
+        ctx.put(pvname, [5] + test_list)
+        assert_pv_in_minor_alarm_state(pvname, ctx)
+        ctx.put(pvname, [10] + test_list)
+        assert_pv_in_major_alarm_state(pvname, ctx)
+
+        # At end
         ctx.put(pvname, test_list + [-10])
         assert_pv_in_major_alarm_state(pvname, ctx)
         ctx.put(pvname, test_list + [-5])
