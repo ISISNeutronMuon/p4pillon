@@ -6,7 +6,7 @@ import logging
 from collections import OrderedDict
 from typing import Callable, Union
 
-from p4p import Type, Value
+from p4p import Value
 from p4p.server import ServerOperation
 from p4p.server.raw import Handler, SharedPV
 
@@ -18,6 +18,7 @@ from .rules import (
     ReadOnlyRule,
     RulesFlow,
     AlarmRule,
+    ScalarToArrayWrapperRule,
     TimestampRule,
     ValueAlarmRule,
 )
@@ -141,90 +142,9 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
     def __init__(self) -> None:
         super().__init__()
 
-        self.rules["control"] = ControlRule()
-        self.rules["alarm"] = AlarmRule()
+        self.rules["control"] = ScalarToArrayWrapperRule(ControlRule())
+        self.rules["alarm"] = ScalarToArrayWrapperRule(AlarmRule())
         self.rules.move_to_end("timestamp")
-
-    def scalarise(self, arrayval: Value, index: int) -> Value:
-        """
-        Convert the NTScalarArray into an NTScalar with the value of the
-        index element in the array
-        """
-
-        # The type of the scalar is essentially the same as the array with
-        # the value type modified. Extracting the type info of the input value
-        # and then making a change to it is surprisingly complicated!
-        val_aspy = arrayval.type().aspy()
-
-        val_id = val_aspy[1]  # id of the structure, probably "epics:nt/NTScalarArray:1.0"
-        val_type = dict(val_aspy[2])  # extract the actual structure recipe
-        val_type["value"] = val_type["value"][1:]  # change the value type to a scalar
-        val_type = list(val_type.items())  # back to a list
-
-        # It would be straightforward to use arrayval.todict() but the value
-        # could potentially be very large. So we use a more indirect way of
-        # constructing it by iterating through the keys
-        val_keys: list = arrayval.keys()
-        val_keys.remove("value")
-
-        val_dict = {}
-        for val_key in val_keys:
-            val_dict[val_key] = arrayval.todict(val_key)
-
-        # We don't always have a value if changes are being made to other parts of
-        # the structure, e.g. control limits
-        if "value" in arrayval and len(arrayval["value"]) >= index:
-            val_dict["value"] = arrayval["value"][index]
-        else:
-            val_dict["value"] = 0
-
-        # Constuct the new scalar value. This will have everything marked as changed
-        value = Value(Type(val_type, id=val_id), val_dict)
-
-        # Fix the changedSet
-        value.unmark()
-        changed_set = arrayval.changedSet()
-        for changed in changed_set:
-            value.mark(changed)
-
-        return value
-
-    def onFirstConnect(self, pv: SharedPV) -> None:
-        # TODO: Implement this properly
-        # If we trigger an ordinary post then in most cases it simply falls through
-        # to the init_rule. And when a post rule triggers nothing is actually different
-        # It may be worth considering making the BaseHandler class work like this?!
-        pv.post(value=pv.current().raw)
-
-    def post(self, pv: SharedPV, new_state: Value) -> None:
-
-        # Update the new_state with missing info from the current_state
-        current_state = pv.current().raw
-        overwrite_unmarked(current_state, new_state)
-
-        # Convert the current Value and new Value into scalar versions
-        scalared_current_state = self.scalarise(current_state, 0)
-        scalared_new_state = self.scalarise(new_state, 0)
-
-        # Loop through the array values applying the rules to each individual value
-        newvals = []  # Use Ajit's trick to bypass the readonly value
-        for idx in range(len(current_state["value"])):
-            scalared_current_state["value"] = current_state["value"][idx]
-            scalared_new_state["value"] = new_state["value"][idx]
-
-            def post_rule(rule: BaseRule) -> RulesFlow:
-                return rule.post_rule(scalared_current_state, scalared_new_state)
-
-            self._apply_rules(post_rule)
-
-            newvals.append(scalared_new_state["value"])
-
-        new_state["value"] = newvals
-
-    def put(self, pv: SharedPV, op: ServerOperation) -> None:
-        # TODO: Implement this properly and don't cheat and use the post
-        pv.post(value=op.value())
-        op.done()
 
 
 class NTEnumRulesHandler(BaseRulesHandler):
