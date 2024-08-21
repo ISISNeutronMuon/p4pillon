@@ -435,7 +435,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
     _name = "ScalarToArrayWrapperRule"
     _fields = []
 
-    def __init__(self, to_wrap: BaseRule | BaseGatherableRule) -> None:
+    def __init__(self, to_wrap: Union[BaseRule, BaseGatherableRule]) -> None:
         super().__init__()
 
         self._wrapped = to_wrap
