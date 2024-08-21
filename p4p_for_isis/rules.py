@@ -213,7 +213,18 @@ class TimestampRule(BaseRule):
     _fields = ["timeStamp"]
 
     def is_applicable(self, newpvstate: Value) -> bool:
-        if not "timeStamp" in newpvstate.keys():
+        """
+        Override the base class's rule because timeStamp changes are triggered
+        by changes to any field and not just to the timeStamp field
+        """
+
+        # If nothing at all has changed then don't update the timeStamp
+        # TODO: Check if this is expected behaviour for Normative Types
+        if not newpvstate.changedSet():
+            return False
+
+        # Check if there is a timeStamp field to update!
+        if "timeStamp" not in newpvstate.keys():
             return False
 
         return True
