@@ -17,6 +17,7 @@ from enum import IntEnum, auto
 from typing import (
     Dict,
     List,
+    Optional,
     SupportsFloat as Numeric,  # Hack to type hint number types
     Union,
 )
@@ -462,7 +463,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
 
         return val_type
 
-    def _value_without_value(self, arrayval: Value, index: Union[int, None] = None) -> Dict:
+    def _value_without_value(self, arrayval: Value, index: Optional[int] = None) -> Dict:
         # It would be straightforward to use arrayval.todict() but the value
         # could potentially be very large. So we use a more indirect way of
         # constructing it by iterating through the keys
@@ -485,7 +486,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
 
         return val_dict
 
-    def scalarise(self, arrayval: Value, index: Union[int, None] = None) -> Value:
+    def scalarise(self, arrayval: Value, index: Optional[int] = None) -> Value:
         """
         Convert the NTScalarArray into an NTScalar with the value of the
         index element in the array. If no index is provided a default value
