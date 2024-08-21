@@ -13,11 +13,11 @@ from p4p.server.raw import Handler, SharedPV
 from p4p_for_isis.value_utils import overwrite_unmarked
 
 from .rules import (
-    ControlRule,
+    AlarmRule,
     BaseRule,
+    ControlRule,
     ReadOnlyRule,
     RulesFlow,
-    AlarmRule,
     TimestampRule,
     ValueAlarmRule,
 )
@@ -197,7 +197,6 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
         pv.post(value=pv.current().raw)
 
     def post(self, pv: SharedPV, new_state: Value) -> None:
-
         # Update the new_state with missing info from the current_state
         current_state = pv.current().raw
         overwrite_unmarked(current_state, new_state)
