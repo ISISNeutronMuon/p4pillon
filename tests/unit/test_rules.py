@@ -72,7 +72,7 @@ class TestControl:
 
         assert result is RulesFlow.CONTINUE
         assert len(caplog.records) == 1
-        assert "control not present in structure" in str(caplog.records[0].getMessage())
+        assert "Rule control.post_rule is not applicable" in str(caplog.records[0].getMessage())
 
     @pytest.mark.parametrize(
         "nttype, new_value, expected_value",
