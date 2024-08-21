@@ -6,8 +6,8 @@ from typing import List, Tuple, Union
 import yaml
 
 from .definitions import PVTypes
-from .server import ISISServer
 from .pvrecipe import BasePVRecipe, PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
+from .server import ISISServer
 
 logger = logging.getLogger(__name__)
 
