@@ -6,13 +6,13 @@ are implementations of the logic of Normative Type
 
 # TODO: Consider adding Authentication class / callback for puts
 
-from abc import ABC, abstractmethod
 import logging
 import operator
 import time
-
+from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import List, SupportsFloat as Numeric  # Hack to type hint number types
+from typing import List
+from typing import SupportsFloat as Numeric  # Hack to type hint number types
 
 from p4p import Value
 from p4p.server import ServerOperation
