@@ -5,7 +5,7 @@ import pytest
 from p4p.nt import NTScalar
 
 from p4p_for_isis.definitions import AlarmSeverity
-from p4p_for_isis.rules import ValueAlarmRule, ControlRule, RulesFlow, TimestampRule
+from p4p_for_isis.rules import ControlRule, RulesFlow, TimestampRule, ValueAlarmRule
 from p4p_for_isis.value_utils import overwrite_unmarked
 
 

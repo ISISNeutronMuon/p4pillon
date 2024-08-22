@@ -6,21 +6,15 @@ are implementations of the logic of Normative Type
 
 # TODO: Consider adding Authentication class / callback for puts
 
-from abc import ABC, abstractmethod
-from copy import deepcopy
 import itertools
 import logging
 import operator
 import time
-
+from abc import ABC, abstractmethod
+from copy import deepcopy
 from enum import IntEnum, auto
-from typing import (
-    Dict,
-    List,
-    Optional,
-    SupportsFloat as Numeric,  # Hack to type hint number types
-    Union,
-)
+from typing import Any, Dict, List, Optional, Union
+from typing import SupportsFloat as Numeric  # Hack to type hint number types
 
 from p4p import Type, Value
 from p4p.server import ServerOperation
@@ -463,7 +457,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
 
         return val_type
 
-    def _value_without_value(self, arrayval: Value, index: Optional[int] = None) -> Dict:
+    def _value_without_value(self, arrayval: Value, index: Optional[int] = None) -> Dict[str, Any]:
         # It would be straightforward to use arrayval.todict() but the value
         # could potentially be very large. So we use a more indirect way of
         # constructing it by iterating through the keys

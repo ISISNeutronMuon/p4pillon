@@ -1,11 +1,3 @@
-import os
-import sys
-from pathlib import Path
-
-root_dir = Path(__file__).parents[2]
-
-sys.path.append(str(root_dir))
-
 from p4p_for_isis.utils import time_in_seconds_and_nanoseconds
 
 

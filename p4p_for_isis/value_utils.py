@@ -1,6 +1,7 @@
 """Utilities related to p4p Values and Types"""
 
 from typing import Callable, List, Optional, cast
+
 from p4p import Value
 
 
