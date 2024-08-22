@@ -7,34 +7,29 @@ Integration tests for expected behaviour of NTScalar PV types:
 - [ ] forward linking records
 """
 
-import sys
 import time
 from pathlib import Path
 
 import pytest
 import yaml
-from p4p.client.thread import Context, RemoteError
+from p4p.client.thread import Context
 
+from p4p_for_isis.definitions import PVTypes
+from p4p_for_isis.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
+from p4p_for_isis.server import ISISServer
 
-from assertions import (
+from .assertions import (
     assert_correct_alarm_config,
     assert_correct_control_config,
     assert_correct_display_config,
-    assert_value_changed,
-    assert_pv_not_in_alarm_state,
-    assert_pv_in_minor_alarm_state,
     assert_pv_in_major_alarm_state,
+    assert_pv_in_minor_alarm_state,
+    assert_pv_not_in_alarm_state,
+    assert_value_changed,
     assert_value_not_changed,
 )
 
 root_dir = Path(__file__).parents[2]
-
-sys.path.append(str(root_dir))
-
-from p4p_for_isis.server import ISISServer
-from p4p_for_isis.definitions import PVTypes
-
-from p4p_for_isis.pvrecipe import PVScalarRecipe, PVScalarArrayRecipe
 
 
 with open(f"{root_dir}/tests/integration/ntscalar_config.yml", "r") as f:
@@ -284,9 +279,7 @@ class TestAlarms:
 
     @pytest.mark.xfail(reason="Not implemented yet")
     @pytest.mark.parametrize("pvtype", [(PVTypes.DOUBLE), (PVTypes.INTEGER)])
-    def test_basic_alarm_logic_array_vals(
-        self, basic_server: ISISServer, ctx: Context, pvtype
-    ):
+    def test_basic_alarm_logic_array_vals(self, basic_server: ISISServer, ctx: Context, pvtype):
         # here we have an example of a pretty standard range alarm configuration but on
         # an array PV. In this case we expect the alarm to be triggered if ANY of the
         # values in the list exceed these values
@@ -351,9 +344,7 @@ class TestControl:
             (PVTypes.INTEGER, 10, 9),
         ],
     )
-    def test_basic_control_logic(
-        self, basic_server: ISISServer, ctx: Context, pvtype, put_val, expected_val
-    ):
+    def test_basic_control_logic(self, basic_server: ISISServer, ctx: Context, pvtype, put_val, expected_val):
         # here we have an example of a PV with control limits
         pvname = "TEST:CONTROL:PV"
 
@@ -379,15 +370,11 @@ class TestControl:
             (PVTypes.INTEGER, 10),
         ],
     )
-    def test_default_control_logic(
-        self, basic_server: ISISServer, ctx: Context, pvtype, put_val
-    ):
+    def test_default_control_logic(self, basic_server: ISISServer, ctx: Context, pvtype, put_val):
         # here we have an example of a PV with default control limits applied
         pvname = "TEST:CONTROL:PV"
 
-        pv_double1 = PVScalarRecipe(
-            pvtype, "An example PV with default control limits", 0
-        )
+        pv_double1 = PVScalarRecipe(pvtype, "An example PV with default control limits", 0)
         pv_double1.set_control_limits()
         basic_server.add_pv(pvname, pv_double1)
 
@@ -404,9 +391,7 @@ class TestControl:
             (PVTypes.INTEGER),
         ],
     )
-    def test_control_logic_min_step(
-        self, basic_server: ISISServer, ctx: Context, pvtype
-    ):
+    def test_control_logic_min_step(self, basic_server: ISISServer, ctx: Context, pvtype):
         # putting a new value less than the minimum step should prevent
         # the value being set
         pvname = "TEST:CONTROL:PV"
@@ -441,18 +426,14 @@ class TestControl:
             (PVTypes.INTEGER, 10, 9),
         ],
     )
-    def test_basic_control_logic_array(
-        self, basic_server: ISISServer, ctx: Context, pvtype, put_val, expected_val
-    ):
+    def test_basic_control_logic_array(self, basic_server: ISISServer, ctx: Context, pvtype, put_val, expected_val):
         # here we have an example of a PV with control limits
         pvname = "TEST:CONTROL:PV"
 
         array_length = 6
 
         control_config = {"low": -9, "high": 9, "min_step": 1}
-        pv_double1 = PVScalarArrayRecipe(
-            pvtype, "An example array PV with control limits", [0] * array_length
-        )
+        pv_double1 = PVScalarArrayRecipe(pvtype, "An example array PV with control limits", [0] * array_length)
         pv_double1.set_control_limits(**control_config)
         basic_server.add_pv(pvname, pv_double1)
 
