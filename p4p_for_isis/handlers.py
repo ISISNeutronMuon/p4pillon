@@ -4,7 +4,7 @@ from __future__ import annotations  # for older version of Python
 
 import logging
 from collections import OrderedDict
-from typing import Callable, Union
+from typing import Callable, Optional
 
 from p4p import Value
 from p4p.server import ServerOperation
@@ -13,11 +13,11 @@ from p4p.server.raw import Handler, SharedPV
 from p4p_for_isis.value_utils import overwrite_unmarked
 
 from .rules import (
-    ControlRule,
+    AlarmRule,
     BaseRule,
+    ControlRule,
     ReadOnlyRule,
     RulesFlow,
-    AlarmRule,
     ScalarToArrayWrapperRule,
     TimestampRule,
     ValueAlarmRule,
@@ -41,7 +41,7 @@ class BaseRulesHandler(Handler):
 
         self.rules: OrderedDict[str, BaseRule] = OrderedDict({"timestamp": TimestampRule()})
 
-    def __getitem__(self, rule_name: str) -> Union[BaseRule, None]:
+    def __getitem__(self, rule_name: str) -> Optional[BaseRule]:  # noqa: UP007
         """Allow access to the rules so that parameters such as read_only may be set"""
         return self.rules.get(rule_name)
 
