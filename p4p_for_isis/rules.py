@@ -13,11 +13,13 @@ import time
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from enum import IntEnum, auto
+from functools import wraps
 from typing import Any, Dict, List, Optional, Union
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
 
 from p4p import Type, Value
 from p4p.server import ServerOperation
+from p4p.server.raw import ServOpWrap
 from p4p.server.thread import SharedPV
 
 from p4p_for_isis.definitions import AlarmSeverity
@@ -54,13 +56,94 @@ class RulesFlow(IntEnum):
         return self
 
 
+def check_applicable_init(func):
+    """Decorator for BaseRule::init_rule - checks `is_applicable()` and returns RulesFlow.CONTINUE if not True"""
+
+    @wraps(func)
+    def wrapped_function(self: "BaseRule", *args, **kwargs):
+        if not self.is_applicable(args[0]):
+            logger.debug("Rule %s.init_rule is not applicable", self._name)
+            return RulesFlow.CONTINUE
+
+        return func(self, *args, **kwargs)
+
+    return wrapped_function
+
+
+def check_applicable_post(func):
+    """Decorator for BaseRule::post_rule - checks `is_applicable()` and returns RulesFlow.CONTINUE if not True"""
+
+    @wraps(func)
+    def wrapped_function(self: "BaseRule", currentstate: Value, newpvstate: Value):
+        if not self.is_applicable(newpvstate):
+            logger.debug("Rule %s.post_rule is not applicable", self._name)
+            return RulesFlow.CONTINUE
+
+        return func(self, currentstate, newpvstate)
+
+    return wrapped_function
+
+
+def check_applicable_put(func):
+    """Decorator for BaseRule::put_rule - checks `is_applicable()` and returns RulesFlow.CONTINUE if not True"""
+
+    @wraps(func)
+    def wrapped_function(self: "BaseRule", *args, **kwargs):
+        if not self.is_applicable(args[1].value().raw):
+            logger.debug("Rule %s.put_rule is not applicable", self._name)
+            return RulesFlow.CONTINUE
+
+        return func(self, *args, **kwargs)
+
+    return wrapped_function
+
+
+def check_applicable(func):
+    """
+    Decorator for BaseRule::*_rule - checks `is_applicable()` and returns RulesFlow.CONTINUE if not True
+    """
+
+    @wraps(func)
+    def wrapped_function(self: "BaseRule", *args, **kwargs):
+        # Determine whether we're being applied to either:
+        # - init_rule (1 argument)
+        # - post_rule (2 arguments, second argument is a Value)
+        # - put_rule (2 arguments, second argument is a ServerOperation)
+        if len(args) == 1:
+            rule_type = "init_rule"
+            newpvstate = args[0]
+        elif len(args) == 2:
+            if isinstance(args[1], Value):
+                rule_type = "post_rule"
+                newpvstate = args[1]
+            elif isinstance(args[1], ServOpWrap):
+                rule_type = "put_rule"
+                newpvstate = args[1].value().raw
+            else:
+                raise TypeError("Type of second argument must be either Value or ServerOperation, is", type(args[1]))
+
+        else:
+            raise TypeError(f"Expected 1 or 2 arguments, received {len(args)}")
+
+        # Then check if applicable and if not return a CONTINUE to short-circuit this rule
+        if not self.is_applicable(newpvstate):
+            logger.debug("Rule %s.%s is not applicable", self._name, rule_type)
+            return RulesFlow.CONTINUE
+
+        # Actually wrap the function we're decorating!
+        return func(self, *args, **kwargs)
+
+    return wrapped_function
+
+
 class BaseRule(ABC):
     """
-    Rules to apply to a PV
-    Most rules only require evaluation agains the new PV state, e.g.
-    whether to apply a control limit, update a timestamp, trigger an
-    alarm etc. But some rules need to compare against the previous
-    state of the PV, e.g. slew limits, control.minStep, etc.
+    Rules to apply to a PV.
+    Most rules only require evaluation against the new PV state, e.g. whether to apply a control
+    limit, update a timestamp, trigger an alarm etc. This may be done by the `init_rule()`.
+    Other rules need to compare against the previous state of the PV, e.g. slew limits,
+    control.minStep, etc. This may be done by the `post_rule().` And some rules need to know
+    who is making the request (for authorisation purposes). The may be done by the `put_rule()`
     """
 
     # Two members must be implemented by derived classes:
@@ -108,6 +191,7 @@ class BaseRule(ABC):
 
         return True
 
+    @check_applicable
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         """
         Rule that only needs to consider the potential future state of a PV.
@@ -117,6 +201,7 @@ class BaseRule(ABC):
 
         return RulesFlow.CONTINUE
 
+    @check_applicable
     def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
         """
         Rule that needs to consider the current and potential future state of a PV.
@@ -125,14 +210,11 @@ class BaseRule(ABC):
         like to apply. This rule is often also triggered in a similar manner by a
         put in which case the newpvstate derives from the ServerOperation.
         """
-        if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.post_rule is not applicable", self._name)
-            return RulesFlow.CONTINUE
-
         logger.debug("Evaluating %s.post_rule", self._name)
 
         return self.init_rule(newpvstate)
 
+    @check_applicable
     def put_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
         """
         Rule with access to ServerOperation information, i.e. triggered by a
@@ -142,10 +224,6 @@ class BaseRule(ABC):
 
         oldpvstate: Value = pv.current().raw
         newpvstate: Value = op.value().raw
-
-        if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.put_rule is not applicable", self._name)
-            return RulesFlow.CONTINUE
 
         logger.debug("Evaluating %s.put_rule", self._name)
 
@@ -161,7 +239,9 @@ class BaseRule(ABC):
 
 class BaseGatherableRule(BaseRule, ABC):
     """
-    Some Rules need additional support to allow use in ScalarToArrayWrapperRule
+    A rule usually applicable to NTScalars must be made Gatherable if when run sequentially on an
+    array the correct output of a Rule must be determined by both the current Value and the
+    previous value
     """
 
     def gather_init(self, gathered_value: Value) -> None:
@@ -224,12 +304,9 @@ class TimestampRule(BaseRule):
 
         return True
 
+    @check_applicable
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         """Update the timeStamp of a PV"""
-        if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.post_rule is not applicable", self._name)
-            return RulesFlow.CONTINUE
-
         logger.debug("Generating timeStamp from time.time()")
         timestamp = time.time()
         seconds, nanoseconds = time_in_seconds_and_nanoseconds(timestamp)
@@ -250,6 +327,7 @@ class ControlRule(BaseRule):
     _name = "control"
     _fields = ["control"]
 
+    @check_applicable
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         """Check whether a value should be clipped by the control limits
 
@@ -261,10 +339,6 @@ class ControlRule(BaseRule):
         min_step_violated to work better with arrays
 
         """
-
-        if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.post_rule is not applicable", self._name)
-            return RulesFlow.CONTINUE
 
         # Check lower and upper control limits
         if newpvstate["value"] < newpvstate["control.limitLow"]:
@@ -285,11 +359,8 @@ class ControlRule(BaseRule):
 
         return RulesFlow.CONTINUE
 
+    @check_applicable
     def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
-        if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.post_rule is not applicable", self._name)
-            return RulesFlow.CONTINUE
-
         # Check minimum step first - if the check for the minimum step fails then we continue
         # and ignore the actual evaluation of the limits
         if __class__.min_step_violated(
@@ -324,14 +395,11 @@ class ValueAlarmRule(BaseGatherableRule):
     _name = "valueAlarm"
     _fields = ["alarm", "valueAlarm"]
 
+    @check_applicable
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         """Evaluate alarm value limits"""
         # TODO: Apply the rule for hysteresis. Unfortunately I don't understand the
         # explanation in the Normative Types specification...
-        if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.post_rule is not applicable", self._name)
-            return RulesFlow.CONTINUE
-
         logger.debug("Evaluating %s.init_rule", self._name)
 
         # Check if valueAlarms are present and active!
@@ -505,11 +573,8 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
         if all(x in array_value.keys() for x in self._fields):
             overwrite_marked(array_value, scalar_value, self._fields)
 
+    @check_applicable
     def init_rule(self, newpvstate: Value) -> RulesFlow:
-        if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.post_rule is not applicable", self._name)
-            return RulesFlow.CONTINUE
-
         # Convert the new Value into scalar versions
         scalared_new_state = self.scalarise(newpvstate)
 
@@ -545,11 +610,8 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
     # TODO: What's the correct behaviour if the new and old PV states have different lengths?
     # TODO: What is the correct behaviour for a Control Rule if the array size increases?
     # TODO: What if the Value["value"] has not changed?
+    @check_applicable
     def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
-        if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.post_rule is not applicable", self._name)
-            return RulesFlow.CONTINUE
-
         # Convert the current Value and new Value into scalar versions
         scalared_current_state = self.scalarise(oldpvstate)
         scalared_new_state = self.scalarise(newpvstate)
