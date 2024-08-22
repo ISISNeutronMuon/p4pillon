@@ -237,7 +237,13 @@ class BaseRule(ABC):
         return self.post_rule(oldpvstate, newpvstate)
 
 
-class BaseGatherableRule(BaseRule, ABC):
+class BaseScalarRule(BaseRule, ABC):
+    """
+    Rule to be applied to NTScalarArrays
+    """
+
+
+class BaseGatherableRule(BaseScalarRule, ABC):
     """
     A rule usually applicable to NTScalars must be made Gatherable if when run sequentially on an
     array the correct output of a Rule must be determined by both the current Value and the
@@ -261,7 +267,7 @@ class BaseArrayRule(BaseRule, ABC):
     """
 
 
-class ReadOnlyRule(BaseRule):
+class ReadOnlyRule(BaseScalarRule):
     """A rule which rejects all attempts to put values"""
 
     _name = "read_only"
@@ -317,7 +323,7 @@ class TimestampRule(BaseRule):
         return RulesFlow.CONTINUE
 
 
-class ControlRule(BaseRule):
+class ControlRule(BaseScalarRule):
     """
     Apply rules implied by Normative Type control field.
     These include a minimum value change (control.minStep) and upper
@@ -498,7 +504,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
     _name = "ScalarToArrayWrapperRule"
     _fields = []
 
-    def __init__(self, to_wrap: Union[BaseRule, BaseGatherableRule]) -> None:
+    def __init__(self, to_wrap: Union[BaseScalarRule, BaseGatherableRule]) -> None:
         super().__init__()
 
         self._wrapped = to_wrap
