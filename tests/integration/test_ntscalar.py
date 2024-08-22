@@ -12,13 +12,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from p4p.client.thread import Context
-
-from p4p_for_isis.definitions import PVTypes
-from p4p_for_isis.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
-from p4p_for_isis.server import ISISServer
-
-from .assertions import (
+from assertions import (
     assert_correct_alarm_config,
     assert_correct_control_config,
     assert_correct_display_config,
@@ -28,6 +22,11 @@ from .assertions import (
     assert_value_changed,
     assert_value_not_changed,
 )
+from p4p.client.thread import Context
+
+from p4p_for_isis.definitions import PVTypes
+from p4p_for_isis.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
+from p4p_for_isis.server import ISISServer
 
 root_dir = Path(__file__).parents[2]
 
