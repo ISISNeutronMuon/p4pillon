@@ -12,7 +12,7 @@ root_dir = Path(__file__).parents[2]
 
 @pytest.fixture
 def ntscalar_config():
-    with open(f"{root_dir}/tests/integration/ntscalar_config.yml", "r") as f:
+    with open(f"{root_dir}/tests/integration/ntscalar_config.yml") as f:
         ntscalar_dict = yaml.load(f, Loader=yaml.SafeLoader)
         f.close()
     return ntscalar_dict

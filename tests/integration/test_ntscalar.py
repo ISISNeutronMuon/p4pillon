@@ -31,7 +31,7 @@ from p4p_for_isis.server import ISISServer
 root_dir = Path(__file__).parents[2]
 
 
-with open(f"{root_dir}/tests/integration/ntscalar_config.yml", "r") as f:
+with open(f"{root_dir}/tests/integration/ntscalar_config.yml") as f:
     ntscalar_config = yaml.load(f, Loader=yaml.SafeLoader)
     f.close()
 
