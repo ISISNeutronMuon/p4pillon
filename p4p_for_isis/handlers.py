@@ -1,7 +1,5 @@
 """Handler for NTScalar (so far)"""
 
-from __future__ import annotations  # for older version of Python
-
 import logging
 from collections import OrderedDict
 from typing import Callable, Optional
@@ -41,7 +39,7 @@ class BaseRulesHandler(Handler):
 
         self.rules: OrderedDict[str, BaseRule] = OrderedDict({"timestamp": TimestampRule()})
 
-    def __getitem__(self, rule_name: str) -> Optional[BaseRule]:  # noqa: UP007
+    def __getitem__(self, rule_name: str) -> Optional[BaseRule]:
         """Allow access to the rules so that parameters such as read_only may be set"""
         return self.rules.get(rule_name)
 
@@ -143,7 +141,7 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
         super().__init__()
 
         self.rules["control"] = ScalarToArrayWrapperRule(ControlRule())
-        self.rules["alarm"] = ScalarToArrayWrapperRule(AlarmRule())
+        self.rules["alarm"] = AlarmRule()  # ScalarToArrayWrapperRule unnecessary - no access to values
         self.rules["alarm_limit"] = ScalarToArrayWrapperRule(ValueAlarmRule())
         self.rules.move_to_end("timestamp")
 
