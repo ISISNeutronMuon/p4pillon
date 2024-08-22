@@ -1,23 +1,18 @@
+from pathlib import Path
+
 import pytest
 import yaml
-
-import sys
-from pathlib import Path
 from p4p.client.thread import Context
 
-
-root_dir = Path(__file__).parents[2]
-
-sys.path.append(str(root_dir))
-
+from p4p_for_isis.config_reader import parse_config
 from p4p_for_isis.server import ISISServer
 
-from p4p_for_isis.config_reader import parse_config
+root_dir = Path(__file__).parents[2]
 
 
 @pytest.fixture
 def ntscalar_config():
-    with open(f"{root_dir}/tests/integration/ntscalar_config.yml", "r") as f:
+    with open(f"{root_dir}/tests/integration/ntscalar_config.yml") as f:
         ntscalar_dict = yaml.load(f, Loader=yaml.SafeLoader)
         f.close()
     return ntscalar_dict

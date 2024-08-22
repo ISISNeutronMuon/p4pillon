@@ -1,29 +1,14 @@
-import sys
-from pathlib import Path
-
+import numpy as np
 from p4p.client.thread import Context
 
-root_dir = Path(__file__).parents[2]
-
-sys.path.append(str(root_dir))
-import numpy as np
-
-from p4p_for_isis.definitions import (
-    PVTypes,
-    Format,
-    MAX_FLOAT,
-    MAX_INT32,
-    MIN_FLOAT,
-    MIN_INT32,
-    AlarmSeverity,
-)
+from p4p_for_isis.definitions import MAX_FLOAT, MAX_INT32, MIN_FLOAT, MIN_INT32, AlarmSeverity, Format
 
 
 def assert_value_changed(pvname: str, put_value, put_timestamp: float, ctx: Context):
     pv_state = ctx.get(pvname)
     current_value = pv_state.raw.todict()["value"]
     assert np.array_equal(np.array(current_value), np.array(put_value))
-    #assert pv_state.timestamp >= put_timestamp  # TODO: Check why this timestamp is broken?
+    # assert pv_state.timestamp >= put_timestamp  # TODO: Check why this timestamp is broken?
 
 
 def assert_value_not_changed(pvname: str, put_value, ctx: Context):
@@ -91,24 +76,14 @@ def assert_correct_alarm_config(pv_state: dict, pv_config: dict):
     else:
         default_max, default_min = MAX_INT32, MIN_INT32
 
-    assert valueAlarm_state.get("lowAlarmLimit") == valueAlarm_config.get(
-        "low_alarm", default_min
-    )
-    assert valueAlarm_state.get("lowWarningLimit") == valueAlarm_config.get(
-        "low_warning", default_min
-    )
-    assert valueAlarm_state.get("highAlarmLimit") == valueAlarm_config.get(
-        "high_alarm", default_max
-    )
-    assert valueAlarm_state.get("highWarningLimit") == valueAlarm_config.get(
-        "high_warning", default_max
-    )
+    assert valueAlarm_state.get("lowAlarmLimit") == valueAlarm_config.get("low_alarm", default_min)
+    assert valueAlarm_state.get("lowWarningLimit") == valueAlarm_config.get("low_warning", default_min)
+    assert valueAlarm_state.get("highAlarmLimit") == valueAlarm_config.get("high_alarm", default_max)
+    assert valueAlarm_state.get("highWarningLimit") == valueAlarm_config.get("high_warning", default_max)
     assert valueAlarm_state.get("lowAlarmSeverity") == AlarmSeverity.MAJOR_ALARM.value
     assert valueAlarm_state.get("lowWarningSeverity") == AlarmSeverity.MINOR_ALARM.value
     assert valueAlarm_state.get("highAlarmSeverity") == AlarmSeverity.MAJOR_ALARM.value
-    assert (
-        valueAlarm_state.get("highWarningSeverity") == AlarmSeverity.MINOR_ALARM.value
-    )
+    assert valueAlarm_state.get("highWarningSeverity") == AlarmSeverity.MINOR_ALARM.value
     assert valueAlarm_state.get("hysteresis") == 0
 
 
