@@ -5,10 +5,22 @@ Required to allow post operations trigger handler rules
 import logging
 
 from p4p import Value
-from p4p.server import ServerOperation
-from p4p.server.raw import Handler, ServOpWrap, SharedPV, _SharedPV
+from p4p.server.raw import Handler, SharedPV, _SharedPV
 
 logger = logging.getLogger(__name__)
+
+
+class ISISHandler(Handler):
+    def post(self, pv: "ISISPV", value: Value, **kws):
+        """
+        Called each time a client issues a post
+        operation on this Channel.
+
+        :param SharedPV pv: The :py:class:`SharedPV` which this Handler is associated with.
+        :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
+        :param dict options: A dictionary of configuration options.
+        """
+        pass
 
 
 class ISISPV(SharedPV):
@@ -20,7 +32,7 @@ class ISISPV(SharedPV):
         return self._handler
 
     @handler.setter
-    def handler(self, newhandler: Handler):
+    def handler(self, newhandler: ISISHandler):
         self._handler = newhandler
 
     def post(self, value, **kws):
@@ -51,45 +63,8 @@ class ISISPV(SharedPV):
 
         _SharedPV.post(self, V)
 
-    class _WrapHandler:
+    class _WrapHandler(SharedPV._WrapHandler):
         "Wrapper around user Handler which logs exceptions"
-
-        def __init__(self, pv: "ISISPV", real):
-            self._pv = pv  # this creates a reference cycle, which should be collectable since SharedPV supports GC
-            self._real = real
-
-        def onFirstConnect(self):
-            logger.debug("ONFIRSTCONNECT %s", self._pv)
-            self._pv._exec(None, self._pv._onFirstConnect, None)
-            try:  # user handler may omit onFirstConnect()
-                M = self._real.onFirstConnect
-            except AttributeError:
-                return
-            self._pv._exec(None, M, self._pv)
-
-        def onLastDisconnect(self):
-            logger.debug("ONLASTDISCONNECT %s", self._pv)
-            try:
-                M = self._real.onLastDisconnect
-            except AttributeError:
-                pass
-            else:
-                self._pv._exec(None, M, self._pv)
-            self._pv._exec(None, self._pv._onLastDisconnect, None)
-
-        def put(self, op: ServerOperation):
-            logger.debug("PUT %s %s", self._pv, op)
-            try:
-                self._pv._exec(op, self._real.put, self._pv, ServOpWrap(op, self._pv._wrap, self._pv._unwrap))
-            except AttributeError:
-                op.done(error="Put not supported")
-
-        def rpc(self, op: ServerOperation):
-            logger.debug("RPC %s %s", self._pv, op)
-            try:
-                self._pv._exec(op, self._real.rpc, self._pv, op)
-            except AttributeError:
-                op.done(error="RPC not supported")
 
         def post(self, value: Value, **kws):
             logger.debug("POST %s %s", self._pv, value)
@@ -137,11 +112,3 @@ class ISISPV(SharedPV):
             return fn
 
         return decorate
-
-    # Aliases for decorators to maintain consistent new style
-    # Required because post is already used and on_post seemed the best
-    # alternative.
-    put = on_put
-    rpc = on_rpc
-    onFirstConnect = on_first_connect
-    onLastDisconnect = on_last_disconnect
