@@ -49,10 +49,12 @@ class BaseRulesHandler(Handler):
         """
 
         if self._apply_rules(lambda x: x.init_rule(pv.current().raw)) != RulesFlow.ABORT:
-            pv.post(value=pv.current().raw, rules=False)
+            pv.post(value=pv.current().raw, handler_post_rules=False)
 
-    def post(self, pv: SharedPV, new_state: Value) -> None:
+    def post(self, pv: SharedPV, new_state: Value, **kwargs) -> None:
         """Handler call by a post operation, requires support from SharedPV derived class"""
+        if kwargs.pop("handler_post_rules", False):
+            return
 
         current_state = pv.current().raw  # We only need the Value from the PV
         overwrite_unmarked(current_state, new_state)
@@ -68,7 +70,7 @@ class BaseRulesHandler(Handler):
 
         rules_flow = self._apply_rules(lambda x: x.put_rule(pv, op))
         if rules_flow != RulesFlow.ABORT:
-            pv.post(value=op.value(), rules=False)
+            pv.post(value=op.value(), handler_post_rules=False)
             op.done()
         else:
             op.done(error=rules_flow.error)
