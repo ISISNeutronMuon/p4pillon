@@ -4,7 +4,7 @@ from __future__ import annotations  # for older version of Python
 
 import logging
 from collections import OrderedDict
-from typing import Callable, Union
+from typing import Callable, Optional
 
 from p4p import Type, Value
 from p4p.server import ServerOperation
@@ -12,15 +12,7 @@ from p4p.server.raw import Handler, SharedPV
 
 from p4p_for_isis.value_utils import overwrite_unmarked
 
-from .rules import (
-    ControlRule,
-    BaseRule,
-    ReadOnlyRule,
-    RulesFlow,
-    AlarmRule,
-    TimestampRule,
-    ValueAlarmRule,
-)
+from .rules import AlarmRule, BaseRule, ControlRule, ReadOnlyRule, RulesFlow, TimestampRule, ValueAlarmRule
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +32,7 @@ class BaseRulesHandler(Handler):
 
         self.rules: OrderedDict[str, BaseRule] = OrderedDict({"timestamp": TimestampRule()})
 
-    def __getitem__(self, rule_name: str) -> Union[BaseRule, None]:
+    def __getitem__(self, rule_name: str) -> Optional[BaseRule]:  # noqa: UP007
         """Allow access to the rules so that parameters such as read_only may be set"""
         return self.rules.get(rule_name)
 
@@ -197,7 +189,6 @@ class NTScalarArrayRulesHandler(BaseRulesHandler):
         pv.post(value=pv.current().raw)
 
     def post(self, pv: SharedPV, new_state: Value) -> None:
-
         # Update the new_state with missing info from the current_state
         current_state = pv.current().raw
         overwrite_unmarked(current_state, new_state)
