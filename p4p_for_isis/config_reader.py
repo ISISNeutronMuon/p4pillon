@@ -6,8 +6,8 @@ from typing import List, Tuple, Union
 import yaml
 
 from .definitions import PVTypes
-from .server import ISISServer
 from .pvrecipe import BasePVRecipe, PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
+from .server import ISISServer
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def parse_config(filename: str, server: Union[ISISServer, None] = None) -> List[
 def read_config(filename: str) -> dict:
     """Read the configuration file"""
     pvconfigs = {}
-    with open(filename, "r", encoding="utf8") as f:
+    with open(filename, encoding="utf8") as f:
         pvconfigs = yaml.load(f, yaml.SafeLoader)
 
     return pvconfigs
