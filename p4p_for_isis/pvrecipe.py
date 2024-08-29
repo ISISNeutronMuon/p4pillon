@@ -6,7 +6,7 @@ import logging
 import time
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Generic, Tuple, Union, TypeVar
+from typing import Generic, Tuple, TypeVar, Union
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
 
 from p4p.nt import NTEnum, NTScalar

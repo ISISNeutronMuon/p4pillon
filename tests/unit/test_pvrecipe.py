@@ -1,28 +1,10 @@
-import sys
-from pathlib import Path
-
-root_dir = Path(__file__).parents[2]
-
-sys.path.append(str(root_dir))
 from unittest.mock import patch
 
 import pytest
-from p4p.nt import NTEnum, NTScalar
+from p4p.nt import NTScalar
 
-from p4p_for_isis.definitions import (
-    MAX_FLOAT,
-    MAX_INT32,
-    MIN_FLOAT,
-    MIN_INT32,
-    AlarmSeverity,
-    Format,
-    PVTypes,
-)
-from p4p_for_isis.handlers import (
-    NTEnumRulesHandler,
-    NTScalarArrayRulesHandler,
-    NTScalarRulesHandler,
-)
+from p4p_for_isis.definitions import MAX_FLOAT, MAX_INT32, MIN_FLOAT, MIN_INT32, AlarmSeverity, Format, PVTypes
+from p4p_for_isis.handlers import NTScalarArrayRulesHandler, NTScalarRulesHandler
 from p4p_for_isis.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
 
 
@@ -235,7 +217,7 @@ def test_ntscalar_string_errors():
 
 def test_ntscalar_enum_error():
     with pytest.raises(ValueError) as e:
-        recipe = PVScalarRecipe(PVTypes.ENUM, description="test", initial_value=1)
+        PVScalarRecipe(PVTypes.ENUM, description="test", initial_value=1)
 
     assert "Unsupported pv type" in str(e)
 
@@ -254,9 +236,7 @@ def test_ntscalar_enum_error():
     ],
 )
 @patch("time.time")
-def test_ntscalar_numeric_create_pv(
-    mock_time, recipe, pvtype, with_limits, expected_handler, expected_value
-):
+def test_ntscalar_numeric_create_pv(mock_time, recipe, pvtype, with_limits, expected_handler, expected_value):
     mock_time.return_value = 123.456
     initial = 1.0
     recipe = recipe(pvtype, description="test", initial_value=initial)
