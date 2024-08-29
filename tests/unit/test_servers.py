@@ -1,16 +1,13 @@
-import pytest
-from p4p.server import StaticProvider
-import os
-
 import logging
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
-root_dir = Path(__file__).parents[2]
+import pytest
+from p4p.server import StaticProvider
 
-sys.path.append(str(root_dir))
 from p4p_for_isis.server import ISISServer
+
+root_dir = Path(__file__).parents[2]
 
 
 def test_server_instantiation():
@@ -88,9 +85,7 @@ def test_server_add_pv(recipe, server, provider, caplog):
         new_name = "TEST:PV:2"
         test_server.add_pv(new_name, recipe.return_value)
     assert test_server["TEST:PV:2"] is recipe.return_value.create_pv.return_value
-    provider.return_value.add.assert_called_once_with(
-        "DEV:TEST:PV:2", recipe.return_value.create_pv.return_value
-    )
+    provider.return_value.add.assert_called_once_with("DEV:TEST:PV:2", recipe.return_value.create_pv.return_value)
 
     assert len(caplog.messages) == 1
     assert caplog.messages[0] == "Added DEV:TEST:PV:2 to server"
