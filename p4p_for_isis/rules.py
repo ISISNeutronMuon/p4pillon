@@ -489,10 +489,12 @@ class ValueAlarmRule(BaseGatherableRule):
             or gathered_value["alarm.severity"] != AlarmSeverity.INVALID_ALARM
         ):
             gathered_value["alarm.severity"] = AlarmSeverity.NO_ALARM
+            gathered_value["alarm.message"] = ""
 
     def gather(self, scalar_value: Value, gathered_value: Value) -> None:
         if scalar_value["alarm.severity"] > gathered_value["alarm.severity"]:
             gathered_value["alarm.severity"] = scalar_value["alarm.severity"]
+            gathered_value["alarm.message"] = scalar_value["alarm.message"]
 
 
 class ScalarToArrayWrapperRule(BaseArrayRule):
