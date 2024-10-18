@@ -37,7 +37,7 @@ def ctx() -> Context:
     client_context.close()
 
 
-def start_server():
+def start_server(ntscalar_config: dict):
     # NOTE this will be replaced by a more universal `parse_yaml` function or equivalent
     server = ISISServer(
         ioc_name="TESTIOC",
@@ -46,7 +46,7 @@ def start_server():
         prefix="TEST:",
     )
 
-    parse_config(f"{root_dir}/tests/integration/ntscalar_config.yml", server)
+    parse_config(ntscalar_config, server)
 
     server.start()
     return server
@@ -60,6 +60,10 @@ def server_from_yaml() -> ISISServer:
     # https://docs.pytest.org/en/latest/how-to/xunit_setup.html
     # NOTE also that this fixture has to be used as a parameter in every test
     # for the server to actually run
-    server = start_server()
+    with open(f"{root_dir}/tests/integration/ntscalar_config.yml") as f:
+        ntscalar_dict = yaml.load(f, Loader=yaml.SafeLoader)
+        f.close()
+
+    server = start_server(ntscalar_dict)
     yield server
     server.stop()
