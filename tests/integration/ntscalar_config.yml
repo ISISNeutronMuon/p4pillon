@@ -47,8 +47,13 @@ DEV:RW:DOUBLE6:
     low: -1.0
     high: 1.0
 
+DEV:RW:INT1:
+  description: "An example integer PV"
+  type: "INTEGER"
+  initial: 0
 
-DEV:RW:INT:
+
+DEV:RW:INT2:
   description: "An example int PV with limits"
   type: "INTEGER"
   initial: 3
