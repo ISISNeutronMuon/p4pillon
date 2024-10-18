@@ -125,7 +125,7 @@ class BasePVRecipe:
             "Building pv\n Construct settings are: \n %r \n Config settings are:\n %r \n Initial value:\n %r\n",
             self.construct_settings,
             self.config_settings,
-            self.initial_value
+            self.initial_value,
         )
 
         if (
