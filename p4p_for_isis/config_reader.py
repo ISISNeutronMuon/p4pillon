@@ -23,16 +23,18 @@ def parse_config_file(filename: str, server: Union[ISISServer, None] = None) -> 
 
     return parse_config(pvconfigs, server)
 
+
 def parse_config_string(yamlStr: str, server: Union[ISISServer, None] = None) -> List[PVScalarRecipe]:
     """
     Parse a yaml string and return a list of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
     """
-    
+
     pvconfigs = {}
     pvconfigs = yaml.load(yamlStr, yaml.SafeLoader)
 
     return parse_config(pvconfigs, server)
+
 
 def parse_config(yamlObj: dict, server: Union[ISISServer, None] = None) -> List[PVScalarRecipe]:
     """
@@ -51,6 +53,7 @@ def parse_config(yamlObj: dict, server: Union[ISISServer, None] = None) -> List[
             pvrecipes.append(process_config(pvconfig))
 
     return pvrecipes
+
 
 def process_config(pvconfig: Tuple[str, dict]) -> BasePVRecipe:
     """
