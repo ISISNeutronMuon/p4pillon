@@ -1,7 +1,7 @@
 """Read configuration from a YAML file"""
 
 import logging
-from typing import List, Tuple, Union
+from typing import Dict, Union
 
 import yaml
 
@@ -12,9 +12,9 @@ from .server import ISISServer
 logger = logging.getLogger(__name__)
 
 
-def parse_config_file(filename: str, server: Union[ISISServer, None] = None) -> List[PVScalarRecipe]:
+def parse_config_file(filename: str, server: Union[ISISServer, None] = None) -> Dict[str, PVScalarRecipe]:
     """
-    Parse a yaml file and return a list of PVScalarRecipe objects.
+    Parse a yaml file and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
     """
     pvconfigs = {}
@@ -24,38 +24,36 @@ def parse_config_file(filename: str, server: Union[ISISServer, None] = None) -> 
     return parse_config(pvconfigs, server)
 
 
-def parse_config_string(yamlStr: str, server: Union[ISISServer, None] = None) -> List[PVScalarRecipe]:
+def parse_config_string(yamlStr: str, server: Union[ISISServer, None] = None) -> Dict[str, PVScalarRecipe]:
     """
-    Parse a yaml string and return a list of PVScalarRecipe objects.
+    Parse a yaml string and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
     """
-
     pvconfigs = {}
     pvconfigs = yaml.load(yamlStr, yaml.SafeLoader)
 
     return parse_config(pvconfigs, server)
 
 
-def parse_config(yamlObj: dict, server: Union[ISISServer, None] = None) -> List[PVScalarRecipe]:
+def parse_config(yamlObj: dict, server: Union[ISISServer, None] = None) -> Dict[str, PVScalarRecipe]:
     """
-    Parse a dictionary that has been filled using yaml.load() and return a list of PVScalarRecipe objects.
+    Parse a dictionary that has been filled using yaml.load() and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
     """
 
-    pvrecipes = []
+    pvrecipes = {}
 
-    if server is not None:
-        for pvconfig in yamlObj.items():
-            pvrecipes.append(process_config(pvconfig))
-            server.add_pv(pvconfig[0], pvrecipes[-1])
-    else:
-        for pvconfig in yamlObj.items():
-            pvrecipes.append(process_config(pvconfig))
+    for name, config in yamlObj.items():
+        recipe = process_config(name, config)
+        pvrecipes[name] = recipe
+
+        if server is not None:
+            server.add_pv(name, recipe)
 
     return pvrecipes
 
 
-def process_config(pvconfig: Tuple[str, dict]) -> BasePVRecipe:
+def process_config(pvname: str, pvdetails: dict) -> BasePVRecipe:
     """
     Process the configuration of a single PV and update pvrecipe accordingly.
 
@@ -76,9 +74,6 @@ def process_config(pvconfig: Tuple[str, dict]) -> BasePVRecipe:
         constructor, the rest need to be added in a later post()
     """
 
-    pvname = pvconfig[0]
-    pvdetails = pvconfig[1]
-
     logger.debug("Processing configuration for pv %s, config is %r", pvname, pvdetails)
 
     # Check that type and description are specified, absence is a syntax error
@@ -88,12 +83,12 @@ def process_config(pvconfig: Tuple[str, dict]) -> BasePVRecipe:
         raise SyntaxError(f"'description' not specified in record {pvname}")
 
     initial = pvdetails.get("initial")
-    array_size = pvdetails.get("array_size")
+    array_size = pvdetails.get("array_size", 1)
     pvtype = pvdetails["type"]
     if not initial:
         # If it's a number set it to 0, if it's a string make it empty
         # If it's something else an initial value needs to be supplied
-        if pvtype == "DOUBLE" or pvtype == "INT":
+        if pvtype == "DOUBLE" or pvtype == "INTEGER":
             if array_size > 1:
                 initial = [0] * array_size
             else:
