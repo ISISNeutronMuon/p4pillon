@@ -151,12 +151,13 @@ class TimestampRule(BaseRule):
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         """Update the timeStamp of a PV"""
 
-        logger.debug("Generating timeStamp from time.time()")
-        timestamp = time.time()
-        seconds, nanoseconds = time_in_seconds_and_nanoseconds(timestamp)
-
-        newpvstate["timeStamp.secondsPastEpoch"] = seconds
-        newpvstate["timeStamp.nanoseconds"] = nanoseconds
+        seconds, nanoseconds = time_in_seconds_and_nanoseconds(time.time())
+        if "timeStamp.secondsPastEpoch" not in newpvstate.changedSet():
+            logger.debug("using secondsPastEpoch from time.time()")
+            newpvstate["timeStamp.secondsPastEpoch"] = seconds
+        if "timeStamp.nanoseconds" not in newpvstate.changedSet():
+            newpvstate["timeStamp.nanoseconds"] = nanoseconds
+            logger.debug("using nanoseconds from time.time()")
 
         return RulesFlow.CONTINUE
 
