@@ -20,6 +20,27 @@ def recurse_values(value1: Value, value2: Value, func: Callable[[Value, Value, s
     return True
 
 
+def overwrite_marked(current: Value, update: Value, fields: Optional[List[str]] = None) -> None:
+    """
+    Overwrite all of the unmarked fields in one Value with fields from another Value.
+
+    This makes the changes in place rather than returning a copy.
+    """
+
+    def overwrite_changed_key(update_leaf: Value, current_leaf: Value, key: str) -> None:
+        """
+        Given a leaf node in the update Value tree, check whether it is changed and, if so,
+        change the matching current leaf to its value
+        """
+        if update_leaf.changed(key):
+            current_leaf[key] = update_leaf[key]
+
+    if not fields:
+        fields = cast(List[str], current.keys())
+
+    recurse_values(update, current, overwrite_changed_key, fields)
+
+
 def overwrite_unmarked(current: Value, update: Value, fields: Optional[List[str]] = None) -> None:
     """
     Overwrite all of the unmarked fields in one Value with fields from another Value.

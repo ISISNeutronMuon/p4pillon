@@ -1,6 +1,6 @@
 """Enums used by p4p for ISIS"""
 
-from enum import Enum
+from enum import Enum, IntEnum
 
 
 class PVTypes(Enum):
@@ -12,7 +12,7 @@ class PVTypes(Enum):
     ENUM = "e"
 
 
-class AlarmSeverity(Enum):
+class AlarmSeverity(IntEnum):
     """PVAccess Normative Type alarm severities"""
 
     NO_ALARM = 0
@@ -22,7 +22,7 @@ class AlarmSeverity(Enum):
     UNDEFINED_ALARM = 4
 
 
-class AlarmStatus(Enum):
+class AlarmStatus(IntEnum):
     """PVAccess Normative Type alarm status codes"""
 
     NO_STATUS = 0
