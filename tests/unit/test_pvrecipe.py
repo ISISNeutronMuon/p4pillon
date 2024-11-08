@@ -1,3 +1,4 @@
+import math
 from unittest.mock import patch
 
 import pytest
@@ -62,6 +63,38 @@ def test_ntscalar_display(pvtype, display_config, expected_values):
         assert recipe.display.units == expected_values[2]
         assert recipe.display.format is expected_values[3]
         assert recipe.display.precision == expected_values[4]
+
+
+@pytest.mark.parametrize(
+    "pvtype, time_val",
+    [
+        (PVTypes.INTEGER, 123.456),
+        (PVTypes.DOUBLE, 123.456),
+        (PVTypes.INTEGER, None),
+        (PVTypes.DOUBLE, None),
+    ],
+)
+@patch("time.time", return_value=456.789)
+def test_ntscalar_timestamp(mock_time, pvtype, time_val):
+    for recipetype in [PVScalarRecipe, PVScalarArrayRecipe]:
+        recipe = recipetype(pvtype, description="test PV", initial_value=0)
+
+        assert recipe.timestamp is None
+
+        if time_val is not None:
+            recipe.set_timestamp(time_val)
+            assert recipe.timestamp.time == time_val
+        else:
+            assert recipe.timestamp is None
+
+        pv = recipe.create_pv("TEST:NAME")
+
+        if time_val is not None:
+            # once we've added the PVs and started the server, the PV timestamp should be respected
+            assert math.isclose(pv.current().timestamp, time_val)
+        else:
+            # if the timestamp isn't set, we use the default time.time return val
+            assert math.isclose(pv.current().timestamp, mock_time.return_value)
 
 
 @pytest.mark.parametrize(
