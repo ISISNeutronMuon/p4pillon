@@ -116,6 +116,14 @@ class BasePVRecipe:
     def create_pv(self, pv_name: str) -> SharedPV:
         raise NotImplementedError
 
+    def _config_timestamp(self):
+        if self.timestamp:
+            seconds, nanoseconds = self.timestamp.time_in_seconds_and_nanoseconds()
+        else:
+            seconds, nanoseconds = Timestamp(time.time()).time_in_seconds_and_nanoseconds()
+        self.config_settings["timeStamp.secondsPastEpoch"] = seconds
+        self.config_settings["timeStamp.nanoseconds"] = nanoseconds
+
     def build_pv(self, pv_name: str, handler: BaseRulesHandler) -> SharedPV:
         """
         This method is called by create_pv in the child classes after construct settings is set.
@@ -140,7 +148,9 @@ class BasePVRecipe:
         else:
             nt = NTScalar(**self.construct_settings)
 
-        pvobj = ISISPV(nt=nt, initial=self.initial_value, timestamp=time.time(), handler=handler)
+        self._config_timestamp()
+
+        pvobj = ISISPV(nt=nt, initial=self.initial_value, handler=handler)
         pvobj.post(self.config_settings)
         handler._name = pv_name
 
@@ -157,6 +167,9 @@ class BasePVRecipe:
     def copy(self) -> "BasePVRecipe":
         """Return a shallow copy of this instance"""
         return dataclasses.replace(self)
+
+    def set_timestamp(self, timestamp: float):
+        self.timestamp = Timestamp(timestamp)
 
 
 class PVScalarRecipe(BasePVRecipe):
