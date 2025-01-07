@@ -128,13 +128,20 @@ class BasePVRecipe:
         """
         This method is called by create_pv in the child classes after construct settings is set.
         """
+        debugStr = f"Building pv\n Construct settings are: \n {self.construct_settings} \n"+\
+            f" Config settings are:\n {self.config_settings} \n Initial value:\n {self.initial_value}\n"
+        
+        if hasattr(self,"forward_links"):
+            # Add forward links to the handler
+            debugStr += f" Forward links are: \n {self.forward_links}"
+            handler.add_forward_links(self.forward_links)
 
-        logger.debug(
-            "Building pv\n Construct settings are: \n %r \n Config settings are:\n %r \n Initial value:\n %r\n",
-            self.construct_settings,
-            self.config_settings,
-            self.initial_value,
-        )
+        if hasattr(self,"calc"):
+            # Add a calc rule to the handler
+            debugStr += f" Calc details are: \n {self.calc}"
+            handler.add_calc(self.calc)
+
+        logger.debug(debugStr)
 
         if (
             self.construct_settings["valtype"] not in ["s", "e"]
@@ -163,6 +170,19 @@ class BasePVRecipe:
         # handler._init_rules["timestamp"] = handler.evaluate_timestamp
 
         return pvobj
+
+    def set_forward_links(self, links: str | list):
+        """
+        Add forward links to the pvrecipe. Links can be a single pv name or a list of pv names. 
+        """
+        if hasattr(self,'forward_links') == False: 
+            self.forward_links = []
+
+        if type(links) == list:
+            for link in links:
+                self.forward_links.append(link)
+        else:
+            self.forward_links.append(links)
 
     def copy(self) -> "BasePVRecipe":
         """Return a shallow copy of this instance"""
