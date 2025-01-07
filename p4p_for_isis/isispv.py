@@ -5,7 +5,8 @@ Required to allow post operations trigger handler rules
 import logging
 
 from p4p import Value
-from p4p.server.raw import Handler, SharedPV, _SharedPV
+from p4p.server.raw import _SharedPV
+from p4p.server.thread import Handler, SharedPV
 
 logger = logging.getLogger(__name__)
 
