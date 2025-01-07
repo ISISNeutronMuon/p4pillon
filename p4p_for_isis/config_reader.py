@@ -108,7 +108,7 @@ def process_config(pvname: str, pvdetails: dict) -> BasePVRecipe:
     else:
         pvrecipe = PVScalarRecipe(PVTypes[pvdetails["type"]], pvdetails["description"], initial)
 
-    supported_configs = [("read_only", bool)]
+    supported_configs = [("read_only", bool), ("calc", dict)]
     for config, config_type in supported_configs:
         # Process variables in the configuration that are attributes of the pvrecipe class
         temp_config = pvdetails.get(config)
@@ -121,6 +121,8 @@ def process_config(pvname: str, pvdetails: dict) -> BasePVRecipe:
         pvrecipe.set_display_limits(**get_field_config(pvdetails, "display"))
     if "valueAlarm" in pvdetails:
         pvrecipe.set_alarm_limits(**get_field_config(pvdetails, "valueAlarm"))
+    if "forward_links" in pvdetails:
+        pvrecipe.set_forward_links(get_field_config(pvdetails, "forward_links"))
 
     return pvrecipe
 
