@@ -6,6 +6,7 @@ from typing import Callable, Optional
 
 from p4p import Value
 from p4p.server import ServerOperation
+#from p4p.server.raw import SharedPV
 from p4p.server.raw import SharedPV
 
 from p4p_for_isis.isispv import ISISHandler
@@ -14,7 +15,9 @@ from p4p_for_isis.value_utils import overwrite_unmarked
 from .rules import (
     AlarmRule,
     BaseRule,
+    CalcRule,
     ControlRule,
+    ForwardLinkRule,
     ReadOnlyRule,
     RulesFlow,
     ScalarToArrayWrapperRule,
@@ -37,8 +40,10 @@ class BaseRulesHandler(ISISHandler):
         # the Server and not the PV object associated with this handler we can't
         # determine the name until the first put operation
         self._name = None  # Used purely for logging
-
         self.rules: OrderedDict[str, BaseRule] = OrderedDict({"timestamp": TimestampRule()})
+        
+        # after_post_rules are rules that need to be evaluated after the pv has been updated, e.g. forward links.
+        self.after_post_rules: OrderedDict[str, BaseRule] = OrderedDict()
 
     def __getitem__(self, rule_name: str) -> Optional[BaseRule]:
         """Allow access to the rules so that parameters such as read_only may be set"""
@@ -73,14 +78,44 @@ class BaseRulesHandler(ISISHandler):
         if rules_flow != RulesFlow.ABORT:
             pv.post(value=op.value(), handler_post_rules=False)
             op.done()
+
+            #Process after_post_rules 
+            self._apply_rules(lambda x: x.put_rule(pv, op), after = True)
         else:
             op.done(error=rules_flow.error)
 
-    def _apply_rules(self, apply_rule: Callable[[BaseRule], RulesFlow]) -> RulesFlow:
+    def add_forward_links(self, forward_links: str | list) -> None:
+        """
+        Add a rule to trigger an update of a forward linked PV.
+        """
+        if "forward_link" not in self.after_post_rules:
+            self.after_post_rules["forward_link"] = ForwardLinkRule()
+            #self.rules.move_to_end("timestamp")
+        
+        self.after_post_rules["forward_link"].add_forward_link(forward_links)
+        
+    def add_calc(self, calc: dict) -> None:
+        """
+        Add a rule to update the value of this PV based on a calculation
+        """
+        if "calc" not in self.rules:
+            self.rules["calc"] = CalcRule()
+            self.rules.move_to_end("timestamp")
+        
+        self.rules["calc"].add_calc(calc)
+
+    def _apply_rules(self, apply_rule: Callable[[BaseRule], RulesFlow], after = False) -> RulesFlow:
         """
         Apply the rules. Primarily this does the basic handling of the RulesFlow.
+        If after == True then apply the after_post_rules which are called after the pv has been updated.
         """
-        for rule_name, rule in self.rules.items():
+        if after == True:
+            rules = self.after_post_rules
+            logger.debug("Applying after_post rules")
+        else:
+            rules = self.rules
+
+        for rule_name, rule in rules.items():
             logger.debug("Applying rule %s", rule_name)
 
             rule_flow = apply_rule(rule)
@@ -94,8 +129,8 @@ class BaseRulesHandler(ISISHandler):
                 return rule_flow
             elif rule_flow == RulesFlow.TERMINATE:
                 logger.debug("Rule %s triggered handler terminate", rule_name)
-                if "timestamp" in self.rules:
-                    rule_flow = apply_rule(self.rules["timestamp"])
+                if "timestamp" in rules:
+                    rule_flow = apply_rule(rules["timestamp"])
                 return rule_flow
             elif rule_flow == RulesFlow.TERMINATE_WO_TIMESTAMP:
                 logger.debug("Rule %s triggered handler terminate without timestamp", rule_name)
