@@ -6,6 +6,7 @@ are implementations of the logic of Normative Type
 
 # TODO: Consider adding Authentication class / callback for puts
 
+import ast
 import itertools
 import logging
 import operator
@@ -21,6 +22,7 @@ from p4p import Type, Value
 from p4p.server import ServerOperation
 from p4p.server.raw import ServOpWrap
 from p4p.server.thread import SharedPV
+from p4p.client.thread import Context
 
 from p4p_for_isis.definitions import AlarmSeverity
 from p4p_for_isis.utils import time_in_seconds_and_nanoseconds
@@ -283,6 +285,107 @@ class AlarmRule(BaseRule):
     _name = "alarm"
     _fields = ["alarm"]
 
+class ForwardLinkRule(BaseRule):
+    """
+    This class implements forward linking using a list of PV names.
+    Those PVs will be updated whenever this rule is called.
+    """
+
+    _name = "foward_link"
+    _fields = None
+
+    def add_forward_link(self, links: str | list) -> None:
+        if not hasattr(self, '_forward_links'):
+            self._forward_links = []
+            
+        if type(links) == list:
+            self._forward_links.extend(links)    
+        else:
+            self._forward_links.append(links)
+        
+        logger.debug(f"Added forward links: {self._forward_links}")
+
+
+    def put_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
+        """
+        Trigger forward links
+        """
+        logger.debug("Evaluating %s.put_rule", self._name)
+        logger.debug(f"Forward links are: {self._forward_links}")
+
+        retVal = RulesFlow.CONTINUE
+        ctxt = Context('pva')
+        for forward_link in self._forward_links:
+            try:
+                 # I've not seen a mechanism for triggering a value update (e.g. read from hardware) in p4p. 
+                 # Calling a put with no value will at least go through all the rules and update 
+                 # those (alarms, time stamp, etc ).
+                 # If the PV is in an IOC with QSRV 2 there is the option to set the PROC field to trigger a read. 
+                 logger.debug(f"Doing put on {forward_link}")
+                 ctxt.put(forward_link,{})
+            except:
+                 logging.error(f"Failed calling forward link to {forward_link}")
+                 #raise RuntimeError(f"Failed calling forward link to {forward_link}")
+                 retVal = RulesFlow.ABORT             
+
+        return retVal
+
+class CalcRule(BaseRule):
+    """
+    This class implements a calculation using a string that represents the calculation and
+    a list of PV names of the variables used in the calculation.
+    """
+
+    _name = "calc"
+    _fields = None
+    
+    _variables = []
+    _calc_str = ''
+
+    def add_calc(self, calc: dict) -> None:
+        self._calc_str = calc['calc_str']
+        self._variables = calc['variables']
+
+    def getVariables(self):
+        """
+        Return a list of the current values of the pvs in self._variables
+        """
+        ctxt = Context('pva')
+
+        pvs = []
+
+        for pv_name in self._variables:
+            try:
+                pvs.append(ctxt.get(pv_name))
+            except:
+                # If there's an error getting the value of a pv return None
+                logging.error(f"Failed to get pv {pv_name}")
+                return None
+
+        return pvs
+
+    def put_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
+        """
+        Evaluate the calculation.
+        NB This is not implemented as an init_rule to ensure dependent pvs served by the same pva server are
+          available before the calculation is evaluated.
+        """
+        logger.debug("Evaluating %s.put_rule", self._name)
+        logger.debug(f"Calculation is {self._calc_str}\nVariables are: {self._variables}")
+
+        retVal = RulesFlow.CONTINUE
+        pv = self.getVariables()
+        logger.debug(f"Values are: {pv}")
+
+        if pv == None:
+            return RulesFlow.ABORT
+        
+        node = ast.parse(self._calc_str, mode='eval')
+
+        newpvstate = op.value().raw
+        newpvstate['value'] = eval(compile(node, '<string>', 'eval'))
+        
+        return retVal        
 
 class TimestampRule(BaseRule):
     """Set current timestamp unless provided with an alternative value"""
