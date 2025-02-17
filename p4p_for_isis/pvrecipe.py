@@ -151,6 +151,7 @@ class BasePVRecipe:
             self.construct_settings["valtype"] = "a" + self.construct_settings["valtype"]
 
         if self.pvtype == PVTypes.ENUM:
+            self.construct_settings.pop("valtype")
             nt = NTEnum(**self.construct_settings)
         else:
             nt = NTScalar(**self.construct_settings)
@@ -175,10 +176,10 @@ class BasePVRecipe:
         """
         Add forward links to the pvrecipe. Links can be a single pv name or a list of pv names. 
         """
-        if hasattr(self,'forward_links') == False: 
+        if not hasattr(self,'forward_links'): 
             self.forward_links = []
 
-        if type(links) == list:
+        if type(links) is list:
             for link in links:
                 self.forward_links.append(link)
         else:
