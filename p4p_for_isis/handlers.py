@@ -6,8 +6,7 @@ from typing import Callable, Optional
 
 from p4p import Value
 from p4p.server import ServerOperation
-#from p4p.server.raw import SharedPV
-from p4p.server.raw import SharedPV
+from p4p.server.thread import SharedPV
 
 from p4p_for_isis.isispv import ISISHandler
 from p4p_for_isis.value_utils import overwrite_unmarked
@@ -53,12 +52,14 @@ class BaseRulesHandler(ISISHandler):
         """
         This method is called when the PV is first accessed. It applies the init_rules
         """
+        logger.debug("In handler onFirstConnect()")
 
         if self._apply_rules(lambda x: x.init_rule(pv.current().raw)) != RulesFlow.ABORT:
             pv.post(value=pv.current().raw, handler_post_rules=False)
 
     def post(self, pv: SharedPV, value: Value, **kwargs) -> None:
         """Handler call by a post operation, requires support from SharedPV derived class"""
+        logger.debug("In handler post()")
         if kwargs.pop("handler_post_rules", False):
             return
 
@@ -72,6 +73,8 @@ class BaseRulesHandler(ISISHandler):
         Handler triggered by put operaitons. Note that this has additional information
         about the source of the put such as the IP address of the caller.
         """
+        logger.debug("In handler put()")
+
         overwrite_unmarked(pv.current().raw, op.value().raw)
 
         rules_flow = self._apply_rules(lambda x: x.put_rule(pv, op))
@@ -109,7 +112,7 @@ class BaseRulesHandler(ISISHandler):
         Apply the rules. Primarily this does the basic handling of the RulesFlow.
         If after == True then apply the after_post_rules which are called after the pv has been updated.
         """
-        if after == True:
+        if after:
             rules = self.after_post_rules
             logger.debug("Applying after_post rules")
         else:
