@@ -6,9 +6,9 @@ import logging
 from typing import List, Union
 
 from p4p.server import Server, StaticProvider
-from p4p.server.raw import SharedPV
+from p4p.server.thread import SharedPV
 
-from p4p_for_isis.pvrecipe import PVScalarRecipe
+from p4p_for_isis.pvrecipe import BasePVRecipe
 
 from .utils import validate_pv_name
 
@@ -64,6 +64,11 @@ class ISISServer:
             self._provider.add(pv_name, pv)
 
         self._server = Server(providers=[self._provider])
+        
+        for pv_name, pv in self._pvs.items():
+            for method in pv.on_start_methods:
+                method(self)
+
         logger.debug("Started Server with %s", self.pvlist)
 
         self._running = True
@@ -81,7 +86,7 @@ class ISISServer:
 
         self._running = False
 
-    def add_pv(self, pv_name: str, pv_recipe: PVScalarRecipe) -> SharedPV:
+    def add_pv(self, pv_name: str, pv_recipe: BasePVRecipe) -> SharedPV:
         """Add a PV to the server"""
 
         if not pv_name.startswith(self.prefix):
