@@ -12,7 +12,7 @@ from .server import ISISServer
 logger = logging.getLogger(__name__)
 
 
-def parse_config_file(filename: str, server: Union[ISISServer, None] = None) -> Dict[str, PVScalarRecipe]:
+def parse_config_file(filename: str, server: Union[ISISServer, None] = None) -> Dict[str, BasePVRecipe]:
     """
     Parse a yaml file and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
@@ -24,7 +24,7 @@ def parse_config_file(filename: str, server: Union[ISISServer, None] = None) -> 
     return parse_config(pvconfigs, server)
 
 
-def parse_config_string(yamlStr: str, server: Union[ISISServer, None] = None) -> Dict[str, PVScalarRecipe]:
+def parse_config_string(yamlStr: str, server: Union[ISISServer, None] = None) -> Dict[str, BasePVRecipe]:
     """
     Parse a yaml string and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
@@ -35,13 +35,15 @@ def parse_config_string(yamlStr: str, server: Union[ISISServer, None] = None) ->
     return parse_config(pvconfigs, server)
 
 
-def parse_config(yamlObj: dict, server: Union[ISISServer, None] = None) -> Dict[str, PVScalarRecipe]:
+def parse_config(yamlObj: dict, server: Union[ISISServer, None] = None) -> Dict[str, BasePVRecipe]:
     """
     Parse a dictionary that has been filled using yaml.load() and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
     """
 
     pvrecipes = {}
+
+    logger.debug(f"Processing yaml: \n{yamlObj}")
 
     for name, config in yamlObj.items():
         recipe = process_config(name, config)
