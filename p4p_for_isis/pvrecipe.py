@@ -100,6 +100,10 @@ class BasePVRecipe:
 
     read_only: bool = False
 
+    # A list of methods that will be called after the pv has been added to 
+    # an ISISServer object and that server is started.
+    on_server_start_methods = []
+
     def __post_init__(self):
         """Anything that isn't done by the automatically created __init__"""
 
@@ -135,11 +139,13 @@ class BasePVRecipe:
             # Add forward links to the handler
             debugStr += f" Forward links are: \n {self.forward_links}"
             handler.add_forward_links(self.forward_links)
+            self.on_server_start_methods.append(handler.after_post_rules["forward_link"].init_internal_pvs)
 
         if hasattr(self,"calc"):
             # Add a calc rule to the handler
             debugStr += f" Calc details are: \n {self.calc}"
             handler.add_calc(self.calc)
+            self.on_server_start_methods.append(handler.rules["calc"].init_internal_pvs)
 
         logger.debug(debugStr)
 
@@ -161,6 +167,8 @@ class BasePVRecipe:
         pvobj = ISISPV(nt=nt, initial=self.initial_value, handler=handler)
         pvobj.post(self.config_settings)
         handler._name = pv_name
+
+        pvobj.on_start_methods = self.on_server_start_methods
 
         if self.read_only:
             handler.set_read_only()
