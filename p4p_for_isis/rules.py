@@ -19,10 +19,10 @@ from typing import Any, Dict, List, Optional, Union
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
 
 from p4p import Type, Value
+from p4p.client.thread import Context
 from p4p.server import ServerOperation
 from p4p.server.raw import ServOpWrap
 from p4p.server.thread import SharedPV
-from p4p.client.thread import Context
 
 from p4p_for_isis.definitions import AlarmSeverity
 from p4p_for_isis.utils import time_in_seconds_and_nanoseconds
@@ -235,6 +235,61 @@ class BaseRule(ABC):
 
         return self.post_rule(oldpvstate, newpvstate)
 
+    def _init_internal_pvs(self, server, pv_attrib: str):
+        """
+        This method should be called after the pva server is started and determines
+        which pvs are local to this server and assumes the rest are external.
+        Internal pvs are stored in a dictionary self._internal_pvs of pv name and ISISPV object.
+        pv_attrib is the name of the attribute of self that contains the list of pv names to process.
+        """
+        if not hasattr(self, pv_attrib):
+            logger.error(f"Attempt to initialise internal pvs but none have being defined in self.{pv_attrib}.")
+            return
+        
+        if not hasattr(self, '_internal_pvs'):
+                    self._internal_pvs = {}
+
+        for pv in getattr(self,pv_attrib):
+            if pv in server.pvlist:
+                self._internal_pvs[pv] = server[pv]
+    
+    def _get_pv(self, pv_name: str):
+        """
+        Return the value for a pv taking into account if the pv is local on this server or not.
+        _init_internal_pvs needs to have been called first to populate self._internal_pvs
+        """
+        retVal = None
+
+        if not hasattr(self, '_internal_pvs'):
+            logger.error("Attempt to use _get_pv without self._internal_pvs being defined.")
+            return retVal
+        
+        if pv_name in self._internal_pvs:
+            retVal = self._internal_pvs[pv_name].current()
+        else:
+            # This pv is external
+            ctxt = Context('pva')
+            retVal = ctxt.get(pv_name)
+        
+        return retVal
+    
+    def _put_pv(self, pv_name: str, val = {}):
+        """
+        Do a blank post to a pv taking into account if the pv is local on this server or not.
+        If the pv is external then a Context.put() is done.
+        self._init_internal_pvs() needs to be called first to populate self._internal_pvs
+        """
+        if not hasattr(self, '_internal_pvs'):
+            logger.error("Attempt to use _put_pv without self._internal_pvs being defined.")
+            return
+                
+        if pv_name in self._internal_pvs:
+            self._internal_pvs[pv_name].post(val)
+        else:
+            # This pv is external
+            ctxt = Context('pva')
+            ctxt.put(pv_name, val)
+
 
 class BaseScalarRule(BaseRule, ABC):
     """
@@ -298,33 +353,45 @@ class ForwardLinkRule(BaseRule):
         if not hasattr(self, '_forward_links'):
             self._forward_links = []
             
-        if type(links) == list:
+        if type(links) is list:
             self._forward_links.extend(links)    
         else:
             self._forward_links.append(links)
         
         logger.debug(f"Added forward links: {self._forward_links}")
 
+    def init_internal_pvs(self, server):
+        self._init_internal_pvs(server, '_forward_links')
 
-    def put_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
+    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
         """
         Trigger forward links
         """
-        logger.debug("Evaluating %s.put_rule", self._name)
+        logger.debug("Evaluating %s.post_rule", self._name)
         logger.debug(f"Forward links are: {self._forward_links}")
-
+        
+        if hasattr(self,"_internal_pvs"):
+            logger.debug(f"Forward links that are internal: {self._internal_pvs}")
+        else:
+            # self._internal_pvs should be set once the pva server has been started.
+            # Abort doing the put if the server hasn't been started. 
+            # This is to make sure all internal pvs are defined. 
+            logger.error("Calling forward link before the server has started. Aborting")
+            return RulesFlow.ABORT  
+             
         retVal = RulesFlow.CONTINUE
-        ctxt = Context('pva')
-        for forward_link in self._forward_links:
+
+        for forward_link in self._forward_links:     
+            #logger.debug(f"Getting to DEV:RW:INT1{ctxt.get('DEV:RW:INT1')}")
             try:
                  # I've not seen a mechanism for triggering a value update (e.g. read from hardware) in p4p. 
                  # Calling a put with no value will at least go through all the rules and update 
                  # those (alarms, time stamp, etc ).
                  # If the PV is in an IOC with QSRV 2 there is the option to set the PROC field to trigger a read. 
                  logger.debug(f"Doing put on {forward_link}")
-                 ctxt.put(forward_link,{})
-            except:
-                 logging.error(f"Failed calling forward link to {forward_link}")
+                 self._put_pv(forward_link)
+            except Exception:
+                 logger.error(f"Failed calling forward link to {forward_link}")
                  #raise RuntimeError(f"Failed calling forward link to {forward_link}")
                  retVal = RulesFlow.ABORT             
 
@@ -346,43 +413,47 @@ class CalcRule(BaseRule):
         self._calc_str = calc['calc_str']
         self._variables = calc['variables']
 
+    def init_internal_pvs(self, server):
+        self._init_internal_pvs(server, '_variables')
+
     def getVariables(self):
         """
         Return a list of the current values of the pvs in self._variables
         """
-        ctxt = Context('pva')
-
         pvs = []
 
         for pv_name in self._variables:
             try:
-                pvs.append(ctxt.get(pv_name))
-            except:
+                val = self._get_pv(pv_name)
+                if val is None:
+                    logging.error(f"Failed to get pv {pv_name}")
+                    return None
+                pvs.append(val)
+            except Exception:
                 # If there's an error getting the value of a pv return None
                 logging.error(f"Failed to get pv {pv_name}")
                 return None
 
         return pvs
 
-    def put_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
+    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
         """
         Evaluate the calculation.
-        NB This is not implemented as an init_rule to ensure dependent pvs served by the same pva server are
-          available before the calculation is evaluated.
+          The syntax for using pvs in the calc string is to use the pv array, e.g. 'pv[0]' to use the first variable
+          in self._variables. This requires the variable below (i.e. pv = self.getVariables()) to have the same name.
         """
-        logger.debug("Evaluating %s.put_rule", self._name)
+        logger.debug("Evaluating %s.post_rule", self._name)
         logger.debug(f"Calculation is {self._calc_str}\nVariables are: {self._variables}")
 
         retVal = RulesFlow.CONTINUE
         pv = self.getVariables()
         logger.debug(f"Values are: {pv}")
 
-        if pv == None:
+        if pv is None:
             return RulesFlow.ABORT
         
         node = ast.parse(self._calc_str, mode='eval')
 
-        newpvstate = op.value().raw
         newpvstate['value'] = eval(compile(node, '<string>', 'eval'))
         
         return retVal        
