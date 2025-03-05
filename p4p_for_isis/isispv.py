@@ -27,6 +27,26 @@ class ISISHandler(Handler):
 class ISISPV(SharedPV):
     """Implementation that applies specified rules to post operations"""
 
+    def set_start_methods(self, method: callable):
+        """
+        Add method to the list of methods to be called when an ISISServer containing this pv is started
+        """
+        if not hasattr(self, 'on_start_methods'):
+            self.on_start_methods = []
+        
+        self.on_start_methods.append(method)
+    
+    def on_server_start(self, server):
+        """
+        This method is called by the ISISServer when the server is started and can be used for any initialisation that 
+        needs to be done after all pvs for the server have been created.
+        This is primarily used to do things like identify which pvs are local for pvs that include forward links or 
+        for calc pvs by adding the appropriate method using set_start_methods().
+        """
+
+        for method in self.on_start_methods:
+            method(server)
+        
     @property
     def handler(self) -> Handler:
         """Access to handler of this PV"""
