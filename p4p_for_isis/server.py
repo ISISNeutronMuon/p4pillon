@@ -5,6 +5,7 @@ ISISServer is used to create PVs and manage their lifetimes
 import logging
 from typing import List, Union
 
+from p4p.client.thread import Context
 from p4p.server import Server, StaticProvider
 from p4p.server.thread import SharedPV
 
@@ -53,6 +54,8 @@ class ISISServer:
 
         self._running = False
 
+        self._ctxt = Context('pva')
+
     def start(self) -> None:
         """Start the ISISServer"""
 
@@ -67,7 +70,8 @@ class ISISServer:
         
         for pv_name, pv in self._pvs.items():
             for method in pv.on_start_methods:
-                method(self)
+                logger.debug(f"Applying on server start method for pv {pv_name} method {method}")
+                method(server = self, pv_name = pv_name, pv = pv)
 
         logger.debug("Started Server with %s", self.pvlist)
 
@@ -127,3 +131,25 @@ class ISISServer:
         if not pv_name.startswith(self.prefix):
             pv_name = self.prefix + pv_name
         return self._pvs.get(pv_name)
+
+    def get_pv_value(self, pv_name: str):
+        """
+        Get the value of a PV using SharedPV.current() if the PV is on this server 
+        or Context.get() if it is not.
+        """
+        retVal = None
+        if pv_name in self.pvlist:
+            logger.debug(f"Getting value using SharedPV for pv {pv_name}")
+            retVal = self[pv_name].current()
+        else:
+            logger.debug(f"Doing Context.get() for pv {pv_name}")
+            retVal = self._ctxt.get(pv_name)
+
+        return retVal
+
+    def put_pv_value(self, pv_name: str, value):
+        """
+        Put the value to a PV using the server Context member self._ctxt
+        """
+        logger.debug(f"Trying putting value {value} to pv {pv_name}")
+        self._ctxt.put(pv_name, value)
