@@ -134,6 +134,19 @@ def check_applicable(func):
 
     return wrapped_function
 
+class MonitorCB:
+    """
+    Used to provide call back methods for subscribing to Context.monitor 
+    """
+    def __init__(self, rule_method):
+        """
+        This class is used within  rule to provide a call back method for Context.monitor
+        The rule_method is the method that the call back will pass the value on to.
+        """
+        self._rule_method = rule_method
+
+    def cb(self,V):
+        self._rule_method(V)
 
 class BaseRule(ABC):
     """
@@ -234,61 +247,58 @@ class BaseRule(ABC):
                 newpvstate.mark(field, False)
 
         return self.post_rule(oldpvstate, newpvstate)
-
-    def _init_internal_pvs(self, server, pv_attrib: str):
-        """
-        This method should be called after the pva server is started and determines
-        which pvs are local to this server and assumes the rest are external.
-        Internal pvs are stored in a dictionary self._internal_pvs of pv name and ISISPV object.
-        pv_attrib is the name of the attribute of self that contains the list of pv names to process.
-        """
-        if not hasattr(self, pv_attrib):
-            logger.error(f"Attempt to initialise internal pvs but none have being defined in self.{pv_attrib}.")
-            return
-        
-        if not hasattr(self, '_internal_pvs'):
-                    self._internal_pvs = {}
-
-        for pv in getattr(self,pv_attrib):
-            if pv in server.pvlist:
-                self._internal_pvs[pv] = server[pv]
     
+    def _init_monitors(self, pv_attrib: str, cb):
+        """
+        Method to set up monitor subscriptions for a rule and should be called after the server has started.
+        The method cb is the method in the rule to be called 
+        when the value of a pv being monitored is updated.
+        """
+        
+        if not hasattr(self, pv_attrib):
+            logger.error(f"Attempt to initialise monitors using non-existant attribute self.{pv_attrib}.")
+            return
+
+        if not hasattr(self, '_server'):
+            logger.error("Attempt to initialise monitors using non-existant attribute self._server")
+            return
+
+        logger.debug(f"In _init_monitors: {getattr(self,pv_attrib)} {cb}.")
+            
+        
+        for pv in getattr(self,pv_attrib):
+            tempMonitor = MonitorCB(cb)
+            self._sub = self._server._ctxt.monitor(pv, tempMonitor.cb)
+
+    def _init_server_attrib(self, server):
+        if not hasattr(self,'_server'):
+            self._server = server
+
     def _get_pv(self, pv_name: str):
         """
-        Return the value for a pv taking into account if the pv is local on this server or not.
-        _init_internal_pvs needs to have been called first to populate self._internal_pvs
+        Return the value of a pv using the server get method.
         """
         retVal = None
 
-        if not hasattr(self, '_internal_pvs'):
-            logger.error("Attempt to use _get_pv without self._internal_pvs being defined.")
-            return retVal
-        
-        if pv_name in self._internal_pvs:
-            retVal = self._internal_pvs[pv_name].current()
-        else:
-            # This pv is external
-            ctxt = Context('pva')
-            retVal = ctxt.get(pv_name)
-        
+        if not hasattr(self, '_server'):
+            logger.error("Attempt to use self._get_pv without self._server being defined.")
+            raise 
+            
+        retVal = self._server.get_pv_value(pv_name)
         return retVal
     
     def _put_pv(self, pv_name: str, val = {}):
         """
-        Do a blank post to a pv taking into account if the pv is local on this server or not.
-        If the pv is external then a Context.put() is done.
-        self._init_internal_pvs() needs to be called first to populate self._internal_pvs
+        Do a put using the server put method
         """
-        if not hasattr(self, '_internal_pvs'):
-            logger.error("Attempt to use _put_pv without self._internal_pvs being defined.")
-            return
-                
-        if pv_name in self._internal_pvs:
-            self._internal_pvs[pv_name].post(val)
-        else:
-            # This pv is external
-            ctxt = Context('pva')
-            ctxt.put(pv_name, val)
+        
+        if not hasattr(self, '_server'):
+            logger.error("Attempt to use self._put_pv without self._server being defined.")
+            raise
+        
+        self._server.put_pv_value(pv_name, val)
+        
+    
 
 
 class BaseScalarRule(BaseRule, ABC):
@@ -360,8 +370,12 @@ class ForwardLinkRule(BaseRule):
         
         logger.debug(f"Added forward links: {self._forward_links}")
 
-    def init_internal_pvs(self, server):
-        self._init_internal_pvs(server, '_forward_links')
+    def init_forward_link(self, **kwargs):
+        """
+        Initialisation that happens after the server has started
+        """
+        # Set the server 
+        self._init_server_attrib(kwargs['server'])
 
     def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
         """
@@ -369,27 +383,17 @@ class ForwardLinkRule(BaseRule):
         """
         logger.debug("Evaluating %s.post_rule", self._name)
         logger.debug(f"Forward links are: {self._forward_links}")
-        
-        if hasattr(self,"_internal_pvs"):
-            logger.debug(f"Forward links that are internal: {self._internal_pvs}")
-        else:
-            # self._internal_pvs should be set once the pva server has been started.
-            # Abort doing the put if the server hasn't been started. 
-            # This is to make sure all internal pvs are defined. 
-            logger.error("Calling forward link before the server has started. Aborting")
-            return RulesFlow.ABORT  
              
         retVal = RulesFlow.CONTINUE
 
         for forward_link in self._forward_links:     
-            #logger.debug(f"Getting to DEV:RW:INT1{ctxt.get('DEV:RW:INT1')}")
             try:
                  # I've not seen a mechanism for triggering a value update (e.g. read from hardware) in p4p. 
                  # Calling a put with no value will at least go through all the rules and update 
                  # those (alarms, time stamp, etc ).
                  # If the PV is in an IOC with QSRV 2 there is the option to set the PROC field to trigger a read. 
                  logger.debug(f"Doing put on {forward_link}")
-                 self._put_pv(forward_link)
+                 self._put_pv(forward_link,{})
             except Exception:
                  logger.error(f"Failed calling forward link to {forward_link}")
                  #raise RuntimeError(f"Failed calling forward link to {forward_link}")
@@ -408,13 +412,35 @@ class CalcRule(BaseRule):
     
     _variables = []
     _calc_str = ''
+    _pv_name = ''
 
     def add_calc(self, calc: dict) -> None:
         self._calc_str = calc['calc_str']
         self._variables = calc['variables']
 
-    def init_internal_pvs(self, server):
-        self._init_internal_pvs(server, '_variables')
+    def init_calc(self, **kwargs):
+        """
+        Method to initialise monitor call backs for the variables to be monitored.
+        This should be added as an on start method when creating the pv.
+        """
+        # Set the server member 
+        self._init_server_attrib(kwargs['server'])
+
+        # Set the name of the pv this rule is part of so that we can do a put to it
+        self._pv_name = kwargs['pv_name']
+
+        # Initialise the monitor methods for checking when dependent variables change.
+        self._init_monitors('_variables', self._monitor_post)
+        
+
+    def _monitor_post(self, V):
+        """
+        This method gets called by the monitor call back and is used to do 
+        a Context.put() so this pv is updated properly (i.e. all rules get processed)
+        """
+        logger.debug(f"In monitor got value {V}")
+        self._put_pv(self._pv_name,{})
+
 
     def getVariables(self):
         """
