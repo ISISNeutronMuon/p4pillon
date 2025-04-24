@@ -100,10 +100,6 @@ class BasePVRecipe:
 
     read_only: bool = False
 
-    # A list of methods that will be called after the pv has been added to 
-    # an ISISServer object and that server is started.
-    on_server_start_methods = []
-
     def __post_init__(self):
         """Anything that isn't done by the automatically created __init__"""
 
@@ -115,6 +111,10 @@ class BasePVRecipe:
         self.construct_settings["valtype"] = self.pvtype.value
         self.construct_settings["extra"] = [("descriptor", "s")]
         self.config_settings["descriptor"] = self.description
+
+        # A list of methods that will be called after the pv has been added to 
+        # an ISISServer object and that server is started.
+        self.on_server_start_methods = []
 
     @abstractmethod
     def create_pv(self, pv_name: str) -> SharedPV:
@@ -138,14 +138,20 @@ class BasePVRecipe:
         if hasattr(self,"forward_links"):
             # Add forward links to the handler
             debugStr += f" Forward links are: \n {self.forward_links}"
+            
+            # prevent linking to self
+            if pv_name in self.forward_links:
+                logger.error(f"Attempting to add forward link to self for pv {pv_name} and forward links {self.forward_links}")
+                raise ValueError
+            
             handler.add_forward_links(self.forward_links)
-            self.on_server_start_methods.append(handler.after_post_rules["forward_link"].init_internal_pvs)
+            self.on_server_start_methods.append(handler.after_post_rules["forward_link"].init_forward_link)
 
         if hasattr(self,"calc"):
             # Add a calc rule to the handler
             debugStr += f" Calc details are: \n {self.calc}"
             handler.add_calc(self.calc)
-            self.on_server_start_methods.append(handler.rules["calc"].init_internal_pvs)
+            self.on_server_start_methods.append(handler.rules["calc"].init_calc)
 
         logger.debug(debugStr)
 
