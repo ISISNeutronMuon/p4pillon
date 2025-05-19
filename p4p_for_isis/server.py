@@ -54,7 +54,7 @@ class ISISServer:
 
         self._running = False
 
-        self._ctxt = Context('pva')
+        self._ctxt = Context("pva")
 
     def start(self) -> None:
         """Start the ISISServer"""
@@ -67,11 +67,11 @@ class ISISServer:
             self._provider.add(pv_name, pv)
 
         self._server = Server(providers=[self._provider])
-        
+
         for pv_name, pv in self._pvs.items():
             for method in pv.on_start_methods:
                 logger.debug(f"Applying on server start method for pv {pv_name} method {method}")
-                method(server = self, pv_name = pv_name, pv = pv)
+                method(server=self, pv_name=pv_name, pv=pv)
 
         logger.debug("Started Server with %s", self.pvlist)
 
@@ -134,7 +134,7 @@ class ISISServer:
 
     def get_pv_value(self, pv_name: str):
         """
-        Get the value of a PV using SharedPV.current() if the PV is on this server 
+        Get the value of a PV using SharedPV.current() if the PV is on this server
         or Context.get() if it is not.
         """
         retVal = None
