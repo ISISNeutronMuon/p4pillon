@@ -112,7 +112,7 @@ class BasePVRecipe:
         self.construct_settings["extra"] = [("descriptor", "s")]
         self.config_settings["descriptor"] = self.description
 
-        # A list of methods that will be called after the pv has been added to 
+        # A list of methods that will be called after the pv has been added to
         # an ISISServer object and that server is started.
         self.on_server_start_methods = []
 
@@ -132,22 +132,26 @@ class BasePVRecipe:
         """
         This method is called by create_pv in the child classes after construct settings is set.
         """
-        debugStr = f"Building pv\n Construct settings are: \n {self.construct_settings} \n"+\
-            f" Config settings are:\n {self.config_settings} \n Initial value:\n {self.initial_value}\n"
-        
-        if hasattr(self,"forward_links"):
+        debugStr = (
+            f"Building pv\n Construct settings are: \n {self.construct_settings} \n"
+            + f" Config settings are:\n {self.config_settings} \n Initial value:\n {self.initial_value}\n"
+        )
+
+        if hasattr(self, "forward_links"):
             # Add forward links to the handler
             debugStr += f" Forward links are: \n {self.forward_links}"
-            
+
             # prevent linking to self
             if pv_name in self.forward_links:
-                logger.error(f"Attempting to add forward link to self for pv {pv_name} and forward links {self.forward_links}")
+                logger.error(
+                    f"Attempting to add forward link to self for pv {pv_name} and forward links {self.forward_links}"
+                )
                 raise ValueError
-            
+
             handler.add_forward_links(self.forward_links)
             self.on_server_start_methods.append(handler.after_post_rules["forward_link"].init_forward_link)
 
-        if hasattr(self,"calc"):
+        if hasattr(self, "calc"):
             # Add a calc rule to the handler
             debugStr += f" Calc details are: \n {self.calc}"
             handler.add_calc(self.calc)
@@ -183,9 +187,9 @@ class BasePVRecipe:
 
     def set_forward_links(self, links: str | list):
         """
-        Add forward links to the pvrecipe. Links can be a single pv name or a list of pv names. 
+        Add forward links to the pvrecipe. Links can be a single pv name or a list of pv names.
         """
-        if not hasattr(self,'forward_links'): 
+        if not hasattr(self, "forward_links"):
             self.forward_links = []
 
         if type(links) is list:
@@ -208,7 +212,7 @@ class PVScalarRecipe(BasePVRecipe):
     def __post_init__(self):
         super().__post_init__()
         if self.pvtype != PVTypes.DOUBLE and self.pvtype != PVTypes.INTEGER and self.pvtype != PVTypes.STRING:
-            raise ValueError(f"Unsupported pv type {self.pvtype} " "for class {self.__class__.__name__}")
+            raise ValueError(f"Unsupported pv type {self.pvtype} for class {{self.__class__.__name__}}")
 
     def set_control_limits(self, low: Numeric = None, high: Numeric = None, min_step=0):
         """
@@ -409,7 +413,7 @@ class PVEnumRecipe(BasePVRecipe):
     def __post_init__(self):
         super().__post_init__()
         if self.pvtype != PVTypes.ENUM:
-            raise ValueError(f"Unsupported pv type {self.pvtype} " "for class {self.__class__.__name__}")
+            raise ValueError(f"Unsupported pv type {self.pvtype} for class {{self.__class__.__name__}}")
 
     @abstractmethod
     def create_pv(self, pv_name: str) -> SharedPV:
