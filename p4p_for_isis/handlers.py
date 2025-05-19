@@ -40,7 +40,7 @@ class BaseRulesHandler(ISISHandler):
         # determine the name until the first put operation
         self._name = None  # Used purely for logging
         self.rules: OrderedDict[str, BaseRule] = OrderedDict({"timestamp": TimestampRule()})
-        
+
         # after_post_rules are rules that need to be evaluated after the pv has been updated, e.g. forward links.
         self.after_post_rules: OrderedDict[str, BaseRule] = OrderedDict()
 
@@ -82,8 +82,8 @@ class BaseRulesHandler(ISISHandler):
             pv.post(value=op.value(), handler_post_rules=False)
             op.done()
 
-            #Process after_post_rules 
-            self._apply_rules(lambda x: x.put_rule(pv, op), after = True)
+            # Process after_post_rules
+            self._apply_rules(lambda x: x.put_rule(pv, op), after=True)
         else:
             op.done(error=rules_flow.error)
 
@@ -93,10 +93,10 @@ class BaseRulesHandler(ISISHandler):
         """
         if "forward_link" not in self.after_post_rules:
             self.after_post_rules["forward_link"] = ForwardLinkRule()
-            #self.rules.move_to_end("timestamp")
-        
+            # self.rules.move_to_end("timestamp")
+
         self.after_post_rules["forward_link"].add_forward_link(forward_links)
-        
+
     def add_calc(self, calc: dict) -> None:
         """
         Add a rule to update the value of this PV based on a calculation
@@ -104,10 +104,10 @@ class BaseRulesHandler(ISISHandler):
         if "calc" not in self.rules:
             self.rules["calc"] = CalcRule()
             self.rules.move_to_end("timestamp")
-        
+
         self.rules["calc"].add_calc(calc)
 
-    def _apply_rules(self, apply_rule: Callable[[BaseRule], RulesFlow], after = False) -> RulesFlow:
+    def _apply_rules(self, apply_rule: Callable[[BaseRule], RulesFlow], after=False) -> RulesFlow:
         """
         Apply the rules. Primarily this does the basic handling of the RulesFlow.
         If after == True then apply the after_post_rules which are called after the pv has been updated.
