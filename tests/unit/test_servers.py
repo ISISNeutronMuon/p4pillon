@@ -49,7 +49,7 @@ def test_server_retrieve_pvs(mock_recipe, pv_name):
 
 @patch("p4p_for_isis.server.StaticProvider", autospec=True)
 @patch("p4p_for_isis.server.Server", autospec=True)
-def test_server_start(server, provider, caplog, mock_pv):
+def test_server_start(server, provider, caplog, mock_isispv):
     test_server = ISISServer(
         ioc_name="TESTIOC",
         section="controls testing",
@@ -57,13 +57,15 @@ def test_server_start(server, provider, caplog, mock_pv):
         prefix="DEV:",
     )
 
-    test_server._pvs = {"DEV:TEST:PV:1": mock_pv}
+    mock_isispv.on_start_methods = []
+    test_server._pvs = {"DEV:TEST:PV:1": mock_isispv}
+    print(len(mock_isispv.on_start_methods))
 
     assert test_server._running is False
     with caplog.at_level(logging.DEBUG):
         test_server.start()
     assert len(caplog.records) == 1
-    provider.return_value.add.assert_called_once_with("DEV:TEST:PV:1", mock_pv)
+    provider.return_value.add.assert_called_once_with("DEV:TEST:PV:1", mock_isispv)
     server.assert_called_once_with(providers=[provider.return_value])
     assert test_server._running is True
 
@@ -93,7 +95,7 @@ def test_server_add_pv(recipe, server, provider, caplog):
 
 @patch("p4p_for_isis.server.StaticProvider", autospec=True)
 @patch("p4p_for_isis.server.Server", autospec=True)
-def test_server_stop(server, provider, caplog, mock_pv):
+def test_server_stop(server, provider, caplog, mock_isispv):
     test_server = ISISServer(
         ioc_name="TESTIOC",
         section="controls testing",
@@ -103,12 +105,12 @@ def test_server_stop(server, provider, caplog, mock_pv):
 
     test_server._running = True
     test_server._server = server.return_value
-    test_server._pvs = {"DEV:TEST:PV:1": mock_pv}
+    test_server._pvs = {"DEV:TEST:PV:1": mock_isispv}
 
     with caplog.at_level(logging.DEBUG):
         test_server.stop()
 
-    mock_pv.close.assert_called_once_with()
+    mock_isispv.close.assert_called_once_with()
     provider.return_value.remove.assert_called_once_with("DEV:TEST:PV:1")
     server.return_value.stop.assert_called_once_with()
     assert test_server._running is False
@@ -117,7 +119,7 @@ def test_server_stop(server, provider, caplog, mock_pv):
 @patch("p4p_for_isis.server.StaticProvider", autospec=True)
 @patch("p4p_for_isis.server.Server", autospec=True)
 @patch("p4p_for_isis.pvrecipe.PVScalarRecipe", autospec=True)
-def test_server_remove_pv(recipe, server, provider, caplog, mock_pv):
+def test_server_remove_pv(recipe, server, provider, caplog, mock_isispv):
     test_server = ISISServer(
         ioc_name="TESTIOC",
         section="controls testing",
@@ -125,14 +127,14 @@ def test_server_remove_pv(recipe, server, provider, caplog, mock_pv):
         prefix="DEV:",
     )
 
-    test_server._pvs["DEV:TEST:PV:1"] = mock_pv
+    test_server._pvs["DEV:TEST:PV:1"] = mock_isispv
     test_server._running = True
     test_server._server = server.return_value
 
     with caplog.at_level(logging.DEBUG):
         test_server.remove_pv("TEST:PV:1")
 
-    mock_pv.close.assert_called_once_with()
+    mock_isispv.close.assert_called_once_with()
     provider.return_value.remove.assert_called_once_with("DEV:TEST:PV:1")
 
     assert test_server._pvs.get("DEV:TEST:PV:1") is None
