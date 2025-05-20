@@ -49,7 +49,7 @@ class ISISServer:
         # the prefix determines the prefix of the PVs to be added to the server e.g. DEV:
         self.prefix = prefix
         self._provider = StaticProvider()
-        self._server: Server = None
+        self._server: Union[Server, None] = None
         self._pvs: dict[str, SharedPV] = {}
 
         self._running = False
@@ -70,7 +70,7 @@ class ISISServer:
 
         for pv_name, pv in self._pvs.items():
             for method in pv.on_start_methods:
-                logger.debug(f"Applying on server start method for pv {pv_name} method {method}")
+                logger.debug("Applying on server start method for pv %s method %s", pv_name, method)
                 method(server=self, pv_name=pv_name, pv=pv)
 
         logger.debug("Started Server with %s", self.pvlist)
@@ -85,7 +85,8 @@ class ISISServer:
         for pv_name, pv in self._pvs.items():
             pv.close()
             self._provider.remove(pv_name)
-        self._server.stop()
+        if self._server:
+            self._server.stop()
         logger.debug("\nStopped server")
 
         self._running = False
@@ -137,19 +138,18 @@ class ISISServer:
         Get the value of a PV using SharedPV.current() if the PV is on this server
         or Context.get() if it is not.
         """
-        retVal = None
         if pv_name in self.pvlist:
-            logger.debug(f"Getting value using SharedPV for pv {pv_name}")
-            retVal = self[pv_name].current()
-        else:
-            logger.debug(f"Doing Context.get() for pv {pv_name}")
-            retVal = self._ctxt.get(pv_name)
+            logger.debug("Getting value using SharedPV for pv %s", pv_name)
+            shared_pv = self._pvs.get(pv_name, None)
+            if shared_pv:
+                return shared_pv.current()
 
-        return retVal
+        logger.debug("Doing Context.get() for pv %s", pv_name)
+        return self._ctxt.get(pv_name)
 
     def put_pv_value(self, pv_name: str, value):
         """
         Put the value to a PV using the server Context member self._ctxt
         """
-        logger.debug(f"Trying putting value {value} to pv {pv_name}")
+        logger.debug("Trying putting value %r to pv %s", value, pv_name)
         self._ctxt.put(pv_name, value)
