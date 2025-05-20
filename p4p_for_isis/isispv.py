@@ -3,10 +3,13 @@ Required to allow post operations trigger handler rules
 """
 
 import logging
+from collections.abc import Callable
 
 from p4p import Value
 from p4p.server.raw import _SharedPV
 from p4p.server.thread import Handler, SharedPV
+
+# from p4p_for_isis.server import ISISServer
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +30,14 @@ class ISISHandler(Handler):
 class ISISPV(SharedPV):
     """Implementation that applies specified rules to post operations"""
 
-    def set_start_methods(self, method: callable):
+    def __init__(self, **kws):
+        super().__init__(**kws)
+        self.on_start_methods: list[Callable] = []
+
+    def set_start_methods(self, method: Callable):
         """
         Add method to the list of methods to be called when an ISISServer containing this pv is started
         """
-        if not hasattr(self, "on_start_methods"):
-            self.on_start_methods = []
-
         self.on_start_methods.append(method)
 
     def on_server_start(self, server):
