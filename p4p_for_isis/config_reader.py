@@ -43,7 +43,7 @@ def parse_config(yamlObj: dict, server: Union[ISISServer, None] = None) -> Dict[
 
     pvrecipes = {}
 
-    logger.debug(f"Processing yaml: \n{yamlObj}")
+    logger.debug("Processing yaml: \n%r", yamlObj)
 
     for name, config in yamlObj.items():
         recipe = process_config(name, config)
@@ -124,7 +124,7 @@ def process_config(pvname: str, pvdetails: dict) -> BasePVRecipe:
     if "valueAlarm" in pvdetails:
         pvrecipe.set_alarm_limits(**get_field_config(pvdetails, "valueAlarm"))
     if "forward_links" in pvdetails:
-        pvrecipe.set_forward_links(get_field_config(pvdetails, "forward_links"))
+        pvrecipe.set_forward_links(**get_field_config(pvdetails, "forward_links"))
 
     return pvrecipe
 
