@@ -1,7 +1,7 @@
 """Read configuration from a YAML file"""
 
 import logging
-from typing import Dict, Union
+from typing import Any, Dict, Union
 
 import yaml
 
@@ -24,18 +24,20 @@ def parse_config_file(filename: str, server: Union[ISISServer, None] = None) -> 
     return parse_config(pvconfigs, server)
 
 
-def parse_config_string(yamlStr: str, server: Union[ISISServer, None] = None) -> Dict[str, BasePVRecipe]:
+def parse_config_string(yaml_str: str, server: Union[ISISServer, None] = None) -> Dict[str, BasePVRecipe]:
     """
     Parse a yaml string and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
     """
     pvconfigs = {}
-    pvconfigs = yaml.load(yamlStr, yaml.SafeLoader)
+    pvconfigs = yaml.load(yaml_str, yaml.SafeLoader)
 
     return parse_config(pvconfigs, server)
 
 
-def parse_config(yamlObj: dict, server: Union[ISISServer, None] = None) -> Dict[str, BasePVRecipe]:
+def parse_config(
+    yaml_obj: Dict[str, Dict[str, Any]], server: Union[ISISServer, None] = None
+) -> Dict[str, BasePVRecipe]:
     """
     Parse a dictionary that has been filled using yaml.load() and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
@@ -43,9 +45,9 @@ def parse_config(yamlObj: dict, server: Union[ISISServer, None] = None) -> Dict[
 
     pvrecipes = {}
 
-    logger.debug("Processing yaml: \n%r", yamlObj)
+    logger.debug("Processing yaml: \n%r", yaml_obj)
 
-    for name, config in yamlObj.items():
+    for name, config in yaml_obj.items():
         recipe = process_config(name, config)
         pvrecipes[name] = recipe
 
@@ -55,7 +57,7 @@ def parse_config(yamlObj: dict, server: Union[ISISServer, None] = None) -> Dict[
     return pvrecipes
 
 
-def process_config(pvname: str, pvdetails: dict) -> BasePVRecipe:
+def process_config(pvname: str, pvdetails: Dict[str, Any]) -> BasePVRecipe:
     """
     Process the configuration of a single PV and update pvrecipe accordingly.
 
@@ -124,7 +126,7 @@ def process_config(pvname: str, pvdetails: dict) -> BasePVRecipe:
     if "valueAlarm" in pvdetails:
         pvrecipe.set_alarm_limits(**get_field_config(pvdetails, "valueAlarm"))
     if "forward_links" in pvdetails:
-        pvrecipe.set_forward_links(**get_field_config(pvdetails, "forward_links"))
+        pvrecipe.set_forward_links(get_field_config(pvdetails, "forward_links"))
 
     return pvrecipe
 
