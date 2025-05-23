@@ -60,6 +60,39 @@ class ISISPV(SharedPV):
     def handler(self, newhandler: ISISHandler):
         self._handler = newhandler
 
+    def open(self, value, nt=None, wrap=None, unwrap=None, **kws):
+        """Mark the PV as opened an provide its initial value.
+        This initial value is later updated with post().
+
+        :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
+
+        Any clients which have begun connecting which began connecting while
+        this PV was in the close'd state will complete connecting.
+
+        Only those fields of the value which are marked as changed will be stored.
+        """
+
+        self._wrap = wrap or (nt and nt.wrap) or self._wrap
+        self._unwrap = unwrap or (nt and nt.unwrap) or self._unwrap
+
+        # Intercept all arguments that start with 'handler_open_' and remove them from
+        # the arguments that go to the wrap and send them instead to the handler.open()
+        post_kws = {x: kws.pop(x) for x in [y for y in kws if y.startswith("handler_open_")]}
+
+        try:
+            V = self._wrap(value, **kws)
+        except:  # py3 will chain automatically, py2 won't
+            raise ValueError("Unable to wrap %r with %r and %r" % (value, self._wrap, kws))
+
+        # Guard goes here because we can have handlers that don't inherit from
+        # the Handler base class
+        try:
+            self._handler.open(V, **post_kws)
+        except AttributeError as err:
+            pass
+
+        _SharedPV.open(self, V)
+
     def post(self, value, **kws):
         """Provide an update to the Value of this PV.
 
