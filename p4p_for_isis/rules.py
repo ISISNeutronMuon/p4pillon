@@ -38,19 +38,19 @@ class RulesFlow(IntEnum):
     set an error message if rule evaluation is aborted.
     """
 
-    CONTINUE = auto()  # Continue rules processing
-    TERMINATE = auto()  # Do not process more rules but apply timestamp and complete
-    TERMINATE_WO_TIMESTAMP = auto()  # Do not process further rules; do not apply timestamp rule
-    ABORT = auto()  # Stop rules processing and abort put
+    CONTINUE = auto()  #: Continue rules processing
+    TERMINATE = auto()  #: Do not process more rules but apply timestamp and complete
+    TERMINATE_WO_TIMESTAMP = auto()  #: Do not process further rules; do not apply timestamp rule
+    ABORT = auto()  #: Stop rules processing and abort put
 
     def __init__(self, _) -> None:
         # We include an error string so that we can indicate why an ABORT
         # has been triggered
         self.error: str = ""
 
-    def set_errormsg(self, errormsg: str):
+    def set_errormsg(self, errormsg: str) -> "RulesFlow":
         """
-        Set an error message to explain an ABORT
+        Set an error message to explain an ABORT.
         This function returns the class instance so it may be used in lambdas
         """
         self.error = errormsg
@@ -102,7 +102,7 @@ def check_applicable_put(func):
 
 def check_applicable(func):
     """
-    Decorator for BaseRule::*_rule - checks `is_applicable()` and returns RulesFlow.CONTINUE if not True
+    Decorator for BaseRule::\*_rule - checks `is_applicable()` and returns RulesFlow.CONTINUE if not True
     """
 
     @wraps(func)
@@ -142,7 +142,7 @@ class MonitorCB:
 
     def __init__(self, rule_method: Callable[[Value], None]):
         """
-        This class is used within  rule to provide a call back method for Context.monitor
+        This class is used within  rule to provide a call back method for Context.monitor.
         The rule_method is the method that the call back will pass the value on to.
         """
         self._rule_method = rule_method
