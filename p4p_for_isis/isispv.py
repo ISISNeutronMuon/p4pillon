@@ -76,7 +76,7 @@ class ISISPV(SharedPV):
         self._handler = newhandler
 
     def open(self, value, nt=None, wrap=None, unwrap=None, **kws):
-        """Mark the PV as opened an provide its initial value.
+        """Mark the PV as opened and provide its initial value.
         This initial value is later updated with post().
 
         :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
