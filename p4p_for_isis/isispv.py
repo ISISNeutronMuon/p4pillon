@@ -6,8 +6,8 @@ import logging
 from collections.abc import Callable
 
 from p4p import Value
-from p4p.server.raw import _SharedPV
-from p4p.server.thread import Handler, SharedPV
+from p4p.server.raw import Handler, _SharedPV
+from p4p.server.thread import SharedPV
 
 # from p4p_for_isis.server import ISISServer
 
