@@ -141,7 +141,7 @@ class ISISPV(SharedPV):
 
         :param bool destroy: Indicate "permanent" closure.  Current clients will not see subsequent open().
         :param bool sync: When block until any pending onLastDisconnect() is delivered (timeout applies).
-        :param float timeout: Applies only when sync=True.  None for no timeout, otherwise a non-negative 
+        :param float timeout: Applies only when sync=True.  None for no timeout, otherwise a non-negative
             floating point value.
 
         close() with destroy=True or sync=True will not prevent clients from re-connecting.
@@ -170,6 +170,7 @@ class ISISPV(SharedPV):
     @property
     def on_first_connect(self):
         """Turn a function into an ISISHandler onFirstConnect() method."""
+
         def decorate(fn):
             self._handler.onFirstConnect = fn
             return fn
@@ -179,6 +180,7 @@ class ISISPV(SharedPV):
     @property
     def on_last_disconnect(self):
         """Turn a function into an ISISHandler onLastDisconnect() method."""
+
         def decorate(fn):
             self._handler.onLastDisconnect = fn
             return fn
@@ -188,6 +190,7 @@ class ISISPV(SharedPV):
     @property
     def on_put(self):
         """Turn a function into an ISISHandler put() method."""
+
         def decorate(fn):
             self._handler.put = fn
             return fn
@@ -197,6 +200,7 @@ class ISISPV(SharedPV):
     @property
     def on_rpc(self):
         """Turn a function into an ISISHandler rpc() method."""
+
         def decorate(fn):
             self._handler.rpc = fn
             return fn
@@ -206,6 +210,7 @@ class ISISPV(SharedPV):
     @property
     def on_post(self):
         """Turn a function into an ISISHandler post() method."""
+
         def decorate(fn):
             self._handler.post = fn
             return fn
