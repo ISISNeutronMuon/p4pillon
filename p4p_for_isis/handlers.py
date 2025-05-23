@@ -48,15 +48,6 @@ class BaseRulesHandler(ISISHandler):
         """Allow access to the rules so that parameters such as read_only may be set"""
         return self.rules.get(rule_name)
 
-    def onFirstConnect(self, pv: SharedPV) -> None:
-        """
-        This method is called when the PV is first accessed. It applies the init_rules
-        """
-        logger.debug("In handler onFirstConnect()")
-
-        if self._apply_rules(lambda x: x.init_rule(pv.current().raw)) != RulesFlow.ABORT:
-            pv.post(value=pv.current().raw, handler_post_rules=False)
-
     def post(self, pv: SharedPV, value: Value, **kwargs) -> None:
         """Handler call by a post operation, requires support from SharedPV derived class"""
         logger.debug("In handler post()")
