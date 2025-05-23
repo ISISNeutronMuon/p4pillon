@@ -102,7 +102,7 @@ def check_applicable_put(func):
 
 def check_applicable(func):
     """
-    Decorator for BaseRule::\*_rule - checks `is_applicable()` and returns RulesFlow.CONTINUE if not True
+    Decorator for BaseRule::*_rule - checks `is_applicable()` and returns RulesFlow.CONTINUE if not True
     """
 
     @wraps(func)
