@@ -15,6 +15,13 @@ logger = logging.getLogger(__name__)
 
 
 class ISISHandler(Handler):
+    def open(self, value, **kws):
+        """
+        Called each time an Open operation is performed on this Channel
+
+        :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
+        """
+
     def post(self, pv: "ISISPV", value: Value, **kws):
         """
         Called each time a client issues a post
@@ -23,6 +30,14 @@ class ISISHandler(Handler):
         :param SharedPV pv: The :py:class:`SharedPV` which this Handler is associated with.
         :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
         :param dict options: A dictionary of configuration options.
+        """
+        pass
+
+    def close(self, pv):
+        """
+        Called when the Channel is closed.
+
+        :param SharedPV pv: The :py:class:`SharedPV` which this Handler is associated with.
         """
         pass
 
@@ -120,6 +135,25 @@ class ISISPV(SharedPV):
             pass
 
         _SharedPV.post(self, V)
+
+    def close(self, destroy=False, sync=False, timeout=None):
+        """Close PV, disconnecting any clients.
+
+        :param bool destroy: Indicate "permanent" closure.  Current clients will not see subsequent open().
+        :param bool sync: When block until any pending onLastDisconnect() is delivered (timeout applies).
+        :param float timeout: Applies only when sync=True.  None for no timeout, otherwise a non-negative floating point value.
+
+        close() with destory=True or sync=True will not prevent clients from re-connecting.
+        New clients may prevent sync=True from succeeding.
+        Prevent reconnection by __first__ stopping the Server, removing with :py:meth:`StaticProvider.remove()`,
+        or preventing a :py:class:`DynamicProvider` from making new channels to this SharedPV.
+        """
+        try:
+            self._handler.close(self)
+        except AttributeError:
+            pass
+
+        _SharedPV.close(self)
 
     class _WrapHandler(SharedPV._WrapHandler):
         "Wrapper around user Handler which logs exceptions"
