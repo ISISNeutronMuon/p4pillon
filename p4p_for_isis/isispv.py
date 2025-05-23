@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 class ISISHandler(Handler):
+    """The ISISHandler added open(), post(), and close() methods to the p4p Handler class."""
+
     def open(self, value, **kws):
         """
         Called each time an Open operation is performed on this Channel
@@ -31,7 +33,6 @@ class ISISHandler(Handler):
         :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
         :param dict options: A dictionary of configuration options.
         """
-        pass
 
     def close(self, pv):
         """
@@ -39,7 +40,6 @@ class ISISHandler(Handler):
 
         :param SharedPV pv: The :py:class:`SharedPV` which this Handler is associated with.
         """
-        pass
 
 
 class ISISPV(SharedPV):
@@ -96,14 +96,14 @@ class ISISPV(SharedPV):
 
         try:
             V = self._wrap(value, **kws)
-        except:  # py3 will chain automatically, py2 won't
-            raise ValueError("Unable to wrap %r with %r and %r" % (value, self._wrap, kws))
+        except Exception as err:  # py3 will chain automatically, py2 won't
+            raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kws}") from err
 
         # Guard goes here because we can have handlers that don't inherit from
         # the Handler base class
         try:
             self._handler.open(V, **post_kws)
-        except AttributeError as err:
+        except AttributeError:
             pass
 
         _SharedPV.open(self, V)
@@ -155,13 +155,13 @@ class ISISPV(SharedPV):
 
         _SharedPV.close(self)
 
-    class _WrapHandler(SharedPV._WrapHandler):
+    class _WrapHandler(SharedPV._WrapHandler): # pylint: disable=protected-access
         "Wrapper around user Handler which logs exceptions"
 
         def post(self, value: Value, **kws):
             logger.debug("POST %s %s", self._pv, value)
             try:
-                self._pv._exec(None, self._real.rpc, self._pv, value, **kws)
+                self._pv._exec(None, self._real.post, self._pv, value, **kws) # pylint: disable=protected-access
             except AttributeError:
                 pass
 
