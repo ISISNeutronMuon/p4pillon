@@ -49,13 +49,13 @@ class ISISPV(SharedPV):
         super().__init__(**kws)
         self.on_start_methods: list[Callable] = []
 
-    def set_start_methods(self, method: Callable):
+    def set_start_methods(self, method: Callable) -> None:
         """
         Add method to the list of methods to be called when an ISISServer containing this pv is started
         """
         self.on_start_methods.append(method)
 
-    def on_server_start(self, server):
+    def on_server_start(self, server) -> None:
         """
         This method is called by the ISISServer when the server is started and can be used for any initialisation that
         needs to be done after all pvs for the server have been created.
@@ -67,15 +67,15 @@ class ISISPV(SharedPV):
             method(server)
 
     @property
-    def handler(self) -> Handler:
+    def handler(self) -> ISISHandler:
         """Access to handler of this PV"""
         return self._handler
 
     @handler.setter
-    def handler(self, newhandler: ISISHandler):
+    def handler(self, newhandler: ISISHandler) -> None:
         self._handler = newhandler
 
-    def open(self, value, nt=None, wrap=None, unwrap=None, **kws):
+    def open(self, value, nt=None, wrap=None, unwrap=None, **kws) -> None:
         """Mark the PV as opened and provide its initial value.
         This initial value is later updated with post().
 
@@ -95,20 +95,20 @@ class ISISPV(SharedPV):
         post_kws = {x: kws.pop(x) for x in [y for y in kws if y.startswith("handler_open_")]}
 
         try:
-            V = self._wrap(value, **kws)
+            wrapped_value = self._wrap(value, **kws)
         except Exception as err:  # py3 will chain automatically, py2 won't
             raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kws}") from err
 
         # Guard goes here because we can have handlers that don't inherit from
         # the Handler base class
         try:
-            self._handler.open(V, **post_kws)
+            self._handler.open(wrapped_value, **post_kws)
         except AttributeError:
             pass
 
-        _SharedPV.open(self, V)
+        _SharedPV.open(self, wrapped_value)
 
-    def post(self, value, **kws):
+    def post(self, value, **kws) -> None:
         """Provide an update to the Value of this PV.
 
         :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
@@ -123,27 +123,28 @@ class ISISPV(SharedPV):
         post_kws = {x: kws.pop(x) for x in [y for y in kws if y.startswith("handler_post_")]}
 
         try:
-            V: Value = self._wrap(value, **kws)
+            wrapped_value: Value = self._wrap(value, **kws)
         except Exception as err:
             raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kws}") from err
 
         # Guard goes here because we can have handlers that don't inherit from
         # the Handler base class
         try:
-            self._handler.post(self, V, **post_kws)
+            self._handler.post(self, wrapped_value, **post_kws)
         except AttributeError:
             pass
 
-        _SharedPV.post(self, V)
+        _SharedPV.post(self, wrapped_value)
 
-    def close(self, destroy=False, sync=False, timeout=None):
+    def close(self, destroy=False, sync=False, timeout=None) -> None:
         """Close PV, disconnecting any clients.
 
         :param bool destroy: Indicate "permanent" closure.  Current clients will not see subsequent open().
         :param bool sync: When block until any pending onLastDisconnect() is delivered (timeout applies).
-        :param float timeout: Applies only when sync=True.  None for no timeout, otherwise a non-negative floating point value.
+        :param float timeout: Applies only when sync=True.  None for no timeout, otherwise a non-negative 
+            floating point value.
 
-        close() with destory=True or sync=True will not prevent clients from re-connecting.
+        close() with destroy=True or sync=True will not prevent clients from re-connecting.
         New clients may prevent sync=True from succeeding.
         Prevent reconnection by __first__ stopping the Server, removing with :py:meth:`StaticProvider.remove()`,
         or preventing a :py:class:`DynamicProvider` from making new channels to this SharedPV.
@@ -155,18 +156,20 @@ class ISISPV(SharedPV):
 
         _SharedPV.close(self)
 
-    class _WrapHandler(SharedPV._WrapHandler): # pylint: disable=protected-access
+    class _WrapHandler(SharedPV._WrapHandler):  # pylint: disable=protected-access
         "Wrapper around user Handler which logs exceptions"
 
-        def post(self, value: Value, **kws):
+        def post(self, value: Value, **kws) -> None:
+            """Call the user handler's post() method, potentially logging this."""
             logger.debug("POST %s %s", self._pv, value)
             try:
-                self._pv._exec(None, self._real.post, self._pv, value, **kws) # pylint: disable=protected-access
+                self._pv._exec(None, self._real.post, self._pv, value, **kws)  # pylint: disable=protected-access
             except AttributeError:
                 pass
 
     @property
     def on_first_connect(self):
+        """Turn a function into an ISISHandler onFirstConnect() method."""
         def decorate(fn):
             self._handler.onFirstConnect = fn
             return fn
@@ -175,6 +178,7 @@ class ISISPV(SharedPV):
 
     @property
     def on_last_disconnect(self):
+        """Turn a function into an ISISHandler onLastDisconnect() method."""
         def decorate(fn):
             self._handler.onLastDisconnect = fn
             return fn
@@ -183,6 +187,7 @@ class ISISPV(SharedPV):
 
     @property
     def on_put(self):
+        """Turn a function into an ISISHandler put() method."""
         def decorate(fn):
             self._handler.put = fn
             return fn
@@ -191,6 +196,7 @@ class ISISPV(SharedPV):
 
     @property
     def on_rpc(self):
+        """Turn a function into an ISISHandler rpc() method."""
         def decorate(fn):
             self._handler.rpc = fn
             return fn
@@ -199,6 +205,7 @@ class ISISPV(SharedPV):
 
     @property
     def on_post(self):
+        """Turn a function into an ISISHandler post() method."""
         def decorate(fn):
             self._handler.post = fn
             return fn
