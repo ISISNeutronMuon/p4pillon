@@ -1,0 +1,48 @@
+[project]
+name = "p4p-ext"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "p4p",
+    "typing-extensions>=4.14.1",
+]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: BSD License",
+  "Programming Language :: Python",
+  "Typing :: Typed"
+]
+license = {text = "BSD-3-Clause"}
+keywords = ["p4p", "epics"]
+authors = [
+  {name = "Ivan Finch", email = "ivan.finch@stfc.ac.uk"},
+  {name = "Ajit Kurup"},
+  {name = "Kathryn Baker", email = "k.baker@stfc.ac.uk"},
+  {name = "Aqeel AlShafei", email = "aqeel.alshafei@stfc.ac.uk"}
+]
+maintainers = [
+  {name = "Ivan Finch", email = "ivan.finch@stfc.ac.uk"},
+]
+
+[project.optional-dependencies]
+test = [
+  "ruff>=0.12",
+]
+
+
+[tool.uv.sources]
+p4p = { git = "https://github.com/ISISNeutronMuon/p4p" }
+
+[tool.ruff]
+# Allow lines to be as long as 120.
+line-length = 120
+
+[tool.ruff.lint]
+extend-select = [
+  "UP",  # pyupgrade
+  "I", # isort
+]
