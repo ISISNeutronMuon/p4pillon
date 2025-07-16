@@ -31,6 +31,7 @@ maintainers = [
 [project.optional-dependencies]
 test = [
   "ruff>=0.12",
+  "coverage>7.9",
 ]
 
 
