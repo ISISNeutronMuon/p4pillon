@@ -24,9 +24,9 @@ from p4p.server import ServerOperation
 from p4p.server.raw import ServOpWrap
 from p4p.server.thread import SharedPV
 
-from p4p_for_isis.definitions import AlarmSeverity
-from p4p_for_isis.utils import time_in_seconds_and_nanoseconds
-from p4p_for_isis.value_utils import overwrite_marked
+from p4p_ext.definitions import AlarmSeverity
+from p4p_ext.utils import time_in_seconds_and_nanoseconds
+from p4p_ext.value_utils import overwrite_marked
 
 logger = logging.getLogger(__name__)
 

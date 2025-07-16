@@ -4,10 +4,9 @@ from unittest.mock import patch
 import numpy
 import pytest
 from p4p.nt import NTScalar
-
-from p4p_for_isis.definitions import AlarmSeverity
-from p4p_for_isis.rules import ControlRule, RulesFlow, ScalarToArrayWrapperRule, TimestampRule, ValueAlarmRule
-from p4p_for_isis.value_utils import overwrite_unmarked
+from p4p_ext.definitions import AlarmSeverity
+from p4p_ext.rules import ControlRule, RulesFlow, ScalarToArrayWrapperRule, TimestampRule, ValueAlarmRule
+from p4p_ext.value_utils import overwrite_unmarked
 
 
 class TestTimestamp:

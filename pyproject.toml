@@ -32,6 +32,7 @@ maintainers = [
 test = [
   "ruff>=0.12",
   "coverage>7.9",
+  "pytest>=8.4",
 ]
 
 
