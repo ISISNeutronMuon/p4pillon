@@ -124,7 +124,7 @@ def check_applicable(func):
 
         # Then check if applicable and if not return a CONTINUE to short-circuit this rule
         if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__) # pylint: disable=protected-access
+            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint: disable=protected-access
             return RulesFlow.CONTINUE
 
         # Actually wrap the function we're decorating!

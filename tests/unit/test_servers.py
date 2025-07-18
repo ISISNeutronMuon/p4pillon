@@ -5,13 +5,13 @@ from unittest.mock import patch
 import pytest
 from p4p.server import StaticProvider
 
-from p4p_for_isis.server import ISISServer
+from p4p_ext.server import NTServer
 
 root_dir = Path(__file__).parents[2]
 
 
 def test_server_instantiation():
-    server = ISISServer(
+    server = NTServer(
         ioc_name="TESTIOC",
         section="controls testing",
         description="server for unit tests",
@@ -34,7 +34,7 @@ def test_server_instantiation():
     [("TEST:PV"), ("DEV:TEST:PV")],
 )
 def test_server_retrieve_pvs(mock_recipe, pv_name):
-    server = ISISServer(
+    server = NTServer(
         ioc_name="TESTIOC",
         section="controls testing",
         description="server for unit tests",
@@ -47,10 +47,10 @@ def test_server_retrieve_pvs(mock_recipe, pv_name):
     assert server["DEV:TEST:PV"] == mock_recipe.create_pv.return_value
 
 
-@patch("p4p_for_isis.server.StaticProvider", autospec=True)
-@patch("p4p_for_isis.server.Server", autospec=True)
+@patch("p4p_ext.server.StaticProvider", autospec=True)
+@patch("p4p_ext.server.Server", autospec=True)
 def test_server_start(server, provider, caplog, mock_isispv):
-    test_server = ISISServer(
+    test_server = NTServer(
         ioc_name="TESTIOC",
         section="controls testing",
         description="server for unit tests",
@@ -70,11 +70,11 @@ def test_server_start(server, provider, caplog, mock_isispv):
     assert test_server._running is True
 
 
-@patch("p4p_for_isis.server.StaticProvider", autospec=True)
-@patch("p4p_for_isis.server.Server", autospec=True)
-@patch("p4p_for_isis.pvrecipe.PVScalarRecipe", autospec=True)
+@patch("p4p_ext.server.StaticProvider", autospec=True)
+@patch("p4p_ext.server.Server", autospec=True)
+@patch("p4p_ext.pvrecipe.PVScalarRecipe", autospec=True)
 def test_server_add_pv(recipe, server, provider, caplog):
-    test_server = ISISServer(
+    test_server = NTServer(
         ioc_name="TESTIOC",
         section="controls testing",
         description="server for unit tests",
@@ -93,10 +93,10 @@ def test_server_add_pv(recipe, server, provider, caplog):
     assert caplog.messages[0] == "Added DEV:TEST:PV:2 to server"
 
 
-@patch("p4p_for_isis.server.StaticProvider", autospec=True)
-@patch("p4p_for_isis.server.Server", autospec=True)
+@patch("p4p_ext.server.StaticProvider", autospec=True)
+@patch("p4p_ext.server.Server", autospec=True)
 def test_server_stop(server, provider, caplog, mock_isispv):
-    test_server = ISISServer(
+    test_server = NTServer(
         ioc_name="TESTIOC",
         section="controls testing",
         description="server for unit tests",
@@ -116,11 +116,11 @@ def test_server_stop(server, provider, caplog, mock_isispv):
     assert test_server._running is False
 
 
-@patch("p4p_for_isis.server.StaticProvider", autospec=True)
-@patch("p4p_for_isis.server.Server", autospec=True)
-@patch("p4p_for_isis.pvrecipe.PVScalarRecipe", autospec=True)
+@patch("p4p_ext.server.StaticProvider", autospec=True)
+@patch("p4p_ext.server.Server", autospec=True)
+@patch("p4p_ext.pvrecipe.PVScalarRecipe", autospec=True)
 def test_server_remove_pv(recipe, server, provider, caplog, mock_isispv):
-    test_server = ISISServer(
+    test_server = NTServer(
         ioc_name="TESTIOC",
         section="controls testing",
         description="server for unit tests",

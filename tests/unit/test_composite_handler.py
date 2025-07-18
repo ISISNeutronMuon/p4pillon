@@ -7,7 +7,7 @@ import unittest
 from collections import OrderedDict
 from unittest.mock import MagicMock
 
-from p4p_ext.handler import AbortHandlerException, CompositeHandler
+from p4p_ext.composite_handler import AbortHandlerException, CompositeHandler
 
 
 class DummyHandler:

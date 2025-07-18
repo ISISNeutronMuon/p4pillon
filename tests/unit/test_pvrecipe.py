@@ -4,9 +4,9 @@ from unittest.mock import patch
 import pytest
 from p4p.nt import NTScalar
 
-from p4p_for_isis.definitions import MAX_FLOAT, MAX_INT32, MIN_FLOAT, MIN_INT32, AlarmSeverity, Format, PVTypes
-from p4p_for_isis.handlers import NTScalarArrayRulesHandler, NTScalarRulesHandler
-from p4p_for_isis.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
+from p4p_ext.definitions import MAX_FLOAT, MAX_INT32, MIN_FLOAT, MIN_INT32, AlarmSeverity, Format, PVTypes
+from p4p_ext.handlers import NTScalarArrayRulesHandler, NTScalarRulesHandler
+from p4p_ext.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
 
 
 @pytest.mark.parametrize(

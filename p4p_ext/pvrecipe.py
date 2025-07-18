@@ -6,13 +6,11 @@ import logging
 import time
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Generic, Tuple, TypeVar, Union
+from typing import Generic, TypeVar
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
 
 from p4p.nt import NTEnum, NTScalar
 from p4p.server.thread import SharedPV
-
-from p4p_for_isis.isispv import ISISPV
 
 from .definitions import (
     MAX_FLOAT,
@@ -40,7 +38,7 @@ class Timestamp:
 
     time: float
 
-    def time_in_seconds_and_nanoseconds(self) -> Tuple[int, int]:
+    def time_in_seconds_and_nanoseconds(self) -> tuple[int, int]:
         """Convert to EPICS style structured timestamp"""
         return time_in_seconds_and_nanoseconds(self.time)
 
@@ -90,10 +88,10 @@ class BasePVRecipe:
 
     pvtype: PVTypes
     description: str
-    initial_value: Union[Numeric, list, str]
+    initial_value: Numeric | list | str
 
     # Alarm: alarm = field(init=False)
-    timestamp: Union[Timestamp, None] = None
+    timestamp: Timestamp | None = None
     display: Display = None
     control: Control = None
     alarm_limit: AlarmLimit = None
@@ -137,26 +135,6 @@ class BasePVRecipe:
             + f" Config settings are:\n {self.config_settings} \n Initial value:\n {self.initial_value}\n"
         )
 
-        if hasattr(self, "forward_links"):
-            # Add forward links to the handler
-            debug_str += f" Forward links are: \n {self.forward_links}"
-
-            # prevent linking to self
-            if pv_name in self.forward_links:
-                logger.error(
-                    "Attempting to add forward link to self for pv %s and forward links %r", pv_name, self.forward_links
-                )
-                raise ValueError
-
-            handler.add_forward_links(self.forward_links)
-            self.on_server_start_methods.append(handler.after_post_rules["forward_link"].init_forward_link)
-
-        if hasattr(self, "calc"):
-            # Add a calc rule to the handler
-            debug_str += f" Calc details are: \n {self.calc}"
-            handler.add_calc(self.calc)
-            self.on_server_start_methods.append(handler.rules["calc"].init_calc)
-
         logger.debug(debug_str)
 
         if (
@@ -174,7 +152,7 @@ class BasePVRecipe:
 
         self._config_timestamp()
 
-        pvobj = ISISPV(nt=nt, initial=self.initial_value, handler=handler)
+        pvobj = SharedPV(nt=nt, initial=self.initial_value, handler=handler)
         pvobj.post(self.config_settings)
         handler._name = pv_name
 
@@ -184,19 +162,6 @@ class BasePVRecipe:
             handler.set_read_only()
 
         return pvobj
-
-    def set_forward_links(self, links: str | list):
-        """
-        Add forward links to the pvrecipe. Links can be a single pv name or a list of pv names.
-        """
-        if not hasattr(self, "forward_links"):
-            self.forward_links = []
-
-        if isinstance(links, list):
-            for link in links:
-                self.forward_links.append(link)
-        else:
-            self.forward_links.append(links)
 
     def copy(self) -> "BasePVRecipe":
         """Return a shallow copy of this instance"""
@@ -214,7 +179,7 @@ class PVScalarRecipe(BasePVRecipe):
         if self.pvtype != PVTypes.DOUBLE and self.pvtype != PVTypes.INTEGER and self.pvtype != PVTypes.STRING:
             raise ValueError(f"Unsupported pv type {self.pvtype} for class {{self.__class__.__name__}}")
 
-    def set_control_limits(self, low: Union[Numeric, None] = None, high: Union[Numeric, None] = None, min_step=0):
+    def set_control_limits(self, low: Numeric | None = None, high: Numeric | None = None, min_step=0):
         """
         Add control limits
         config is a dictionary of low_limit and high_limit. This is used by the config_reader.
@@ -238,8 +203,8 @@ class PVScalarRecipe(BasePVRecipe):
 
     def set_display_limits(
         self,
-        low: Union[Numeric, None] = None,
-        high: Union[Numeric, None] = None,
+        low: Numeric | None = None,
+        high: Numeric | None = None,
         units: str = "",
         format: Format = Format.DEFAULT,
         precision: int = 2,
@@ -289,10 +254,10 @@ class PVScalarRecipe(BasePVRecipe):
 
     def set_alarm_limits(
         self,
-        low_warning: Union[Numeric, None] = None,
-        high_warning: Union[Numeric, None] = None,
-        low_alarm: Union[Numeric, None] = None,
-        high_alarm: Union[Numeric, None] = None,
+        low_warning: Numeric | None = None,
+        high_warning: Numeric | None = None,
+        low_alarm: Numeric | None = None,
+        high_alarm: Numeric | None = None,
     ):
         """
         Add display limits

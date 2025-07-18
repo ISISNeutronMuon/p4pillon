@@ -6,17 +6,15 @@ from typing import Callable, Optional
 
 from p4p import Value
 from p4p.server import ServerOperation
+from p4p.server.raw import Handler
 from p4p.server.thread import SharedPV
 
-from p4p_for_isis.isispv import ISISHandler
-from p4p_for_isis.value_utils import overwrite_unmarked
+from p4p_ext.value_utils import overwrite_unmarked
 
 from .rules import (
     AlarmRule,
     BaseRule,
-    CalcRule,
     ControlRule,
-    ForwardLinkRule,
     ReadOnlyRule,
     RulesFlow,
     ScalarToArrayWrapperRule,
@@ -27,7 +25,7 @@ from .rules import (
 logger = logging.getLogger(__name__)
 
 
-class BaseRulesHandler(ISISHandler):
+class BaseRulesHandler(Handler):
     """
     Base class for handlers used to implement Normative Type handling.
     """
@@ -77,26 +75,6 @@ class BaseRulesHandler(ISISHandler):
             self._apply_rules(lambda x: x.put_rule(pv, op), after=True)
         else:
             op.done(error=rules_flow.error)
-
-    def add_forward_links(self, forward_links: str | list) -> None:
-        """
-        Add a rule to trigger an update of a forward linked PV.
-        """
-        if "forward_link" not in self.after_post_rules:
-            self.after_post_rules["forward_link"] = ForwardLinkRule()
-            # self.rules.move_to_end("timestamp")
-
-        self.after_post_rules["forward_link"].add_forward_link(forward_links)
-
-    def add_calc(self, calc: dict) -> None:
-        """
-        Add a rule to update the value of this PV based on a calculation
-        """
-        if "calc" not in self.rules:
-            self.rules["calc"] = CalcRule()
-            self.rules.move_to_end("timestamp")
-
-        self.rules["calc"].add_calc(calc)
 
     def _apply_rules(self, apply_rule: Callable[[BaseRule], RulesFlow], after=False) -> RulesFlow:
         """
