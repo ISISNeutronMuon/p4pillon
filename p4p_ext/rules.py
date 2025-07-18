@@ -6,13 +6,11 @@ are implementations of the logic of Normative Type
 
 # TODO: Consider adding Authentication class / callback for puts
 
-import ast
 import itertools
 import logging
 import operator
 import time
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from copy import deepcopy
 from enum import IntEnum, auto
 from functools import wraps
@@ -126,31 +124,13 @@ def check_applicable(func):
 
         # Then check if applicable and if not return a CONTINUE to short-circuit this rule
         if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)
+            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__) # pylint: disable=protected-access
             return RulesFlow.CONTINUE
 
         # Actually wrap the function we're decorating!
         return func(self, *args, **kwargs)
 
     return wrapped_function
-
-
-class MonitorCB:
-    """
-    Used to provide call back methods for subscribing to Context.monitor
-    """
-
-    def __init__(self, rule_method: Callable[[Value], None]):
-        """
-        This class is used within  rule to provide a call back method for Context.monitor.
-        The rule_method is the method that the call back will pass the value on to.
-        """
-        self._rule_method = rule_method
-
-    def cb(self, v: Value):
-        """This callback "cb" is part of the context.monitor() functionality.
-        See https://epics-base.github.io/p4p/client.html#monitor for further information."""
-        self._rule_method(v)
 
 
 class BaseRule(ABC):
@@ -253,55 +233,6 @@ class BaseRule(ABC):
 
         return self.post_rule(oldpvstate, newpvstate)
 
-    def _init_monitors(self, pv_attrib: str, cb: Callable[[Value], None]):
-        """
-        Method to set up monitor subscriptions for a rule and should be called after the server has started.
-        The method cb is the method in the rule to be called
-        when the value of a pv being monitored is updated.
-        """
-
-        if not hasattr(self, pv_attrib):
-            logger.error("Attempt to initialise monitors using non-existant attribute self.%s", pv_attrib)
-            return
-
-        if not hasattr(self, "_server"):
-            logger.error("Attempt to initialise monitors using non-existant attribute self._server")
-            return
-
-        logger.debug("In _init_monitors: %r %r", getattr(self, pv_attrib), cb)
-
-        for pv in getattr(self, pv_attrib):
-            temp_monitor = MonitorCB(cb)
-            self._sub = self._server._ctxt.monitor(pv, temp_monitor.cb)
-
-    def _init_server_attrib(self, server):
-        if not hasattr(self, "_server"):
-            self._server = server
-
-    def _get_pv(self, pv_name: str):
-        """
-        Return the value of a pv using the server get method.
-        """
-        ret_val = None
-
-        if not hasattr(self, "_server"):
-            logger.error("Attempt to use self._get_pv without self._server being defined.")
-            raise NameError("Attempt to use self._get_pv without self._server being defined.")
-
-        ret_val = self._server.get_pv_value(pv_name)
-        return ret_val
-
-    def _put_pv(self, pv_name: str, val={}):
-        """
-        Do a put using the server put method
-        """
-
-        if not hasattr(self, "_server"):
-            logger.error("Attempt to use self._put_pv without self._server being defined.")
-            raise NameError("Attempt to use self._put_pv without self._server being defined.")
-
-        self._server.put_pv_value(pv_name, val)
-
 
 class BaseScalarRule(BaseRule, ABC):
     """
@@ -351,143 +282,6 @@ class AlarmRule(BaseRule):
 
     _name = "alarm"
     _fields = ["alarm"]
-
-
-class ForwardLinkRule(BaseRule):
-    """
-    This class implements forward linking using a list of PV names.
-    Those PVs will be updated whenever this rule is called.
-    """
-
-    _name = "foward_link"
-    _fields = None
-
-    def __init__(self):
-        super().__init__()
-        self._forward_links: list[str] = []
-
-    def add_forward_link(self, links: str | list) -> None:
-        """Add a forward link to the list of forward links"""
-        if isinstance(links, list):
-            self._forward_links.extend(links)
-        else:
-            self._forward_links.append(links)
-
-        logger.debug("Added forward links: %r", self._forward_links)
-
-    def init_forward_link(self, **kwargs):
-        """
-        Initialisation that happens after the server has started
-        """
-        # Set the server
-        self._init_server_attrib(kwargs["server"])
-
-    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
-        """
-        Trigger forward links
-        """
-        logger.debug("Evaluating %s.post_rule", self._name)
-        logger.debug("Forward links are: %r", self._forward_links)
-
-        ret_val = RulesFlow.CONTINUE
-
-        for forward_link in self._forward_links:
-            try:
-                # I've not seen a mechanism for triggering a value update (e.g. read from hardware) in p4p.
-                # Calling a put with no value will at least go through all the rules and update
-                # those (alarms, time stamp, etc ).
-                # If the PV is in an IOC with QSRV 2 there is the option to set the PROC field to trigger a read.
-                logger.debug("Doing put on %s", forward_link)
-                self._put_pv(forward_link, {})
-            except Exception:
-                logger.error("Failed calling forward link to %s", forward_link)
-                # raise RuntimeError(f"Failed calling forward link to {forward_link}")
-                ret_val = RulesFlow.ABORT
-
-        return ret_val
-
-
-class CalcRule(BaseRule):
-    """
-    This class implements a calculation using a string that represents the calculation and
-    a list of PV names of the variables used in the calculation.
-    """
-
-    _name = "calc"
-    _fields = None
-
-    _variables = []
-    _calc_str: str = ""
-    _pv_name: str = ""
-
-    def add_calc(self, calc: dict) -> None:
-        """Define the calculation to be performed"""
-        self._calc_str = calc["calc_str"]
-        self._variables = calc["variables"]
-
-    def init_calc(self, **kwargs):
-        """
-        Method to initialise monitor call backs for the variables to be monitored.
-        This should be added as an on start method when creating the pv.
-        """
-        # Set the server member
-        self._init_server_attrib(kwargs["server"])
-
-        # Set the name of the pv this rule is part of so that we can do a put to it
-        self._pv_name = kwargs["pv_name"]
-
-        # Initialise the monitor methods for checking when dependent variables change.
-        self._init_monitors("_variables", self._monitor_post)
-
-    def _monitor_post(self, v: Value):
-        """
-        This method gets called by the monitor call back and is used to do
-        a Context.put() so this pv is updated properly (i.e. all rules get processed)
-        """
-        logger.debug("In monitor got value %r", v)
-        self._put_pv(self._pv_name, {})
-
-    def get_variables(self):
-        """
-        Return a list of the current values of the pvs in self._variables
-        """
-        pvs = []
-
-        for pv_name in self._variables:
-            try:
-                val = self._get_pv(pv_name)
-                if val is None:
-                    logging.error("Failed to get pv %s", pv_name)
-                    return None
-                pvs.append(val)
-            except Exception:
-                # If there's an error getting the value of a pv return None
-                logging.error("Failed to get pv %s", pv_name)
-                return None
-
-        return pvs
-
-    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
-        """
-        Evaluate the calculation.
-          The syntax for using pvs in the calc string is to use the pv array, e.g. 'pv[0]' to use the first variable
-          in self._variables. This requires the variable below (i.e. pv = self.getVariables()) to have the same name.
-        """
-        logger.debug("Evaluating %s.post_rule", self._name)
-        logger.debug("Calculation is %s\nVariables are: %r", self._calc_str, self._variables)
-
-        ret_val = RulesFlow.CONTINUE
-        pv = self.get_variables()
-        logger.debug("Values are: %r", pv)
-
-        if pv is None:
-            return RulesFlow.ABORT
-
-        node = ast.parse(self._calc_str, mode="eval")
-
-        newpvstate["value"] = eval(compile(node, "<string>", "eval"))
-
-        return ret_val
 
 
 class TimestampRule(BaseRule):
