@@ -40,7 +40,7 @@ jobs:
     - name: Run tests
       run: |
         PYTHON_PATH=$(which python)
-        $PYTHON_PATH -m coverage run --source=. -m unittest discover tests/
+        $PYTHON_PATH -m coverage run --source=. -m pytest tests/unit/
     - name: Gather coverage statistics
       if: ${{ always() }}
       run: |
