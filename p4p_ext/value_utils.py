@@ -1,6 +1,6 @@
 """Utilities related to p4p Values and Types"""
 
-from typing import Callable, List, Optional, cast
+from typing import Callable, Optional, cast
 
 from p4p import Value
 
@@ -8,7 +8,7 @@ from p4p import Value
 def recurse_values(value1: Value, value2: Value, func: Callable[[Value, Value, str], None], keys=None) -> bool:
     """Recurse through two Values with the same structure and apply a supplied to the leaf nodes"""
     if not keys:
-        keys = cast(List[str], value1.keys())
+        keys = cast(list[str], value1.keys())
 
     for key in keys:
         if isinstance(value1[key], Value) and isinstance(value2[key], Value):
@@ -20,7 +20,7 @@ def recurse_values(value1: Value, value2: Value, func: Callable[[Value, Value, s
     return True
 
 
-def overwrite_marked(current: Value, update: Value, fields: Optional[List[str]] = None) -> None:
+def overwrite_marked(current: Value, update: Value, fields: Optional[list[str]] = None) -> None:
     """
     Overwrite all of the unmarked fields in one Value with fields from another Value.
 
@@ -36,12 +36,12 @@ def overwrite_marked(current: Value, update: Value, fields: Optional[List[str]] 
             current_leaf[key] = update_leaf[key]
 
     if not fields:
-        fields = cast(List[str], current.keys())
+        fields = cast(list[str], current.keys())
 
     recurse_values(update, current, overwrite_changed_key, fields)
 
 
-def overwrite_unmarked(current: Value, update: Value, fields: Optional[List[str]] = None) -> None:
+def overwrite_unmarked(current: Value, update: Value, fields: Optional[list[str]] = None) -> None:
     """
     Overwrite all of the unmarked fields in one Value with fields from another Value.
 
@@ -59,6 +59,6 @@ def overwrite_unmarked(current: Value, update: Value, fields: Optional[List[str]
             update_leaf.mark(key, val=False)
 
     if not fields:
-        fields = cast(List[str], current.keys())
+        fields = cast(list[str], current.keys())
 
     recurse_values(update, current, overwrite_unchanged_key, fields)

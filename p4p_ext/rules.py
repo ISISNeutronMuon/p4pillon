@@ -16,8 +16,8 @@ from collections.abc import Callable
 from copy import deepcopy
 from enum import IntEnum, auto
 from functools import wraps
-from typing import Any, Dict, List, Optional, Union
-from typing import SupportsFloat as Numeric  # Hack to type hint number types
+from typing import Any, Optional  # Hack to type hint number types
+from typing import SupportsFloat as Numeric
 
 from p4p import Type, Value
 from p4p.server import ServerOperation
@@ -182,7 +182,7 @@ class BaseRule(ABC):
 
     @property
     @abstractmethod
-    def _fields(self) -> List[str]:
+    def _fields(self) -> list[str]:
         raise NotImplementedError
 
     # TODO: Consider using lru_cache but be aware of https://rednafi.com/python/lru_cache_on_methods/
@@ -711,7 +711,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
     _name = "ScalarToArrayWrapperRule"
     _fields = []
 
-    def __init__(self, to_wrap: Union[BaseScalarRule, BaseGatherableRule]) -> None:
+    def __init__(self, to_wrap: BaseScalarRule | BaseGatherableRule) -> None:
         super().__init__()
 
         self._wrapped = to_wrap
@@ -722,7 +722,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
     def _get_value_id(self, arrayval: Value) -> str:
         return arrayval.type().aspy()[1]  # id of the structure, probably "epics:nt/NTScalarArray:1.0"
 
-    def _change_array_type_to_scalar_type(self, arrayval: Value) -> List:
+    def _change_array_type_to_scalar_type(self, arrayval: Value) -> list:
         """
         Return the id and type of an NTScalarArray Value, changing the type of the
         value field to be a scalar.
@@ -738,7 +738,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
 
         return val_type
 
-    def _value_without_value(self, arrayval: Value, index: Optional[int] = None) -> Dict[str, Any]:
+    def _value_without_value(self, arrayval: Value, index: Optional[int] = None) -> dict[str, Any]:
         # It would be straightforward to use arrayval.todict() but the value
         # could potentially be very large. So we use a more indirect way of
         # constructing it by iterating through the keys
