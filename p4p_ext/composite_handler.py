@@ -11,7 +11,6 @@ from typing import Optional
 from p4p import Value
 from p4p.server import ServerOperation
 from p4p.server.raw import Handler, SharedPV
-from typing_extensions import deprecated
 
 
 class HandlerException(Exception):
@@ -83,7 +82,6 @@ class CompositeHandler(Handler):
             for handler in self.handlers.values():
                 handler.onFirstConnect(pv)
 
-    @deprecated("onFirstConnect is deprecated, use on_first_connect instead")
     def onFirstConnect(self, pv: Value):
         self.on_first_connect(pv)
 
@@ -93,7 +91,6 @@ class CompositeHandler(Handler):
             for handler in self.handlers.values():
                 handler.onFirstConnect(pv)
 
-    @deprecated("onLastDisconnect is deprecated, use on_last_connect instead")
     def onLastDisconnect(self, pv: Value):
         self.on_last_connect(pv)
 
