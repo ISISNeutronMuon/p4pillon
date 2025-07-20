@@ -48,3 +48,7 @@ extend-select = [
   "UP",  # pyupgrade
   "I", # isort
 ]
+
+[tool.pylint.format]
+# Set the maximum line length
+max-line-length = 120
