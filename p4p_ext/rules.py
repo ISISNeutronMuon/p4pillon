@@ -19,12 +19,10 @@ from typing import SupportsFloat as Numeric
 
 from p4p import Type, Value
 from p4p.server import ServerOperation
-from p4p.server.raw import ServOpWrap
-from p4p.server.thread import SharedPV
+from p4p.server.raw import ServOpWrap, SharedPV
 
 from p4p_ext.definitions import AlarmSeverity
-from p4p_ext.utils import time_in_seconds_and_nanoseconds
-from p4p_ext.value_utils import overwrite_marked
+from p4p_ext.utils import overwrite_marked, time_in_seconds_and_nanoseconds
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +55,15 @@ class RulesFlow(IntEnum):
 
 
 def check_applicable_init(func):
-    """Decorator for `BaseRule::init_rule` - checks `is_applicable()` and returns RulesFlow.CONTINUE if not True"""
+    """
+    Decorator for `BaseRule::init_rule`. Checks `is_applicable()`
+    and returns RulesFlow.CONTINUE if not True
+    """
 
     @wraps(func)
     def wrapped_function(self: "BaseRule", *args, **kwargs):
         if not self.is_applicable(args[0]):
-            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)
+            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint disable=protected-access
             return RulesFlow.CONTINUE
 
         return func(self, *args, **kwargs)
@@ -71,12 +72,15 @@ def check_applicable_init(func):
 
 
 def check_applicable_post(func):
-    """Decorator for `BaseRule::post_rule` - checks `is_applicable()` and returns RulesFlow.CONTINUE if not True"""
+    """
+    Decorator for `BaseRule::post_rule`. Checks `is_applicable()`
+    and returns RulesFlow.CONTINUE if not True
+    """
 
     @wraps(func)
     def wrapped_function(self: "BaseRule", currentstate: Value, newpvstate: Value):
         if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)
+            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint disable=protected-access
             return RulesFlow.CONTINUE
 
         return func(self, currentstate, newpvstate)
@@ -85,7 +89,10 @@ def check_applicable_post(func):
 
 
 def check_applicable_put(func):
-    """Decorator for `BaseRule::put_rule` - checks `is_applicable()` and returns RulesFlow.CONTINUE if not True"""
+    """
+    Decorator for `BaseRule::put_rule`. Checks `is_applicable()`
+    and returns RulesFlow.CONTINUE if not True
+    """
 
     @wraps(func)
     def wrapped_function(self: "BaseRule", *args, **kwargs):
@@ -100,7 +107,8 @@ def check_applicable_put(func):
 
 def check_applicable(func):
     """
-    Decorator for `BaseRule::*_rule` - checks `is_applicable()` and returns RulesFlow.CONTINUE if not True
+    Decorator for `BaseRule::*_rule`. Checks `is_applicable()`
+    and returns RulesFlow.CONTINUE if not True
     """
 
     @wraps(func)
@@ -139,18 +147,23 @@ class BaseRule(ABC):
     Most rules only require evaluation against the new PV state, e.g. whether to apply a control
     limit, update a timestamp, trigger an alarm etc. This may be done by the `init_rule()`.
     Other rules need to compare against the previous state of the PV, e.g. slew limits,
-    control.minStep, etc. This may be done by the `post_rule().` And some rules need to know
+    control.minStep, etc. This may be done by the `post_rule()`. And some rules need to know
     who is making the request (for authorisation purposes). The may be done by the `put_rule()`
     """
 
     # Two members must be implemented by derived classes:
     # - _name is a human-readable name for the rule used in error and debug messages
-    # - _fields is a list of the fields with the PV structure that this rule manages
+    # - _fields is a list of the fields within the PV structure that this rule manages
     #           and at this time is used mainly by readonly rules
 
     @property
     @abstractmethod
     def _name(self) -> str:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def _fields(self) -> list[str]:
         raise NotImplementedError
 
     # Often we want to make the fields associated with a rule readonly for put
@@ -159,11 +172,6 @@ class BaseRule(ABC):
     # rule and having a readonly flag allows this to be automatically handled by
     # this base class's put_rule()
     read_only: bool = False
-
-    @property
-    @abstractmethod
-    def _fields(self) -> list[str]:
-        raise NotImplementedError
 
     # TODO: Consider using lru_cache but be aware of https://rednafi.com/python/lru_cache_on_methods/
     def is_applicable(self, newpvstate: Value) -> bool:
@@ -189,17 +197,17 @@ class BaseRule(ABC):
         return True
 
     @check_applicable
-    def init_rule(self, newpvstate: Value) -> RulesFlow:
+    def init_rule(self, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
         """
         Rule that only needs to consider the potential future state of a PV.
-        Consider if this rule could apply to a newly initialised PV.
+        Consider implementing if this rule could apply to a newly initialised PV.
         """
         logger.debug("Evaluating %s.init_rule", self._name)
 
         return RulesFlow.CONTINUE
 
     @check_applicable
-    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
+    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
         """
         Rule that needs to consider the current and potential future state of a PV.
         Usually this will involve a post where the oldpvstate is actually the current
@@ -267,8 +275,13 @@ class BaseArrayRule(BaseRule, ABC):
 class ReadOnlyRule(BaseScalarRule):
     """A rule which rejects all attempts to put values"""
 
-    _name = "read_only"
-    _fields = None
+    @property
+    def _name(self) -> str:
+        return "read_only"
+
+    @property
+    def _fields(self) -> list[str]:
+        return []
 
     def put_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
         return RulesFlow(RulesFlow.ABORT).set_errormsg("read-only")
@@ -280,15 +293,25 @@ class AlarmRule(BaseRule):
     message to be made read-only for put operations
     """
 
-    _name = "alarm"
-    _fields = ["alarm"]
+    @property
+    def _name(self) -> str:
+        return "alarm"
+
+    @property
+    def _fields(self) -> list[str]:
+        return ["alarm"]
 
 
 class TimestampRule(BaseRule):
     """Set current timestamp unless provided with an alternative value"""
 
-    _name = "timestamp"
-    _fields = ["timeStamp"]
+    @property
+    def _name(self) -> str:
+        return "timestamp"
+
+    @property
+    def _fields(self) -> list[str]:
+        return ["timeStamp"]
 
     def is_applicable(self, newpvstate: Value) -> bool:
         """
@@ -329,8 +352,13 @@ class ControlRule(BaseScalarRule):
     and lower limits for values (control.limitHigh and control.limitLow)
     """
 
-    _name = "control"
-    _fields = ["control"]
+    @property
+    def _name(self) -> str:
+        return "control"
+
+    @property
+    def _fields(self) -> list[str]:
+        return ["control"]
 
     @check_applicable
     def init_rule(self, newpvstate: Value) -> RulesFlow:
@@ -397,8 +425,13 @@ class ValueAlarmRule(BaseGatherableRule):
     TODO: Implement hysteresis
     """
 
-    _name = "valueAlarm"
-    _fields = ["alarm", "valueAlarm"]
+    @property
+    def _name(self) -> str:
+        return "valueAlarm"
+
+    @property
+    def _fields(self) -> list[str]:
+        return ["alarm", "valueAlarm"]
 
     @check_applicable
     def init_rule(self, newpvstate: Value) -> RulesFlow:
@@ -502,16 +535,21 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
     NTScalarArrays.
     """
 
-    _name = "ScalarToArrayWrapperRule"
-    _fields = []
+    @property
+    def _name(self) -> str:
+        return self._wrap_name
+
+    @property
+    def _fields(self) -> list[str]:
+        return self._wrap_fields
 
     def __init__(self, to_wrap: BaseScalarRule | BaseGatherableRule) -> None:
         super().__init__()
 
         self._wrapped = to_wrap
 
-        self._name = to_wrap._name
-        self._fields = to_wrap._fields
+        self._wrap_name = to_wrap._name
+        self._wrap_fields = to_wrap._fields
 
     def _get_value_id(self, arrayval: Value) -> str:
         return arrayval.type().aspy()[1]  # id of the structure, probably "epics:nt/NTScalarArray:1.0"

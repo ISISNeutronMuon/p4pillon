@@ -6,10 +6,9 @@ from typing import Callable, Optional
 
 from p4p import Value
 from p4p.server import ServerOperation
-from p4p.server.raw import Handler
-from p4p.server.thread import SharedPV
+from p4p.server.raw import Handler, SharedPV
 
-from p4p_ext.value_utils import overwrite_unmarked
+from p4p_ext.utils import overwrite_unmarked
 
 from .rules import (
     AlarmRule,
@@ -36,21 +35,16 @@ class BaseRulesHandler(Handler):
         # Name is used purely for logging. Because the name of the PV is stored by
         # the Server and not the PV object associated with this handler we can't
         # determine the name until the first put operation
-        self._name = None  # Used purely for logging
+        self._name: str | None = None  # Used purely for logging
         self.rules: OrderedDict[str, BaseRule] = OrderedDict({"timestamp": TimestampRule()})
-
-        # after_post_rules are rules that need to be evaluated after the pv has been updated, e.g. forward links.
-        self.after_post_rules: OrderedDict[str, BaseRule] = OrderedDict()
 
     def __getitem__(self, rule_name: str) -> Optional[BaseRule]:
         """Allow access to the rules so that parameters such as read_only may be set"""
         return self.rules.get(rule_name)
 
-    def post(self, pv: SharedPV, value: Value, **kwargs) -> None:
+    def post(self, pv: SharedPV, value: Value) -> None:
         """Handler call by a post operation, requires support from SharedPV derived class"""
         logger.debug("In handler post()")
-        if kwargs.pop("handler_post_rules", False):
-            return
 
         current_state = pv.current().raw  # We only need the Value from the PV
         overwrite_unmarked(current_state, value)
@@ -68,26 +62,17 @@ class BaseRulesHandler(Handler):
 
         rules_flow = self._apply_rules(lambda x: x.put_rule(pv, op))
         if rules_flow != RulesFlow.ABORT:
-            pv.post(value=op.value(), handler_post_rules=False)
+            pv.post(value=op.value())
             op.done()
-
-            # Process after_post_rules
-            self._apply_rules(lambda x: x.put_rule(pv, op), after=True)
         else:
             op.done(error=rules_flow.error)
 
-    def _apply_rules(self, apply_rule: Callable[[BaseRule], RulesFlow], after=False) -> RulesFlow:
+    def _apply_rules(self, apply_rule: Callable[[BaseRule], RulesFlow]) -> RulesFlow:
         """
         Apply the rules. Primarily this does the basic handling of the RulesFlow.
-        If after == True then apply the after_post_rules which are called after the pv has been updated.
         """
-        if after:
-            rules = self.after_post_rules
-            logger.debug("Applying after_post rules")
-        else:
-            rules = self.rules
 
-        for rule_name, rule in rules.items():
+        for rule_name, rule in self.rules.items():
             logger.debug("Applying rule %s", rule_name)
 
             rule_flow = apply_rule(rule)
@@ -101,8 +86,8 @@ class BaseRulesHandler(Handler):
                 return rule_flow
             elif rule_flow == RulesFlow.TERMINATE:
                 logger.debug("Rule %s triggered handler terminate", rule_name)
-                if "timestamp" in rules:
-                    rule_flow = apply_rule(rules["timestamp"])
+                if "timestamp" in self.rules:
+                    rule_flow = apply_rule(self.rules["timestamp"])
                 return rule_flow
             elif rule_flow == RulesFlow.TERMINATE_WO_TIMESTAMP:
                 logger.debug("Rule %s triggered handler terminate without timestamp", rule_name)
@@ -160,6 +145,3 @@ class NTEnumRulesHandler(BaseRulesHandler):
     """
     Rules handler for NTScalarArray PVs.
     """
-
-    def __init__(self) -> None:
-        super().__init__()
