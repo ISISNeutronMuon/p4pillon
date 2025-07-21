@@ -16,7 +16,7 @@ Implements the logic of Normative Types (specifically NTScalars and NTScalarArra
  
 ### CompositeHandler
 > [!WARNING]
-> This feature under development and not get available.
+> This feature under development and not yet available.
 
 The base version of p4p only allows a single Handler class to be associated with a SharedPV. This makes it complex to combine multiple handlers from different sources. It also means that if a Handler is used to handle NormativeType logic then it either precludes a user handler or requires subclassing.
 
