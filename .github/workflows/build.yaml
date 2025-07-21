@@ -23,7 +23,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest] #, mac-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
@@ -53,3 +53,27 @@ jobs:
         name: coverage-results-${{ matrix.os }}-${{ matrix.python-version }}
         path: coverage.xml
       # Use always() to always run this step to publish test results when there are test failures
+
+  build:
+    name: Build distribution 📦
+    needs: 
+    - test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Needed to fetch the tags
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
+    - name: Install build tools
+      run: >-
+        pip install .[dist]
+    - name: Build a binary wheel and a source tarball
+      run: python -m build
+    - name: Store the distribution packages
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-package-distributions
+        path: dist/
