@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "p4p",
+    "pyyaml>=6.0.2",
 ]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",

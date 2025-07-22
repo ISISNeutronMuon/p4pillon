@@ -1,18 +1,21 @@
 """Read configuration from a YAML file"""
 
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, Union
+from typing import Any
 
 import yaml
 
-from .definitions import PVTypes
-from .pvrecipe import BasePVRecipe, PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
-from .server import ISISServer
+from p4p_ext.definitions import PVTypes
+from p4p_ext.pvrecipe import BasePVRecipe
+from p4p_ext.server import BaseSimpleServer
+from p4p_ext.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
 
 logger = logging.getLogger(__name__)
 
 
-def parse_config_file(filename: str, server: Union[ISISServer, None] = None) -> Dict[str, BasePVRecipe]:
+def parse_config_file(filename: str, server: BaseSimpleServer | None = None) -> dict[str, BasePVRecipe]:
     """
     Parse a yaml file and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
@@ -24,7 +27,7 @@ def parse_config_file(filename: str, server: Union[ISISServer, None] = None) -> 
     return parse_config(pvconfigs, server)
 
 
-def parse_config_string(yaml_str: str, server: Union[ISISServer, None] = None) -> Dict[str, BasePVRecipe]:
+def parse_config_string(yaml_str: str, server: BaseSimpleServer | None = None) -> dict[str, BasePVRecipe]:
     """
     Parse a yaml string and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
@@ -36,8 +39,8 @@ def parse_config_string(yaml_str: str, server: Union[ISISServer, None] = None) -
 
 
 def parse_config(
-    yaml_obj: Dict[str, Dict[str, Any]], server: Union[ISISServer, None] = None
-) -> Dict[str, BasePVRecipe]:
+    yaml_obj: dict[str, dict[str, Any]], server: BaseSimpleServer | None = None
+) -> dict[str, BasePVRecipe]:
     """
     Parse a dictionary that has been filled using yaml.load() and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
@@ -57,7 +60,7 @@ def parse_config(
     return pvrecipes
 
 
-def process_config(pvname: str, pvdetails: Dict[str, Any]) -> BasePVRecipe:
+def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
     """
     Process the configuration of a single PV and update pvrecipe accordingly.
 
@@ -125,8 +128,6 @@ def process_config(pvname: str, pvdetails: Dict[str, Any]) -> BasePVRecipe:
         pvrecipe.set_display_limits(**get_field_config(pvdetails, "display"))
     if "valueAlarm" in pvdetails:
         pvrecipe.set_alarm_limits(**get_field_config(pvdetails, "valueAlarm"))
-    if "forward_links" in pvdetails:
-        pvrecipe.set_forward_links(get_field_config(pvdetails, "forward_links"))
 
     return pvrecipe
 

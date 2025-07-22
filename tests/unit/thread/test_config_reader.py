@@ -3,9 +3,9 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from p4p_for_isis.config_reader import parse_config
-from p4p_for_isis.definitions import PVTypes
-from p4p_for_isis.pvrecipe import PVScalarRecipe
+from p4p_ext.definitions import PVTypes
+from p4p_ext.pvrecipe import PVScalarRecipe
+from p4p_ext.thread.config_reader import parse_config
 
 
 @pytest.mark.parametrize(
