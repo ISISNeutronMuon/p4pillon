@@ -5,6 +5,7 @@ are implementations of the logic of Normative Type
 """
 
 # TODO: Consider adding Authentication class / callback for puts
+from __future__ import annotations
 
 import itertools
 import logging
@@ -570,7 +571,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
 
         return val_type
 
-    def _value_without_value(self, arrayval: Value, index: Optional[int] = None) -> dict[str, Any]:
+    def _value_without_value(self, arrayval: Value, index: int | None = None) -> dict[str, Any]:
         # It would be straightforward to use arrayval.todict() but the value
         # could potentially be very large. So we use a more indirect way of
         # constructing it by iterating through the keys
@@ -593,7 +594,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
 
         return val_dict
 
-    def scalarise(self, arrayval: Value, index: Optional[int] = None) -> Value:
+    def scalarise(self, arrayval: Value, index: int | None = None) -> Value:
         """
         Convert the NTScalarArray into an NTScalar with the value of the
         index element in the array. If no index is provided a default value
