@@ -27,6 +27,10 @@ maintainers = [
   {name = "Ivan Finch", email = "ivan.finch@stfc.ac.uk"},
 ]
 
+[project.urls]
+Repository = "https://github.com/ISISNeutronMuon/p4p_ext"
+
+
 [project.optional-dependencies]
 test = [
   "ruff>=0.12",
@@ -50,7 +54,7 @@ build-backend = "hatchling.build"
 version-file = "_version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["snowsignal/"]
+packages = ["p4p_ext/"]
 
 [tool.hatch.version]
 source = "vcs"
