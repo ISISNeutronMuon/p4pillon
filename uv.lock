@@ -713,7 +713,6 @@ name = "p4p-ext"
 source = { editable = "." }
 dependencies = [
     { name = "p4p" },
-    { name = "typing-extensions" },
 ]
 
 [package.optional-dependencies]
@@ -735,7 +734,6 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.4" },
     { name = "ruff", marker = "extra == 'test'", specifier = ">=0.12" },
     { name = "twine", marker = "extra == 'dist'", specifier = ">=6.1.0" },
-    { name = "typing-extensions", specifier = ">=4.14.1" },
 ]
 provides-extras = ["dist", "test"]
 
