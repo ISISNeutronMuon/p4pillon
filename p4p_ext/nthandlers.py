@@ -1,8 +1,10 @@
 """Handler for NTScalar (so far)"""
 
+from __future__ import annotations
+
 import logging
 from collections import OrderedDict
-from typing import Callable, Optional
+from typing import Callable
 
 from p4p import Value
 from p4p.server import ServerOperation
@@ -38,7 +40,7 @@ class BaseRulesHandler(Handler):
         self._name: str | None = None  # Used purely for logging
         self.rules: OrderedDict[str, BaseRule] = OrderedDict({"timestamp": TimestampRule()})
 
-    def __getitem__(self, rule_name: str) -> Optional[BaseRule]:
+    def __getitem__(self, rule_name: str) -> BaseRule | None:
         """Allow access to the rules so that parameters such as read_only may be set"""
         return self.rules.get(rule_name)
 

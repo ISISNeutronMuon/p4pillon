@@ -5,8 +5,9 @@ And ordered dictionary is used to make the component handlers accessible by name
 The ordered dictionary also controls the order in which the handlers are called.
 """
 
+from __future__ import annotations
+
 from collections import OrderedDict
-from typing import Optional
 
 from p4p import Value
 from p4p.server import ServerOperation
@@ -28,7 +29,7 @@ class AbortHandlerException(HandlerException):
 class CompositeHandler(Handler):
     """Composite Handler for combining multiple component handlers into a single handler."""
 
-    def __init__(self, handlers: Optional[OrderedDict[str, Handler]] = None):
+    def __init__(self, handlers: OrderedDict[str, Handler] | None = None):
         """Initialize the CompositeHandler with an optional list of handlers."""
         super().__init__()
         self.handlers = handlers

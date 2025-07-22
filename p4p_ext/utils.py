@@ -1,6 +1,8 @@
 """Utility function for P4P for ISIS"""
 
-from typing import Callable, Optional, cast
+from __future__ import annotations
+
+from typing import Callable, cast
 
 from p4p import Value
 
@@ -27,7 +29,7 @@ def recurse_values(value1: Value, value2: Value, func: Callable[[Value, Value, s
     return True
 
 
-def overwrite_marked(current: Value, update: Value, fields: Optional[list[str]] = None) -> None:
+def overwrite_marked(current: Value, update: Value, fields: list[str] | None = None) -> None:
     """
     Overwrite all of the unmarked fields in one Value with fields from another Value.
 
@@ -48,7 +50,7 @@ def overwrite_marked(current: Value, update: Value, fields: Optional[list[str]] 
     recurse_values(update, current, overwrite_changed_key, fields)
 
 
-def overwrite_unmarked(current: Value, update: Value, fields: Optional[list[str]] = None) -> None:
+def overwrite_unmarked(current: Value, update: Value, fields: list[str] | None = None) -> None:
     """
     Overwrite all of the unmarked fields in one Value with fields from another Value.
 

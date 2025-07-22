@@ -1,5 +1,7 @@
 """Example of simplifed interface for NTScalar creation"""
 
+from __future__ import annotations
+
 import collections.abc
 import dataclasses
 import logging
@@ -168,7 +170,7 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
 
         return pvobj
 
-    def copy(self) -> "BasePVRecipe":
+    def copy(self) -> BasePVRecipe:
         """Return a shallow copy of this instance"""
         return dataclasses.replace(self)
 
