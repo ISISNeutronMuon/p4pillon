@@ -1,6 +1,8 @@
 # p4p_ext
 Opinionated extensions and additional functionality for the p4p library.
 
+[![p4p_ext](https://github.com/ISISNeutronMuon/p4p_ext/actions/workflows/build.yaml/badge.svg)](https://github.com/ISISNeutronMuon/p4p_ext/actions/workflows/build.yaml)
+
 ### Python Version
 These extensions make extensive use of typing. As such they require Python 3.9 or later.
 
