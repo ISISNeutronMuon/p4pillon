@@ -1,0 +1,88 @@
+DEV:RW:DOUBLE1:
+  description: "An example double PV"
+  type: "DOUBLE"
+  initial: 5.0
+
+DEV:RW:DOUBLE2:
+  description: "An example double PV"
+  type: "DOUBLE"
+  initial: 5.0
+  display:
+    units: 'v'
+
+DEV:RW:DOUBLE3:
+  description: "A different default value for the PV"
+  type: "DOUBLE"
+  initial: 17.5
+  control:
+    low: 1
+    high: 20
+  valueAlarm:
+    low_warning: 2
+    high_alarm: 9
+
+DEV:RO:DOUBLE4:
+  description: "A read-only double"
+  type: "DOUBLE"
+  display:
+    units: "Bq"
+    format: "EXPONENTIAL"
+    precision: 3
+  initial: 17.5
+  read_only: True
+
+DEV:RW:DOUBLE5:
+  description: "A double array"
+  type: "DOUBLE"
+  initial: [3,4,5,17.5,7,8]
+  control:
+    low: 1
+    high: 20
+
+DEV:RW:DOUBLE6:
+  description: "A PV with display limits configured but no precision etc"
+  type: "DOUBLE"
+  initial: 6.0
+  display:
+    low: -1.0
+    high: 1.0
+
+DEV:RW:INT1:
+  description: "An example integer PV"
+  type: "INTEGER"
+  initial: 0
+
+
+DEV:RW:INT2:
+  description: "An example int PV with limits"
+  type: "INTEGER"
+  initial: 3
+  control:
+    low: 1
+    high: 10
+  valueAlarm:
+    low_warning: 2
+    high_alarm: 9
+
+DEV:RO:INT:
+  description: "An example int PV with limits"
+  type: "INTEGER"
+  initial: 3
+  read_only: True
+  control:
+    low: 1
+    high: 10
+  valueAlarm:
+
+
+DEV:RW:STRING1:
+  description: "An example string PV"
+  type: "STRING"
+  initial: 5.0
+
+# DEV:RW:ENUM:
+#   description: "An example enum PV"
+#   type: "ENUM"
+#   initial:
+#     choices: ['OFF', 'ON']
+#     index: 0
