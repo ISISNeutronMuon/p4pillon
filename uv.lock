@@ -710,7 +710,6 @@ dependencies = [
 
 [[package]]
 name = "p4p-ext"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "p4p" },
@@ -738,7 +737,7 @@ requires-dist = [
     { name = "twine", marker = "extra == 'dist'", specifier = ">=6.1.0" },
     { name = "typing-extensions", specifier = ">=4.14.1" },
 ]
-provides-extras = ["test", "dist"]
+provides-extras = ["dist", "test"]
 
 [[package]]
 name = "packaging"
