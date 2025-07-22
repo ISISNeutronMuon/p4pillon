@@ -1,7 +1,7 @@
 import numpy as np
 from p4p.client.thread import Context
 
-from p4p_for_isis.definitions import MAX_FLOAT, MAX_INT32, MIN_FLOAT, MIN_INT32, AlarmSeverity, Format
+from p4p_ext.definitions import MAX_FLOAT, MAX_INT32, MIN_FLOAT, MIN_INT32, AlarmSeverity, Format
 
 
 def assert_value_changed(pvname: str, put_value, put_timestamp: float, ctx: Context):

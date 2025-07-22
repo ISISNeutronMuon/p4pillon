@@ -12,7 +12,12 @@ from pathlib import Path
 
 import pytest
 import yaml
-from assertions import (
+from p4p.client.thread import Context
+
+from p4p_ext.definitions import PVTypes
+from p4p_ext.thread.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
+from p4p_ext.thread.server import SimpleServer
+from tests.integration.thread.assertions import (
     assert_correct_alarm_config,
     assert_correct_control_config,
     assert_correct_display_config,
@@ -22,16 +27,11 @@ from assertions import (
     assert_value_changed,
     assert_value_not_changed,
 )
-from p4p.client.thread import Context
-
-from p4p_for_isis.definitions import PVTypes
-from p4p_for_isis.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
-from p4p_for_isis.server import ISISServer
 
 root_dir = Path(__file__).parents[2]
 
 
-with open(f"{root_dir}/tests/integration/ntscalar_config.yml") as f:
+with open(f"{root_dir}/integration/ntscalar_config.yml") as f:
     ntscalar_config = yaml.load(f, Loader=yaml.SafeLoader)
     f.close()
 
@@ -216,7 +216,7 @@ class TestAlarms:
     of PV types"""
 
     @pytest.mark.parametrize("pvtype", [(PVTypes.DOUBLE), (PVTypes.INTEGER)])
-    def test_basic_alarm_logic(self, basic_server: ISISServer, ctx: Context, pvtype):
+    def test_basic_alarm_logic(self, basic_server: SimpleServer, ctx: Context, pvtype):
         # here we have an example of a pretty standard range alarm configuration
         pvname = "TEST:ALARM:PV"
 
@@ -277,7 +277,7 @@ class TestAlarms:
                 assert_pv_in_major_alarm_state(pvname, ctx)
 
     @pytest.mark.parametrize("pvtype", [(PVTypes.DOUBLE), (PVTypes.INTEGER)])
-    def test_basic_alarm_logic_array_vals(self, basic_server: ISISServer, ctx: Context, pvtype):
+    def test_basic_alarm_logic_array_vals(self, basic_server: SimpleServer, ctx: Context, pvtype):
         # here we have an example of a pretty standard range alarm configuration but on
         # an array PV. In this case we expect the alarm to be triggered if ANY of the
         # values in the list exceed these values
@@ -355,7 +355,7 @@ class TestControl:
             (PVTypes.INTEGER, 10, 9),
         ],
     )
-    def test_basic_control_logic(self, basic_server: ISISServer, ctx: Context, pvtype, put_val, expected_val):
+    def test_basic_control_logic(self, basic_server: SimpleServer, ctx: Context, pvtype, put_val, expected_val):
         # here we have an example of a PV with control limits
         pvname = "TEST:CONTROL:PV"
 
@@ -381,7 +381,7 @@ class TestControl:
             (PVTypes.INTEGER, 10),
         ],
     )
-    def test_default_control_logic(self, basic_server: ISISServer, ctx: Context, pvtype, put_val):
+    def test_default_control_logic(self, basic_server: SimpleServer, ctx: Context, pvtype, put_val):
         # here we have an example of a PV with default control limits applied
         pvname = "TEST:CONTROL:PV"
 
@@ -402,7 +402,7 @@ class TestControl:
             (PVTypes.INTEGER),
         ],
     )
-    def test_control_logic_min_step(self, basic_server: ISISServer, ctx: Context, pvtype):
+    def test_control_logic_min_step(self, basic_server: SimpleServer, ctx: Context, pvtype):
         # putting a new value less than the minimum step should prevent
         # the value being set
         pvname = "TEST:CONTROL:PV"
@@ -437,7 +437,7 @@ class TestControl:
             (PVTypes.INTEGER, 10, 9),
         ],
     )
-    def test_basic_control_logic_array(self, basic_server: ISISServer, ctx: Context, pvtype, put_val, expected_val):
+    def test_basic_control_logic_array(self, basic_server: SimpleServer, ctx: Context, pvtype, put_val, expected_val):
         # here we have an example of a PV with control limits
         pvname = "TEST:CONTROL:PV"
 
