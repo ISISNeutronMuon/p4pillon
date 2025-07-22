@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from enum import IntEnum, auto
 from functools import wraps
-from typing import Any, Optional  # Hack to type hint number types
+from typing import Any  # Hack to type hint number types
 from typing import SupportsFloat as Numeric
 
 from p4p import Type, Value
@@ -45,7 +45,7 @@ class RulesFlow(IntEnum):
         # has been triggered
         self.error: str = ""
 
-    def set_errormsg(self, errormsg: str) -> "RulesFlow":
+    def set_errormsg(self, errormsg: str) -> RulesFlow:
         """
         Set an error message to explain an ABORT.
         This function returns the class instance so it may be used in lambdas
@@ -62,7 +62,7 @@ def check_applicable_init(func):
     """
 
     @wraps(func)
-    def wrapped_function(self: "BaseRule", *args, **kwargs):
+    def wrapped_function(self: BaseRule, *args, **kwargs):
         if not self.is_applicable(args[0]):
             logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint disable=protected-access
             return RulesFlow.CONTINUE
@@ -79,7 +79,7 @@ def check_applicable_post(func):
     """
 
     @wraps(func)
-    def wrapped_function(self: "BaseRule", currentstate: Value, newpvstate: Value):
+    def wrapped_function(self: BaseRule, currentstate: Value, newpvstate: Value):
         if not self.is_applicable(newpvstate):
             logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint disable=protected-access
             return RulesFlow.CONTINUE
@@ -96,7 +96,7 @@ def check_applicable_put(func):
     """
 
     @wraps(func)
-    def wrapped_function(self: "BaseRule", *args, **kwargs):
+    def wrapped_function(self: BaseRule, *args, **kwargs):
         if not self.is_applicable(args[1].value().raw):
             logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)
             return RulesFlow.CONTINUE
@@ -113,7 +113,7 @@ def check_applicable(func):
     """
 
     @wraps(func)
-    def wrapped_function(self: "BaseRule", *args, **kwargs):
+    def wrapped_function(self: BaseRule, *args, **kwargs):
         # Determine whether we're being applied to either:
         # - init_rule (1 argument)
         # - post_rule (2 arguments, second argument is a Value)
