@@ -12,14 +12,8 @@ root_dir = Path(__file__).parents[2]
 
 def test_server_instantiation():
     server = SimpleServer(
-        ioc_name="TESTIOC",
-        section="controls testing",
-        description="server for unit tests",
         prefix="DEV:",
     )
-    assert server.ioc_name == "TESTIOC"
-    assert server.section == "controls testing"
-    assert server.description == "server for unit tests"
     assert server.prefix == "DEV:"
 
     # before we explicitly call `start()`, the server shouldn't exist
@@ -35,9 +29,6 @@ def test_server_instantiation():
 )
 def test_server_retrieve_pvs(mock_recipe, pv_name):
     server = SimpleServer(
-        ioc_name="TESTIOC",
-        section="controls testing",
-        description="server for unit tests",
         prefix="DEV:",
     )
     server.add_pv(pv_name, mock_recipe)
@@ -52,9 +43,6 @@ def test_server_retrieve_pvs(mock_recipe, pv_name):
 @patch("p4p_ext.thread.server.SimpleServer", autospec=True)
 def test_server_start(server, provider, caplog, mock_isispv):
     test_server = SimpleServer(
-        ioc_name="TESTIOC",
-        section="controls testing",
-        description="server for unit tests",
         prefix="DEV:",
     )
 
@@ -77,9 +65,6 @@ def test_server_start(server, provider, caplog, mock_isispv):
 @patch("p4p_ext.pvrecipe.PVScalarRecipe", autospec=True)
 def test_server_add_pv(recipe, server, provider, caplog):
     test_server = SimpleServer(
-        ioc_name="TESTIOC",
-        section="controls testing",
-        description="server for unit tests",
         prefix="DEV:",
     )
 
@@ -99,9 +84,6 @@ def test_server_add_pv(recipe, server, provider, caplog):
 @patch("p4p_ext.thread.server.SimpleServer", autospec=True)
 def test_server_stop(server, provider, caplog, mock_isispv):
     test_server = SimpleServer(
-        ioc_name="TESTIOC",
-        section="controls testing",
-        description="server for unit tests",
         prefix="DEV:",
     )
 
@@ -123,9 +105,6 @@ def test_server_stop(server, provider, caplog, mock_isispv):
 @patch("p4p_ext.pvrecipe.PVScalarRecipe", autospec=True)
 def test_server_remove_pv(recipe, server, provider, caplog, mock_isispv):
     test_server = SimpleServer(
-        ioc_name="TESTIOC",
-        section="controls testing",
-        description="server for unit tests",
         prefix="DEV:",
     )
 
