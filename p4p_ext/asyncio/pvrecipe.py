@@ -1,5 +1,7 @@
 """Concrete implementations of PVRecipe using ascyncio"""
 
+from __future__ import annotations
+
 from p4p.server.asyncio import SharedPV
 
 from p4p_ext.definitions import PVTypes
