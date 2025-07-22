@@ -64,7 +64,7 @@ def check_applicable_init(func):
     @wraps(func)
     def wrapped_function(self: BaseRule, *args, **kwargs):
         if not self.is_applicable(args[0]):
-            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint disable=protected-access
+            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint: disable=protected-access
             return RulesFlow.CONTINUE
 
         return func(self, *args, **kwargs)
@@ -81,7 +81,7 @@ def check_applicable_post(func):
     @wraps(func)
     def wrapped_function(self: BaseRule, currentstate: Value, newpvstate: Value):
         if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint disable=protected-access
+            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint: disable=protected-access
             return RulesFlow.CONTINUE
 
         return func(self, currentstate, newpvstate)
@@ -98,7 +98,7 @@ def check_applicable_put(func):
     @wraps(func)
     def wrapped_function(self: BaseRule, *args, **kwargs):
         if not self.is_applicable(args[1].value().raw):
-            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)
+            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint: disable=protected-access
             return RulesFlow.CONTINUE
 
         return func(self, *args, **kwargs)
