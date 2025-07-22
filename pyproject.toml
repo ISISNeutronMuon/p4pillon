@@ -20,7 +20,7 @@ classifiers = [
   "Typing :: Typed"
 ]
 license = {text = "BSD-3-Clause"}
-keywords = ["p4p", "epics"]
+keywords = ["pva", "pvaccess", "p4p", "epics"]
 authors = [
   {name = "Ivan Finch", email = "ivan.finch@stfc.ac.uk"},
   {name = "Ajit Kurup", email = "a.kurup@imperial.ac.uk"},
