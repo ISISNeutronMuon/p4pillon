@@ -29,7 +29,7 @@ from .nthandlers import (
 )
 from .utils import time_in_seconds_and_nanoseconds
 
-NumericTypeT = TypeVar("NumericTypeT", int, float)
+NumericTypeT = TypeVar("NumericTypeT", int, Numeric)
 SharedPvT = TypeVar("SharedPvT", SharedPV_threaded, SharedPV_asyncio)
 
 logger = logging.getLogger(__name__)
