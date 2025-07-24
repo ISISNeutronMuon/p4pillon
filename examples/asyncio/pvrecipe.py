@@ -1,3 +1,10 @@
+"""
+An example of using pvrecipe with asyncio to create an NTScalar PV.
+The created PV will be called 'demo:pv:name' and will have a default value of 17.5.
+It will also have a description and alarm thresholds. If the value is changed, the
+alarm secverity will automatically update.
+"""
+
 import asyncio
 import logging
 
@@ -35,27 +42,22 @@ class AsyncProviderWrapper:
         self._provider.add("demo:pv:name", pv_double1)
 
 
-class AsyncServerWrapper:
-    def run(self):
-        loop = asyncio.new_event_loop()
-        provider_wrapper = AsyncProviderWrapper(loop)
-
-        try:
-            # `Server.forever()` is for p4p threading and shouldn't
-            # be used with async.
-            server = Server(provider_wrapper.providers)
-            with server:
-                done = asyncio.Event()
-
-                # loop.add_signal_handler(signal.SIGINT, done.set)
-                # loop.add_signal_handler(signal.SIGTERM, done.set)
-                loop.run_until_complete(done.wait())
-        finally:
-            loop.close()
-
-
 def main():
-    AsyncServerWrapper().run()
+    loop = asyncio.new_event_loop()
+    provider_wrapper = AsyncProviderWrapper(loop)
+
+    try:
+        # `Server.forever()` is for p4p threading and shouldn't
+        # be used with async.
+        server = Server(provider_wrapper.providers)
+        with server:
+            done = asyncio.Event()
+
+            # loop.add_signal_handler(signal.SIGINT, done.set)
+            # loop.add_signal_handler(signal.SIGTERM, done.set)
+            loop.run_until_complete(done.wait())
+    finally:
+        loop.close()
 
 
 if __name__ == "__main__":
