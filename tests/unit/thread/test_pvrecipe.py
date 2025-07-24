@@ -1,12 +1,13 @@
 import math
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 from p4p.nt import NTScalar
 
 from p4p_ext.definitions import MAX_FLOAT, MAX_INT32, MIN_FLOAT, MIN_INT32, AlarmSeverity, Format, PVTypes
-from p4p_ext.nthandlers import NTScalarArrayRulesHandler, NTScalarRulesHandler
-from p4p_ext.thread.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
+from p4p_ext.nthandlers import NTEnumRulesHandler, NTScalarArrayRulesHandler, NTScalarRulesHandler
+from p4p_ext.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
 
 
 @pytest.mark.parametrize(
@@ -333,3 +334,56 @@ def test_ntscalar_string_create_pv(mock_time, recipe, expected_handler, expected
     assert pvdict.get("display") is None
     assert pvdict.get("control") is None
     assert pvdict.get("valueAlarm") is None
+
+
+@pytest.mark.parametrize(
+    "pvtype",
+    [(PVTypes.DOUBLE), (PVTypes.INTEGER), (PVTypes.STRING)],
+)
+def test_ntenum_bad_types(pvtype):
+    with pytest.raises(ValueError) as e:
+        PVEnumRecipe(pvtype, description="test enum", initial_value={"index": 0, "choices": ["OFF", "ON"]})
+
+    assert "Unsupported pv type" in str(e)
+
+
+@patch("time.time")
+def test_ntenum_create_pv(mock_time):
+    mock_time.return_value = 123.456
+
+    recipe = PVEnumRecipe(PVTypes.ENUM, description="test enum", initial_value={"index": 0, "choices": ["OFF", "ON"]})
+
+    pv = recipe.create_pv("TEST:PV:ENUM")
+
+    pvdict = pv.current().raw.todict()
+
+    assert pv.isOpen()
+    assert isinstance(pv._handler, NTEnumRulesHandler)
+    assert pv.nt.type.getID() == "epics:nt/NTEnum:1.0"
+    assert pv.isOpen() is True
+    assert pv.current().timestamp == mock_time.return_value
+    assert pvdict["value"] == {"index": 0, "choices": ["OFF", "ON"]}
+    assert pvdict.get("alarm") is not None
+    # enum PVs shouldn't have any of these fields
+    assert pvdict.get("display") is None
+    assert pvdict.get("control") is None
+    assert pvdict.get("valueAlarm") is None
+
+
+def test_ntenum_extras():
+    recipe = PVEnumRecipe(PVTypes.ENUM, description="test enum", initial_value={"index": 0, "choices": ["OFF", "ON"]})
+
+    # check display
+    assert recipe.display is None
+    with pytest.raises(AttributeError) as e:
+        recipe.set_display_limits()
+
+    # check control
+    assert recipe.control is None
+    with pytest.raises(AttributeError) as e:
+        recipe.set_control_limits()
+
+    # check valueAlarm
+    assert recipe.alarm_limit is None
+    with pytest.raises(AttributeError) as e:
+        recipe.set_alarm_limits()

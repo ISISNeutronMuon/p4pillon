@@ -105,3 +105,16 @@ def assert_pv_in_invalid_alarm_state(pvname: str, ctx: Context):
 def assert_pv_not_in_alarm_state(pvname: str, ctx: Context):
     val = ctx.get(pvname)
     assert val.severity == AlarmSeverity.NO_ALARM.value
+
+
+def assert_enum_value_changed(pvname: str, put_value: dict, put_timestamp: float, ctx: Context):
+    pv_state = ctx.get(pvname)
+    current_value = pv_state.raw.todict()["value"]
+    assert put_value == current_value
+    assert pv_state.timestamp >= put_timestamp
+
+
+def assert_enum_value_not_changed(pvname: str, put_value, ctx: Context):
+    pv_state = ctx.get(pvname)
+    current_value = pv_state.raw.todict()["value"]
+    assert put_value != current_value
