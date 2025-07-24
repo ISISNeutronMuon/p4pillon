@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from p4p.server.thread import SharedPV
 
-from p4p_ext.definitions import PVTypes
 from p4p_ext.nthandlers import NTEnumRulesHandler, NTScalarArrayRulesHandler, NTScalarRulesHandler
 from p4p_ext.pvrecipe import BasePVRecipe
 from p4p_ext.pvrecipe import PVScalarRecipe as _PVScalarRecipe
@@ -61,11 +60,6 @@ class PVEnumRecipe(BasePVRecipe):
     This class is used to create a PV that represents an enumeration type,
     allowing for the definition of enum values and their corresponding labels.
     """
-
-    def __post_init__(self):
-        super().__post_init__()
-        if self.pvtype != PVTypes.ENUM:
-            raise ValueError(f"Unsupported pv type {self.pvtype} for class {{self.__class__.__name__}}")
 
     def create_pv(self, pv_name: str | None = None) -> SharedPV:
         """Turn the recipe into an actual NTEnum"""
