@@ -8,11 +8,9 @@ pv = SharedNT(
         "d",
         valueAlarm=True,
     ),  # scalar double
-    initial=0.0,
+    initial={"value": 4.5, "valueAlarm.active": True, "valueAlarm.highAlarmLimit": 17},
 )  # setting initial value also open()'s
-pv.post(
-    {"valueAlarm.active": True, "valueAlarm.highAlarmLimit": 17},
-)
+
 
 Server.forever(
     providers=[
