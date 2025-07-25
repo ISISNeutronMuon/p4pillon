@@ -28,7 +28,7 @@ def mock_pv():
 
 
 @pytest.fixture
-def mock_isispv():
+def mock_pv():
     with patch("p4p.server.thread.SharedPV", autospec=True) as shared_pv:
         yield shared_pv
 
