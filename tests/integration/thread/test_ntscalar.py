@@ -1,8 +1,8 @@
 """
 Integration tests for expected behaviour of NTScalar PV types:
-- [ ] creation / modification (values, descriptions, limits)
-- [ ] alarm handling
-- [ ] control handling
+- [x] creation / modification (values, descriptions, limits)
+- [x] alarm handling
+- [x] control handling
 - [ ] calc records
 - [ ] forward linking records
 """
@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 import yaml
 from helpers import put_different_value_scalar, put_metadata
+from p4p._p4p import RemoteError
 from p4p.client.thread import Context
 
 from p4p_ext.definitions import PVTypes
@@ -59,8 +60,6 @@ def test_configs(pvname, yaml_server, pv_config, ctx):
 
     if pv_is_numeric:
         if "display" in pv_config.keys():
-            print(pv_state)
-            print(pv_config)
             assert_correct_display_config(pv_state, pv_config)
         if "control" in pv_config.keys():
             assert_correct_control_config(pv_state, pv_config)
@@ -77,36 +76,47 @@ def test_configs(pvname, yaml_server, pv_config, ctx):
 def test_value_change(pvname, yaml_server, pv_config, ctx):
     pvname = yaml_server.prefix + pvname
 
+    current_state = ctx.get(pvname)
+
     if not pv_config.get("read_only"):
         put_val, put_timestamp = put_different_value_scalar(ctx, pvname)
         assert_value_changed(pvname, put_val, put_timestamp, ctx)
     else:
-        pytest.xfail(
-            "Unsure on expected behaviour - expect the RemoteError or continue \
-                     working with a warning logged to user"
-        )
-        assert_value_not_changed(pvname, put_val, ctx)
+        with pytest.raises(RemoteError) as e:
+            put_different_value_scalar(ctx, pvname)
+
+        assert "read-only" in str(e)
+        pvstate = ctx.get(pvname)
+
+        assert pvstate.timestamp == current_state.timestamp
+        assert pvstate == current_state
 
 
 @pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
 def test_field_change(pvname, yaml_server, pv_config, ctx):
     pvname = yaml_server.prefix + pvname
 
-    current_description = ctx.get(pvname).raw.todict().get("descriptor")
+    current_state = ctx.get(pvname)
+
+    current_description = current_state.raw.todict().get("descriptor")
     new_description = current_description + " modified"
 
-    if not pv_config.get("read_only"):
-        if not isinstance(pv_config.get("initial"), list):
+    if not isinstance(pv_config.get("initial"), list):
+        if not pv_config.get("read_only"):
             put_timestamp = put_metadata(ctx, pvname, "descriptor", new_description)
-
             pvstate = ctx.get(pvname)
 
             assert pvstate.raw.todict().get("descriptor") == new_description
             assert pvstate.timestamp >= put_timestamp
         else:
-            pytest.xfail(reason="Currently unable to change fields in NTScalarArrays")
+            with pytest.raises(RemoteError) as e:
+                put_metadata(ctx, pvname, "descriptor", new_description)
+            assert "read-only" in str(e)
+            pvstate = ctx.get(pvname)
+            assert pvstate.timestamp == current_state.timestamp
+            assert pvstate.raw.todict().get("descriptor") == current_description
     else:
-        pytest.xfail("Unsure on expected behaviour for read-only field changes")
+        pytest.xfail(reason="Currently unable to change fields in NTScalarArrays")
 
 
 def test_alarm_limit_change(basic_server, ctx):
