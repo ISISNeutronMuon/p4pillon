@@ -40,8 +40,8 @@ def test_server_retrieve_pvs(mock_recipe, pv_name):
 
 @pytest.mark.xfail(reason="Unsure why the mock provider is failing at server.start()")
 @patch("p4p_ext.thread.server.StaticProvider", autospec=True)
-@patch("p4p_ext.thread.server.SimpleServer", autospec=True)
-def test_server_start(server, provider, caplog, mock_isispv):
+@patch("p4p_ext.thread.server.Server", autospec=True)
+def test_server_start(server, provider, caplog, mock_pv):
     test_server = SimpleServer(
         prefix="DEV:",
     )
@@ -61,7 +61,7 @@ def test_server_start(server, provider, caplog, mock_isispv):
 
 @pytest.mark.xfail(reason="Unsure why the mock provider is failing at server.start()")
 @patch("p4p_ext.thread.server.StaticProvider", autospec=True)
-@patch("p4p_ext.thread.server.SimpleServer", autospec=True)
+@patch("p4p_ext.thread.server.Server", autospec=True)
 @patch("p4p_ext.pvrecipe.PVScalarRecipe", autospec=True)
 def test_server_add_pv(recipe, server, provider, caplog):
     test_server = SimpleServer(
@@ -81,8 +81,8 @@ def test_server_add_pv(recipe, server, provider, caplog):
 
 
 @patch("p4p_ext.thread.server.StaticProvider", autospec=True)
-@patch("p4p_ext.thread.server.SimpleServer", autospec=True)
-def test_server_stop(server, provider, caplog, mock_isispv):
+@patch("p4p_ext.thread.server.Server", autospec=True)
+def test_server_stop(server, provider, caplog, mock_pv):
     test_server = SimpleServer(
         prefix="DEV:",
     )
@@ -101,7 +101,7 @@ def test_server_stop(server, provider, caplog, mock_isispv):
 
 
 @patch("p4p_ext.thread.server.StaticProvider", autospec=True)
-@patch("p4p_ext.thread.server.SimpleServer", autospec=True)
+@patch("p4p_ext.thread.server.Server", autospec=True)
 @patch("p4p_ext.pvrecipe.PVScalarRecipe", autospec=True)
 def test_server_remove_pv(recipe, server, provider, caplog, mock_isispv):
     test_server = SimpleServer(
