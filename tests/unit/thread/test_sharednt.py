@@ -304,7 +304,8 @@ def test_ntscalar_numeric_create_pv(mock_time, recipe, pvtype, with_limits, expe
     "recipe, expected_handler, expected_value",
     [
         (PVScalarRecipe, NTScalarRulesHandler, "test"),
-        # TODO work out how to fix this - currently failing as unable to wrap
+        # TODO work out how to fix this - currently failing with error:
+        # ValueError: Unable to wrap ['test'] with <bound method NTScalar.wrap of <p4p.nt.scalar.NTScalar
         pytest.param(
             PVScalarArrayRecipe,
             NTScalarArrayRulesHandler,
