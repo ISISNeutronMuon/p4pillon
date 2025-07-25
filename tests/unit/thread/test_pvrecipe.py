@@ -1,7 +1,6 @@
 import math
 from unittest.mock import patch
 
-import numpy as np
 import pytest
 from p4p.nt import NTScalar
 
@@ -375,15 +374,15 @@ def test_ntenum_extras():
 
     # check display
     assert recipe.display is None
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(AttributeError):
         recipe.set_display_limits()
 
     # check control
     assert recipe.control is None
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(AttributeError):
         recipe.set_control_limits()
 
     # check valueAlarm
     assert recipe.alarm_limit is None
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(AttributeError):
         recipe.set_alarm_limits()
