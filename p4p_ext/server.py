@@ -13,7 +13,7 @@ class BaseSimpleServer(ABC):
     @abstractmethod
     def __init__(self, prefix: str = "") -> None:
         """
-        Initialize the ISIS Server instance.
+        Initialize the SimpleServer instance.
 
         :param prefix: The prefix to be added to the PVs (Process Variables) of the server e.g. DEV: Defaults to "".
         """

@@ -39,7 +39,7 @@ class SharedNT(SharedPV):
 
     @property
     def on_first_connect(self):
-        """Turn a function into an ISISHandler onFirstConnect() method."""
+        """Turn a function into a Handler onFirstConnect() method."""
 
         def decorate(fn):
             self._handler.onFirstConnect = fn
@@ -49,7 +49,7 @@ class SharedNT(SharedPV):
 
     @property
     def on_last_disconnect(self):
-        """Turn a function into an ISISHandler onLastDisconnect() method."""
+        """Turn a function into a Handler onLastDisconnect() method."""
 
         def decorate(fn):
             self._handler.onLastDisconnect = fn
@@ -59,7 +59,7 @@ class SharedNT(SharedPV):
 
     @property
     def on_put(self):
-        """Turn a function into an ISISHandler put() method."""
+        """Turn a function into a Handler put() method."""
 
         def decorate(fn):
             self._handler.put = fn
@@ -69,7 +69,7 @@ class SharedNT(SharedPV):
 
     @property
     def on_rpc(self):
-        """Turn a function into an ISISHandler rpc() method."""
+        """Turn a function into a Handler rpc() method."""
 
         def decorate(fn):
             self._handler.rpc = fn
@@ -79,7 +79,7 @@ class SharedNT(SharedPV):
 
     @property
     def on_post(self):
-        """Turn a function into an ISISHandler post() method."""
+        """Turn a function into a Handler post() method."""
 
         def decorate(fn):
             self._handler.post = fn
