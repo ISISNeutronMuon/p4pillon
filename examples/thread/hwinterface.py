@@ -74,7 +74,12 @@ def main():
             "d",
             valueAlarm=True,
         ),
-        initial={"value": hw.poll(), "valueAlarm.active": True, "valueAlarm.highAlarmLimit": 17},
+        initial={
+            "value": hw.poll(),
+            "valueAlarm.active": True,
+            "valueAlarm.highAlarmLimit": 17,
+            "valueAlarm.highAlarmSeverity": 2,  # Not obvious, but without this the highAlarmLimit above will not work
+        },
     )
     pv_hwget.handlers["NTScalar"].set_read_only()  # Make the readback read-only
 
