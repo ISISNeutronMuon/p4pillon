@@ -26,61 +26,76 @@ class AbortHandlerException(HandlerException):
         self.message = message
 
 
-class CompositeHandler(Handler, OrderedDict):
+class CompositeHandler(Handler):
     """Composite Handler for combining multiple component handlers into a single handler."""
+
+    def __init__(self, handlers: OrderedDict[str, Handler] | None = None):
+        """Initialize the CompositeHandler with an optional list of handlers."""
+        super().__init__()
+        self.handlers = handlers
+
+    def __getitem__(self, name: str) -> Handler | None:
+        if self.handlers:
+            return self.handlers[name]
+
+        return None
 
     def open(self, value: Value):
         """Open all handlers in the composite handler."""
-        for handler in self.values():
-            handler.open(value)
+        if self.handlers:
+            for handler in self.handlers.values():
+                handler.open(value)
 
     def put(self, pv: SharedPV, op: ServerOperation):
         errmsg = None
 
-        for handler in self.values():
-            try:
-                handler.put(pv, op)
-            except AbortHandlerException as e:
-                errmsg = e.message
-                break
+        if self.handlers:
+            for handler in self.handlers.values():
+                try:
+                    handler.put(pv, op)
+                except AbortHandlerException as e:
+                    errmsg = e.message
+                    break
 
         op.done(error=errmsg)
 
     def post(self, pv: SharedPV, value: Value):
-        # for handler in self.values():
-        #     handler.post(pv, value)
-
-        for handler in self.values():
-            handler.post(pv, value)
+        if self.handlers:
+            for handler in self.handlers.values():
+                handler.post(pv, value)
 
     def rpc(self, pv: SharedPV, op: ServerOperation):
         errmsg = None
 
-        for handler in self.values():
-            try:
-                handler.rpc(pv, op)
-            except AbortHandlerException as e:
-                errmsg = e.message
-                break
+        if self.handlers:
+            for handler in self.handlers.values():
+                try:
+                    handler.rpc(pv, op)
+                except AbortHandlerException as e:
+                    errmsg = e.message
+                    break
 
         op.done(error=errmsg)
 
     def on_first_connect(self, pv: SharedPV):
         """Called when the first client connects to the PV."""
-        for handler in self.values():
-            handler.onFirstConnect(pv)
+        if self.handlers:
+            for handler in self.handlers.values():
+                handler.onFirstConnect(pv)
 
     def onFirstConnect(self, pv: Value):
         self.on_first_connect(pv)
 
     def on_last_connect(self, pv: SharedPV):
         """Called when the last client channel is closed."""
-        for handler in self.values():
-            handler.onFirstConnect(pv)
+        if self.handlers:
+            for handler in self.handlers.values():
+                handler.onFirstConnect(pv)
 
     def onLastDisconnect(self, pv: Value):
         self.on_last_connect(pv)
 
     def close(self, pv: SharedPV):
-        for handler in self.values():
-            handler.close(pv)
+        if self.handlers:
+            for handler in self.handlers.values():
+                handler.close(pv)

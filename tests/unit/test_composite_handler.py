@@ -56,10 +56,9 @@ class TestCompositeHandler(unittest.TestCase):
         self.op = DummyOp()
         self.value = DummyValue()
 
-    def test_init_no_handlers(self):
+    def test_init_none_handlers(self):
         comp = CompositeHandler()
-        with self.assertRaises(KeyError):
-            comp["any"]
+        self.assertIsNone(comp.handlers)
 
     def test_getitem_valid(self):
         self.assertIs(self.comp["h1"], self.h1)
@@ -68,6 +67,10 @@ class TestCompositeHandler(unittest.TestCase):
     def test_getitem_invalid(self):
         with self.assertRaises(KeyError):
             _ = self.comp["missing"]
+
+    def test_getitem_no_handlers(self):
+        comp = CompositeHandler()
+        self.assertIsNone(comp["any"])
 
     def test_open_calls_all(self):
         self.comp.open(self.value)
@@ -153,6 +156,17 @@ class TestCompositeHandler(unittest.TestCase):
     def test_close_no_handlers(self):
         comp = CompositeHandler()
         comp.close(self.pv)  # Should not raise
+
+    def test_empty_ordereddict(self):
+        comp = CompositeHandler(OrderedDict())
+        comp.open(self.value)
+        comp.put(self.pv, self.op)
+        comp.post(self.pv, self.value)
+        comp.rpc(self.pv, self.op)
+        comp.on_first_connect(self.pv)
+        comp.on_last_connect(self.pv)
+        comp.close(self.pv)
+        self.op.done.assert_called_with(error=None)
 
 
 if __name__ == "__main__":
