@@ -148,41 +148,43 @@ class TestControl:
             assert new_state["value"] == expected_value
 
             if new_value != expected_value:
-                assert len(caplog.records) == 1
+                assert len(caplog.records) == 3
                 assert f"control limit exceeded, changing value to {str(expected_value)}" in str(
-                    caplog.records[0].getMessage()
+                    caplog.records[2].getMessage()
                 )
         else:
             numpy.testing.assert_array_equal(new_state["value"], expected_value)
 
     @pytest.mark.parametrize(
-        "nttype, new_value, expected_value, expected_log",
+        "nttype, new_value, expected_value, expected_log, expected_log_index",
         [
-            ("d", 2, 2, ""),
-            ("d", 1, 0, "minStep"),
-            ("d", 6, 5, "control limit exceeded"),
-            ("i", 2, 2, ""),
-            ("i", 1, 0, "minStep"),
-            ("i", 6, 5, "control limit exceeded"),
-            ("ad", [2, 2, 2], [2, 2, 2], ["", "", ""]),
-            ("ad", [1, 1, 1], [0, 0, 0], ["minStep", "minStep", "minStep"]),
+            ("d", 2, 2, "", 1),
+            ("d", 1, 0, "minStep", 1),
+            ("d", 6, 5, "control limit exceeded", 2),
+            ("i", 2, 2, "", 1),
+            ("i", 1, 0, "minStep", 1),
+            ("i", 6, 5, "control limit exceeded", 2),
+            ("ad", [2, 2, 2], [2, 2, 2], ["", "", ""], 1),
+            ("ad", [1, 1, 1], [0, 0, 0], ["minStep", "minStep", "minStep"], 3),
             (
                 "ad",
                 [6, 6, 6],
                 [5, 5, 5],
                 ["control limit exceeded", "control limit exceeded", "control limit exceeded"],
+                2,
             ),
-            ("ai", [2, 2, 2], [2, 2, 2], ["", "", ""]),
-            ("ai", [1, 1, 1], [0, 0, 0], ["minStep", "minStep", "minStep"]),
+            ("ai", [2, 2, 2], [2, 2, 2], ["", "", ""], 1),
+            ("ai", [1, 1, 1], [0, 0, 0], ["minStep", "minStep", "minStep"], 3),
             (
                 "ai",
                 [6, 6, 6],
                 [5, 5, 5],
                 ["control limit exceeded", "control limit exceeded", "control limit exceeded"],
+                2,
             ),
         ],
     )
-    def test_control_min_step(self, nttype, new_value, expected_value, expected_log, caplog):
+    def test_control_min_step(self, nttype, new_value, expected_value, expected_log, expected_log_index, caplog):
         nt = NTScalar(nttype, control=True)
         control_limits = {"limitLow": -5, "limitHigh": 5, "minStep": 2}
         if not nttype.startswith("a"):
@@ -203,15 +205,15 @@ class TestControl:
             assert new_state["value"] == expected_value
 
             if new_value != expected_value:
-                assert len(caplog.records) == 1
-                assert expected_log in str(caplog.records[0].getMessage())
+                assert len(caplog.records) == 3
+                assert expected_log in str(caplog.records[expected_log_index].getMessage())
 
         else:
             numpy.testing.assert_array_equal(new_state["value"], expected_value)
 
             if not numpy.array_equal(new_value, expected_value):
-                assert len(caplog.records) == 3
-                for item in zip(expected_log, caplog.records):
+                assert len(caplog.records) == 9
+                for item in zip(expected_log, caplog.records[expected_log_index:3:]):
                     assert item[0] in item[1].getMessage()
 
 
