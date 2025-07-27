@@ -238,7 +238,14 @@ class BaseRule(ABC):
             # This will effectively make the field read-only while allowing
             # subsequent rules to trigger and work as usual
             for field in self._fields:
-                newpvstate.mark(field, False)
+                # We need to rollback the changes by making the fields that shouldn't
+                # be changed equal their oldstate and marking them as unchanged.
+                # The first step stops issues with evaluating rules against the newstate.
+                # The second step prevents changes being made.
+                for changed_field in newpvstate.changedSet():
+                    if changed_field.startswith(field):
+                        newpvstate[changed_field] = oldpvstate[changed_field]
+                        newpvstate.mark(changed_field, False)
 
         return self.post_rule(oldpvstate, newpvstate)
 
