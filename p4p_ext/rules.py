@@ -172,7 +172,7 @@ class BaseRule(ABC):
     # of a valueAlarm rule. The combination of listing fields controlled by the
     # rule and having a readonly flag allows this to be automatically handled by
     # this base class's put_rule()
-    read_only: bool = False
+    read_only: bool = True
 
     # TODO: Consider using lru_cache but be aware of https://rednafi.com/python/lru_cache_on_methods/
     def is_applicable(self, newpvstate: Value) -> bool:
