@@ -197,7 +197,7 @@ class BaseRule(ABC):
 
         return True
 
-    @check_applicable
+    @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
         """
         Rule that only needs to consider the potential future state of a PV.
@@ -207,7 +207,7 @@ class BaseRule(ABC):
 
         return RulesFlow.CONTINUE
 
-    @check_applicable
+    @check_applicable_post
     def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
         """
         Rule that needs to consider the current and potential future state of a PV.
@@ -220,7 +220,7 @@ class BaseRule(ABC):
 
         return self.init_rule(newpvstate)
 
-    @check_applicable
+    @check_applicable_put
     def put_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
         """
         Rule with access to ServerOperation information, i.e. triggered by a
@@ -338,7 +338,7 @@ class TimestampRule(BaseRule):
 
         return True
 
-    @check_applicable
+    @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         """Update the timeStamp of a PV"""
 
@@ -368,7 +368,7 @@ class ControlRule(BaseScalarRule):
     def _fields(self) -> list[str]:
         return ["control"]
 
-    @check_applicable
+    @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         """Check whether a value should be clipped by the control limits
 
@@ -380,6 +380,7 @@ class ControlRule(BaseScalarRule):
         min_step_violated to work better with arrays
 
         """
+        logger.debug("Evaluating control.init rule")
 
         # Check lower and upper control limits
         if newpvstate["value"] < newpvstate["control.limitLow"]:
@@ -400,8 +401,9 @@ class ControlRule(BaseScalarRule):
 
         return RulesFlow.CONTINUE
 
-    @check_applicable
+    @check_applicable_post
     def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
+        logger.debug("Evaluating control.post rule")
         # Check minimum step first - if the check for the minimum step fails then we continue
         # and ignore the actual evaluation of the limits
         if __class__.min_step_violated(
@@ -441,7 +443,7 @@ class ValueAlarmRule(BaseGatherableRule):
     def _fields(self) -> list[str]:
         return ["alarm", "valueAlarm"]
 
-    @check_applicable
+    @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         """Evaluate alarm value limits"""
         # TODO: Apply the rule for hysteresis. Unfortunately I don't understand the
@@ -626,7 +628,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
         if all(x in array_value.keys() for x in self._fields):
             overwrite_marked(array_value, scalar_value, self._fields)
 
-    @check_applicable
+    @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         # Convert the new Value into scalar versions
         scalared_new_state = self.scalarise(newpvstate)
@@ -663,7 +665,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
     # TODO: What's the correct behaviour if the new and old PV states have different lengths?
     # TODO: What is the correct behaviour for a Control Rule if the array size increases?
     # TODO: What if the Value["value"] has not changed?
-    @check_applicable
+    @check_applicable_post
     def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
         # Convert the current Value and new Value into scalar versions
         scalared_current_state = self.scalarise(oldpvstate)
