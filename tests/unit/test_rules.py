@@ -216,6 +216,49 @@ class TestControl:
                 for item in zip(expected_log, caplog.records[expected_log_index:3:]):
                     assert item[0] in item[1].getMessage()
 
+    @pytest.mark.parametrize(
+        "nttype, control_changes, expected_value, read_only",
+        [
+            ("d", [-6, -5, 5, 2], -5, True),
+            ("d", [-6, -5, 5, 2], -5, False),
+            ("d", [-7, -10, 5, 2], -5, True),
+            ("d", [-7, -10, 5, 2], -7, False),
+        ],
+    )
+    def test_control_change_with_put(self, nttype, control_changes, expected_value, read_only):
+        nt = NTScalar(nttype, control=True)
+        control_limits = {"limitLow": -5, "limitHigh": 5, "minStep": 2}
+        if not nttype.startswith("a"):
+            rule = ControlRule()
+            old_state = nt.wrap({"value": 0.0, "control": control_limits})
+        else:
+            rule = ScalarToArrayWrapperRule(ControlRule())
+            old_state = nt.wrap({"value": [0.0, 0.0, 0.0], "control": control_limits})
+        rule.read_only = read_only
+
+        control_limits = {
+            "limitLow": control_changes[1],
+            "limitHigh": control_changes[2],
+            "minStep": control_changes[3],
+        }
+        new_state = nt.wrap({"value": control_changes[0], "control": control_limits})
+        overwrite_unmarked(old_state, new_state)
+
+        with (
+            patch("p4p.server.raw.SharedPV", autospec=True) as sharedpv,
+            patch("p4p.server.ServerOperation", autospec=True) as server_op,
+        ):
+            sharedpv.current.return_value = nt.unwrap(old_state)
+            server_op.value.return_value = nt.unwrap(new_state)
+            result = rule.put_rule(sharedpv, server_op)
+
+        assert result is RulesFlow.CONTINUE
+
+        if not nttype.startswith("a"):
+            assert new_state["value"] == expected_value
+        else:
+            numpy.testing.assert_array_equal(new_state["value"], expected_value)
+
 
 class TestAlarmLimit:
     @pytest.mark.parametrize(
