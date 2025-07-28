@@ -37,12 +37,12 @@ jobs:
         pip install uv
     - name: Run tests
       run: |
-        uv run --extra test python -m coverage run --source=. -m pytest tests
+        uv run --extra test --python ${{ matrix.python-version }} -m coverage run --source=. -m pytest tests
     - name: Gather coverage statistics
       if: ${{ always() }}
       run: |
-        uv run --extra test python -m coverage report -m
-        uv run --extra test python -m coverage xml
+        uv run --extra test --python ${{ matrix.python-version }} -m coverage report -m
+        uv run --extra test --python ${{ matrix.python-version }} -m coverage xml
     - name: Upload pytest test results
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
