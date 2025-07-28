@@ -34,9 +34,6 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
-        pip install uv
-    - name: Run tests
-      run: |
         pip install git+https://github.com/ISISNeutronMuon/p4p
         pip install .[test]
         PIP_PATH=$(which pip)
@@ -44,7 +41,7 @@ jobs:
     - name: Run tests
       run: |
         PYTHON_PATH=$(which python)
-        $PYTHON_PATH -m coverage run --source=. -m pytest tests/unit/
+        $PYTHON_PATH -m coverage run --source=. -m pytest tests/
     - name: Gather coverage statistics
       if: ${{ always() }}
       run: |
