@@ -111,7 +111,7 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
         self.config_settings["descriptor"] = self.description
 
         # A list of methods that will be called after the pv has been added to
-        # an ISISServer object and that server is started.
+        # a SimpleServer object and that server is started.
         self.on_server_start_methods = []
 
     @abstractmethod
