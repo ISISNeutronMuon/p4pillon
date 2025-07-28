@@ -135,6 +135,9 @@ def test_alarm_limit_change_readonly(basic_server, ctx):
     pv_double1.set_alarm_limits(**alarm_config)
     basic_server.add_pv(pvname, pv_double1)
 
+    # TODO: This is a very messy way of making a rule not read_only!
+    basic_server[pvname]._handler["alarm_limit"].read_only = True
+
     basic_server.start()
 
     ctx.put(pvname, -5)
