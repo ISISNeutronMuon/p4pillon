@@ -1,4 +1,4 @@
-"""Utility function for P4P for ISIS"""
+"""Utility function for p4p_ext"""
 
 from __future__ import annotations
 

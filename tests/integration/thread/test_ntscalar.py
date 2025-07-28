@@ -1,8 +1,8 @@
 """
 Integration tests for expected behaviour of NTScalar PV types:
-- [ ] creation / modification (values, descriptions, limits)
-- [ ] alarm handling
-- [ ] control handling
+- [x] creation / modification (values, descriptions, limits)
+- [x] alarm handling
+- [x] control handling
 - [ ] calc records
 - [ ] forward linking records
 """
@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 import yaml
+from helpers import put_different_value_scalar, put_metadata
+from p4p._p4p import RemoteError
 from p4p.client.thread import Context
 
 from p4p_ext.definitions import PVTypes
@@ -36,90 +38,18 @@ with open(f"{root_dir}/integration/ntscalar_config.yml") as f:
     f.close()
 
 
-def put_different_value(ctx: Context, pvname: str):
-    """
-    Change the value of a process variable (PV) to ensure it is different from its current value.
-
-    Parameters:
-    -----------
-    ctx : Context
-        The context object that provides methods to get and put the value of the PV.
-    pvname : str
-        The name of the PV whose value is to be changed.
-
-    Returns:
-    --------
-    tuple
-        A tuple containing the new value of the PV and the Unix timestamp when the update was made.
-
-    Example:
-    --------
-    >>> ctx = Context()
-    >>> pvname = "temperature_sensor_1"
-    >>> new_value, timestamp = put_different_value(ctx, pvname)
-    >>> print(f"New value: {new_value}, Updated at: {timestamp}")
-    """
-    current_val = ctx.get(pvname).raw.todict()["value"]
-    if isinstance(current_val, str):
-        put_val = current_val + "1"
-    else:
-        put_val = current_val + 1
-    put_timestamp = time.time()
-    ctx.put(pvname, put_val)
-    time.sleep(0.1)
-    return put_val, put_timestamp
-
-
-def put_metadata(ctx: Context, pvname: str, field: str, value):
-    """
-    Update the metadata of a process variable in the given context and return the timestamp of the update.
-
-    Parameters:
-    -----------
-    ctx : Context
-        The context object that provides the method to update the PV.
-    pvname : str
-        The name of the PV whose metadata is to be updated.
-    field : str
-        The specific metadata field that needs to be updated. For subfields use dot notation e.g. valueAlarm.highAlarmLimit
-    value
-        The value to set for the specified metadata field. The type of this value can vary based on the field.
-
-    Returns:
-    --------
-    float
-        The Unix timestamp when the metadata was updated.
-
-    Example:
-    --------
-    >>> ctx = Context()
-    >>> pvname = "temperature_sensor_1"
-    >>> field = "display.units"
-    >>> value = "Celsius"
-    >>> timestamp = put_metadata(ctx, pvname, field, value)
-    >>> print(f"Metadata updated at {timestamp}")
-    """
-    put_timestamp = time.time()
-    ctx.put(
-        pvname,
-        {field: value},
-    )
-    time.sleep(0.1)
-    return put_timestamp
-
-
 @pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
-def test_configs(pvname, server_from_yaml, pv_config, ctx):
+def test_configs(pvname, yaml_server, pv_config, ctx):
     # NOTE by using pytest and parameterize here we run the test individually
     # per PV in the config file, helping us to identify which PVs are causing
     # problems (this would be much more difficult if we were iterating over
     # a list from within the same test)
-    pvname = server_from_yaml.prefix + pvname
+    pvname = yaml_server.prefix + pvname
 
     pv_type = pv_config["type"]
     pv_is_numeric = pv_type in [PVTypes.DOUBLE.name, PVTypes.INTEGER.name]
 
-    assert pvname in server_from_yaml.pvlist
+    assert pvname in yaml_server.pvlist
 
     pv_state = ctx.get(pvname).raw.todict()
     # if we only provide a description with no other display fields, only
@@ -130,8 +60,6 @@ def test_configs(pvname, server_from_yaml, pv_config, ctx):
 
     if pv_is_numeric:
         if "display" in pv_config.keys():
-            print(pv_state)
-            print(pv_config)
             assert_correct_display_config(pv_state, pv_config)
         if "control" in pv_config.keys():
             assert_correct_control_config(pv_state, pv_config)
@@ -145,39 +73,50 @@ def test_configs(pvname, server_from_yaml, pv_config, ctx):
 
 
 @pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
-def test_value_change(pvname, server_from_yaml, pv_config, ctx):
-    pvname = server_from_yaml.prefix + pvname
+def test_value_change(pvname, yaml_server, pv_config, ctx):
+    pvname = yaml_server.prefix + pvname
+
+    current_state = ctx.get(pvname)
 
     if not pv_config.get("read_only"):
-        put_val, put_timestamp = put_different_value(ctx, pvname)
+        put_val, put_timestamp = put_different_value_scalar(ctx, pvname)
         assert_value_changed(pvname, put_val, put_timestamp, ctx)
     else:
-        pytest.xfail(
-            "Unsure on expected behaviour - expect the RemoteError or continue \
-                     working with a warning logged to user"
-        )
-        assert_value_not_changed(pvname, put_val, ctx)
+        with pytest.raises(RemoteError) as e:
+            put_different_value_scalar(ctx, pvname)
+
+        assert "read-only" in str(e)
+        pvstate = ctx.get(pvname)
+
+        assert pvstate.timestamp == current_state.timestamp
+        assert pvstate == current_state
 
 
 @pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
-def test_field_change(pvname, server_from_yaml, pv_config, ctx):
-    pvname = server_from_yaml.prefix + pvname
+def test_field_change(pvname, yaml_server, pv_config, ctx):
+    pvname = yaml_server.prefix + pvname
 
-    current_description = ctx.get(pvname).raw.todict().get("descriptor")
+    current_state = ctx.get(pvname)
+
+    current_description = current_state.raw.todict().get("descriptor")
     new_description = current_description + " modified"
 
-    if not pv_config.get("read_only"):
-        if not isinstance(pv_config.get("initial"), list):
+    if not isinstance(pv_config.get("initial"), list):
+        if not pv_config.get("read_only"):
             put_timestamp = put_metadata(ctx, pvname, "descriptor", new_description)
-
             pvstate = ctx.get(pvname)
 
             assert pvstate.raw.todict().get("descriptor") == new_description
             assert pvstate.timestamp >= put_timestamp
         else:
-            pytest.xfail(reason="Currently unable to change fields in NTScalarArrays")
+            with pytest.raises(RemoteError) as e:
+                put_metadata(ctx, pvname, "descriptor", new_description)
+            assert "read-only" in str(e)
+            pvstate = ctx.get(pvname)
+            assert pvstate.timestamp == current_state.timestamp
+            assert pvstate.raw.todict().get("descriptor") == current_description
     else:
-        pytest.xfail("Unsure on expected behaviour for read-only field changes")
+        pytest.xfail(reason="Currently unable to change fields in NTScalarArrays")
 
 
 def test_alarm_limit_change(basic_server, ctx):

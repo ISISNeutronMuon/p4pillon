@@ -38,30 +38,28 @@ def test_server_retrieve_pvs(mock_recipe, pv_name):
     assert server["DEV:TEST:PV"] == mock_recipe.create_pv.return_value
 
 
-@pytest.mark.xfail(reason="Unsure why the mock provider is failing at server.start()")
 @patch("p4p_ext.thread.server.StaticProvider", autospec=True)
-@patch("p4p_ext.thread.server.SimpleServer", autospec=True)
-def test_server_start(server, provider, caplog, mock_isispv):
+@patch("p4p_ext.thread.server.Server", autospec=True)
+def test_server_start(server, provider, caplog, mock_ntpv):
     test_server = SimpleServer(
         prefix="DEV:",
     )
 
-    mock_isispv.on_start_methods = []
-    test_server._pvs = {"DEV:TEST:PV:1": mock_isispv}
-    print(len(mock_isispv.on_start_methods))
+    mock_ntpv.on_start_methods = []
+    test_server._pvs = {"DEV:TEST:PV:1": mock_ntpv}
+    print(len(mock_ntpv.on_start_methods))
 
     assert test_server._running is False
     with caplog.at_level(logging.DEBUG):
         test_server.start()
     assert len(caplog.records) == 1
-    provider.return_value.add.assert_called_once_with("DEV:TEST:PV:1", mock_isispv)
+    provider.return_value.add.assert_called_once_with("DEV:TEST:PV:1", mock_ntpv)
     server.assert_called_once_with(providers=[provider.return_value])
     assert test_server._running is True
 
 
-@pytest.mark.xfail(reason="Unsure why the mock provider is failing at server.start()")
 @patch("p4p_ext.thread.server.StaticProvider", autospec=True)
-@patch("p4p_ext.thread.server.SimpleServer", autospec=True)
+@patch("p4p_ext.thread.server.Server", autospec=True)
 @patch("p4p_ext.pvrecipe.PVScalarRecipe", autospec=True)
 def test_server_add_pv(recipe, server, provider, caplog):
     test_server = SimpleServer(
@@ -81,41 +79,41 @@ def test_server_add_pv(recipe, server, provider, caplog):
 
 
 @patch("p4p_ext.thread.server.StaticProvider", autospec=True)
-@patch("p4p_ext.thread.server.SimpleServer", autospec=True)
-def test_server_stop(server, provider, caplog, mock_isispv):
+@patch("p4p_ext.thread.server.Server", autospec=True)
+def test_server_stop(server, provider, caplog, mock_ntpv):
     test_server = SimpleServer(
         prefix="DEV:",
     )
 
     test_server._running = True
     test_server._server = server.return_value
-    test_server._pvs = {"DEV:TEST:PV:1": mock_isispv}
+    test_server._pvs = {"DEV:TEST:PV:1": mock_ntpv}
 
     with caplog.at_level(logging.DEBUG):
         test_server.stop()
 
-    mock_isispv.close.assert_called_once_with()
+    mock_ntpv.close.assert_called_once_with()
     provider.return_value.remove.assert_called_once_with("DEV:TEST:PV:1")
     server.return_value.stop.assert_called_once_with()
     assert test_server._running is False
 
 
 @patch("p4p_ext.thread.server.StaticProvider", autospec=True)
-@patch("p4p_ext.thread.server.SimpleServer", autospec=True)
+@patch("p4p_ext.thread.server.Server", autospec=True)
 @patch("p4p_ext.pvrecipe.PVScalarRecipe", autospec=True)
-def test_server_remove_pv(recipe, server, provider, caplog, mock_isispv):
+def test_server_remove_pv(recipe, server, provider, caplog, mock_ntpv):
     test_server = SimpleServer(
         prefix="DEV:",
     )
 
-    test_server._pvs["DEV:TEST:PV:1"] = mock_isispv
+    test_server._pvs["DEV:TEST:PV:1"] = mock_ntpv
     test_server._running = True
     test_server._server = server.return_value
 
     with caplog.at_level(logging.DEBUG):
         test_server.remove_pv("TEST:PV:1")
 
-    mock_isispv.close.assert_called_once_with()
+    mock_ntpv.close.assert_called_once_with()
     provider.return_value.remove.assert_called_once_with("DEV:TEST:PV:1")
 
     assert test_server._pvs.get("DEV:TEST:PV:1") is None
