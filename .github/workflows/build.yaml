@@ -34,18 +34,15 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
-        pip install .[test]
-        PIP_PATH=$(which pip)
-        $PIP_PATH install .[test]
+        pip install uv
     - name: Run tests
       run: |
-        PYTHON_PATH=$(which python)
-        $PYTHON_PATH -m coverage run --source=. -m pytest tests/unit/
+        uv run --extra test python -m coverage run --source=. -m pytest tests
     - name: Gather coverage statistics
       if: ${{ always() }}
       run: |
-        coverage report -m
-        coverage xml
+        uv run --extra test python -m coverage report -m
+        uv run --extra test python -m coverage xml
     - name: Upload pytest test results
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
