@@ -223,6 +223,46 @@ def test_ntscalar_alarm_limit(pvtype, alarm_config, expected_values):
         assert recipe.alarm_limit.hysteresis == 0
 
 
+@pytest.mark.parametrize(
+    "put_value, expected_alarm_state",
+    [
+        (
+            -6,
+            AlarmSeverity.MAJOR_ALARM,
+        ),
+        (
+            -4,
+            AlarmSeverity.MINOR_ALARM,
+        ),
+        (
+            0,
+            AlarmSeverity.NO_ALARM,
+        ),
+        (
+            4,
+            AlarmSeverity.MINOR_ALARM,
+        ),
+        (
+            6,
+            AlarmSeverity.MAJOR_ALARM,
+        ),
+    ],
+)
+def test_ntscalar_alarm_state_post(put_value, expected_alarm_state):
+    pvtype = PVTypes.DOUBLE
+    alarm_config = {"low_alarm": -5, "low_warning": -3, "high_alarm": 5, "high_warning": 3}
+    recipe = PVScalarRecipe(pvtype, description="test PV", initial_value=0)
+
+    recipe.set_alarm_limits(**alarm_config)
+
+    pv = recipe.create_pv()
+
+    pv.post(put_value)
+
+    pvstate = pv.current().raw.todict()
+    assert pvstate.get("alarm").get("severity") == expected_alarm_state.value
+
+
 def test_ntscalar_string_errors():
     # string NTScalars don't support any of the standard numeric NTScalar fields like display,
     # control or alarm limits
@@ -304,7 +344,8 @@ def test_ntscalar_numeric_create_pv(mock_time, recipe, pvtype, with_limits, expe
     "recipe, expected_handler, expected_value",
     [
         (PVScalarRecipe, NTScalarRulesHandler, "test"),
-        # TODO work out how to fix this - currently failing as unable to wrap
+        # TODO work out how to fix this - currently failing with error:
+        # ValueError: Unable to wrap ['test'] with <bound method NTScalar.wrap of <p4p.nt.scalar.NTScalar
         pytest.param(
             PVScalarArrayRecipe,
             NTScalarArrayRulesHandler,

@@ -23,7 +23,7 @@ class SimpleServer(BaseSimpleServer):
 
     def __init__(self, prefix: str = "") -> None:
         """
-        Initialize the ISIS Server instance.
+        Initialize the SimpleServer instance.
 
         :param prefix: The prefix to be added to the PVs (Process Variables) of the server e.g. DEV: Defaults to "".
         """
@@ -37,7 +37,7 @@ class SimpleServer(BaseSimpleServer):
         self._ctxt = Context("pva")
 
     def start(self) -> None:
-        """Start the ISISServer"""
+        """Start the SimpleServer"""
 
         # iterate over all the PVs and initialise them if they haven't
         # been already, add them to the provider and start the server
@@ -58,7 +58,7 @@ class SimpleServer(BaseSimpleServer):
         self._running = True
 
     def stop(self) -> None:
-        """Stop the ISISServer"""
+        """Stop the SimpleServer"""
 
         # iterate over all the PVs and close them before removing them
         # from the provider and closing the server

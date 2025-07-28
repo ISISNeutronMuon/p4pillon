@@ -1,0 +1,29 @@
+DEV:RW:ENUM:1:
+  description: "An example enum PV"
+  type: "ENUM"
+  initial:
+    choices: ['OFF', 'ON']
+    index: 0
+
+DEV:RW:ENUM:2:
+  description: "An example enum PV with different choices"
+  type: "ENUM"
+  initial:
+    choices: ['CLOSED', 'OPEN']
+    index: 1
+  
+DEV:RW:ENUM:3:
+  description: "An example enum PV with an alarm configured"
+  type: "ENUM"
+  initial:
+    choices: ['OFF', 'ON']
+    index: 1
+  alarm_value: 'OFF'
+
+DEV:RO:ENUM:1:
+  description: "An example read only enum PV"
+  type: "ENUM"
+  initial:
+    choices: ['OFF', 'ON']
+    index: 1
+  read_only: True
