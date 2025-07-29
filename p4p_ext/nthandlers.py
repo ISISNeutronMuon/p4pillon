@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections import OrderedDict
-from typing import Callable
+from collections.abc import Callable
 
 from p4p import Value
 from p4p.server import ServerOperation
