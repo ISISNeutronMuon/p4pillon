@@ -12,7 +12,7 @@ from p4p.server.raw import Handler
 from p4p.server.thread import SharedPV
 
 from p4p_ext.composite_handler import CompositeHandler
-from p4p_ext.nthandlers import NTEnumRulesHandler, NTScalarRulesHandler
+from p4p_ext.nthandlers import NTEnumRulesHandler, NTScalarArrayRulesHandler, NTScalarRulesHandler
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +42,20 @@ class SharedNT(SharedPV):
 
         if "nt" in kws:
             nt: NTBase = kws["nt"]
-            if isinstance(nt, NTScalar):
-                self.handlers["NTScalar"] = NTScalarRulesHandler()
-            if isinstance(nt, NTEnum):
-                self.handlers["NTEnum"] = NTEnumRulesHandler()
+
+            match nt:
+                case NTScalar():
+                    nttype_str: str = nt.type.getID()
+                    if nttype_str.startswith("epics:nt/NTScalarArray"):
+                        self.handlers["NTScalarArray"] = NTScalarArrayRulesHandler()
+                    elif nttype_str.startswith("epics:nt/NTScalar"):
+                        self.handlers["NTScalar"] = NTScalarRulesHandler()
+                    else:
+                        raise TypeError(f"Unrecognised NT type: {nttype_str}")
+                case NTEnum():
+                    self.handlers["NTEnum"] = NTEnumRulesHandler()
+                case _:
+                    raise NotImplementedError(f"SharedNT does not support type: {nt.__class__.__name__}")
 
         if post_nthandlers:
             self.handlers = self.handlers | post_nthandlers
