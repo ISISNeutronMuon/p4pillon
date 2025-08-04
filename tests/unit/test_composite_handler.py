@@ -34,12 +34,16 @@ class DummyHandler:
 
 
 class DummyPV:
-    pass
+    def post(self, value):
+        pass
 
 
 class DummyOp:
     def __init__(self):
         self.done = MagicMock()
+
+    def value(self):
+        return None
 
 
 class DummyValue:
@@ -82,7 +86,7 @@ class TestCompositeHandler(unittest.TestCase):
         self.comp.put(self.pv, self.op)
         self.assertEqual(self.h1.calls[0][0], "put")
         self.assertEqual(self.h2.calls[0][0], "put")
-        self.op.done.assert_called_once_with(error=None)
+        self.op.done.assert_called_once_with()
 
     def test_put_abort_exception(self):
         def abort_put(pv, op):

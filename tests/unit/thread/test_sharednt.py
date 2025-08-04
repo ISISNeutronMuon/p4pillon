@@ -9,49 +9,87 @@ from p4p_ext.thread.sharednt import SharedNT
 
 @pytest.mark.parametrize(
     "pvtype, expected_handlername",
-    [("d", "NTScalar"), ("ad", "NTScalarArray"), ("i", "NTScalar"), ("ai", "NTScalarArray")],
+    [
+        ("d", ["control", "alarm", "alarm_limit", "timestamp"]),
+        ("ad", ["control", "alarm", "alarm_limit", "timestamp"]),
+        ("i", ["control", "alarm", "alarm_limit", "timestamp"]),
+        ("ai", ["control", "alarm", "alarm_limit", "timestamp"]),
+    ],
 )
 def testntscalar_create(pvtype, expected_handlername):
     testpv = SharedNT(
         nt=NTScalar(pvtype),
     )
 
-    assert len(testpv.handlers) == 1
-    assert list(testpv.handlers.keys()) == [expected_handlername]
+    assert len(testpv.handler) == 4
+    assert list(testpv.handler.keys()) == expected_handlername
 
 
 @pytest.mark.parametrize(
     "pvtype, expected_handlername",
-    [("d", "NTScalar"), ("ad", "NTScalarArray"), ("i", "NTScalar"), ("ai", "NTScalarArray")],
+    [
+        (
+            "d",
+            [
+                "control",
+                "alarm",
+                "alarm_limit",
+            ],
+        ),
+        (
+            "ad",
+            [
+                "control",
+                "alarm",
+                "alarm_limit",
+            ],
+        ),
+        (
+            "i",
+            [
+                "control",
+                "alarm",
+                "alarm_limit",
+            ],
+        ),
+        (
+            "ai",
+            [
+                "control",
+                "alarm",
+                "alarm_limit",
+            ],
+        ),
+    ],
 )
 def testntscalar_create_with_handlers(pvtype, expected_handlername):
     testpv = SharedNT(
         nt=NTScalar(pvtype),
-        pre_nthandlers=OrderedDict({"pre1": Handler(), "pre2": Handler()}),
-        post_nthandlers=OrderedDict({"post1": Handler(), "post2": Handler()}),
+        auth_handlers=OrderedDict({"pre1": Handler(), "pre2": Handler()}),
+        user_handlers=OrderedDict({"post1": Handler(), "post2": Handler()}),
     )
 
-    assert len(testpv.handlers) == 5
-    assert list(testpv.handlers.keys()) == ["pre1", "pre2", expected_handlername, "post1", "post2"]
+    assert len(testpv.handler) == 8
+    assert list(testpv.handler.keys()) == ["pre1", "pre2", *expected_handlername, "post1", "post2", "timestamp"]
 
 
 def testntenum_create():
     testpv = SharedNT(nt=NTEnum(), initial={"index": 0, "choices": ["OFF", "ON"]})
 
-    assert len(testpv.handlers) == 1
-    assert list(testpv.handlers.keys()) == ["NTEnum"]
+    assert len(testpv.handler) == 1
+    assert list(testpv.handler.keys()) == ["timestamp"]
 
 
 def testntenum_create_with_handlers():
     testpv = SharedNT(
         nt=NTEnum(),
         initial={"index": 0, "choices": ["OFF", "ON"]},
-        pre_nthandlers=OrderedDict({"pre1": Handler(), "pre2": Handler()}),
-        post_nthandlers=OrderedDict({"post1": Handler(), "post2": Handler()}),
+        auth_handlers=OrderedDict({"pre1": Handler(), "pre2": Handler()}),
+        user_handlers=OrderedDict({"post1": Handler(), "post2": Handler()}),
     )
 
-    assert len(testpv.handlers) == 5
-    assert list(testpv.handlers.keys()) == ["pre1", "pre2", "NTEnum", "post1", "post2"]
+    assert len(testpv.handler) == 5
+    assert list(testpv.handler.keys()) == ["pre1", "pre2", "post1", "post2", "timestamp"]
 
 
 @pytest.mark.filterwarnings("ignore")  # Ignore "RuntimeError: Empty SharedPV" warning
