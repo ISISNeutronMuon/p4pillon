@@ -7,7 +7,7 @@ name = "p4p_ext"
 dynamic = ["version"]
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "p4p",
     "pyyaml>=6.0.2",

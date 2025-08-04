@@ -5,7 +5,6 @@ from __future__ import annotations
 from p4p.server.thread import SharedPV
 
 from p4p_ext.definitions import PVTypes
-from p4p_ext.nthandlers import NTEnumRulesHandler, NTScalarArrayRulesHandler, NTScalarRulesHandler
 from p4p_ext.pvrecipe import BasePVRecipe
 from p4p_ext.pvrecipe import PVScalarRecipe as _PVScalarRecipe
 
@@ -26,9 +25,7 @@ class PVScalarRecipe(_PVScalarRecipe):
         self._config_control()
         self._config_alarm_limit()
 
-        handler = NTScalarRulesHandler()
-
-        return super().build_pv(SharedPV, handler, pv_name)
+        return super().build_pv()
 
 
 class PVScalarArrayRecipe(_PVScalarRecipe):
@@ -46,12 +43,10 @@ class PVScalarArrayRecipe(_PVScalarRecipe):
         self._config_control()
         self._config_alarm_limit()
 
-        handler = NTScalarArrayRulesHandler()
-
         if not isinstance(self.initial_value, list):
             self.initial_value = [self.initial_value]
 
-        return super().build_pv(SharedPV, handler, pv_name)
+        return super().build_pv()
 
 
 class PVEnumRecipe(BasePVRecipe):
@@ -70,6 +65,4 @@ class PVEnumRecipe(BasePVRecipe):
     def create_pv(self, pv_name: str | None = None) -> SharedPV:
         """Turn the recipe into an actual NTEnum"""
 
-        handler = NTEnumRulesHandler()
-
-        return super().build_pv(SharedPV, handler, pv_name)
+        return super().build_pv()

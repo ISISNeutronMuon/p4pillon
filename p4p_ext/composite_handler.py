@@ -29,28 +29,40 @@ class AbortHandlerException(HandlerException):
 class CompositeHandler(Handler, OrderedDict):
     """Composite Handler for combining multiple component handlers into a single handler."""
 
+    def __init__(self, *args, **kwargs):
+        OrderedDict.__init__(self, *args, **kwargs)
+        Handler.__init__(self)
+
+        self.read_only = False
+
     def open(self, value: Value):
         """Open all handlers in the composite handler."""
-        for handler in self.values():
+        for _name, handler in self.items():
             handler.open(value)
 
     def put(self, pv: SharedPV, op: ServerOperation):
+        if self.read_only:
+            errmsg = "This PV is read-only"
+            op.done(error=errmsg)
+            return
+
         errmsg = None
 
-        for handler in self.values():
+        for _name, handler in self.items():
             try:
                 handler.put(pv, op)
             except AbortHandlerException as e:
                 errmsg = e.message
                 break
 
-        op.done(error=errmsg)
+        if errmsg is None:
+            pv.post(op.value())
+            op.done()
+        else:
+            op.done(error=errmsg)
 
     def post(self, pv: SharedPV, value: Value):
-        # for handler in self.values():
-        #     handler.post(pv, value)
-
-        for handler in self.values():
+        for _name, handler in self.items():
             handler.post(pv, value)
 
     def rpc(self, pv: SharedPV, op: ServerOperation):

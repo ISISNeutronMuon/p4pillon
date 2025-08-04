@@ -1,376 +1,98 @@
-import math
-from unittest.mock import patch
+from collections import OrderedDict
 
 import pytest
-from p4p.nt import NTScalar
+from p4p.nt import NTEnum, NTScalar
+from p4p.server.raw import Handler
 
-from p4p_ext.definitions import MAX_FLOAT, MAX_INT32, MIN_FLOAT, MIN_INT32, AlarmSeverity, Format, PVTypes
-from p4p_ext.nthandlers import NTScalarArrayRulesHandler, NTScalarRulesHandler
-from p4p_ext.thread.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
-
-
-@pytest.mark.parametrize(
-    "pvtype, display_config, expected_values",
-    [
-        (
-            # passing an empty display dictionary gives the defaults
-            PVTypes.INTEGER,
-            {},
-            (MIN_INT32, MAX_INT32, "", Format.DEFAULT, 2),
-        ),
-        (
-            PVTypes.INTEGER,
-            {"units": "V"},
-            (MIN_INT32, MAX_INT32, "V", Format.DEFAULT, 2),
-        ),
-        (
-            PVTypes.INTEGER,
-            {"format": Format.ENGINEERING},
-            (MIN_INT32, MAX_INT32, "", Format.ENGINEERING, 2),
-        ),
-        (
-            PVTypes.DOUBLE,
-            {"units": "V"},
-            (MIN_FLOAT, MAX_FLOAT, "V", Format.DEFAULT, 2),
-        ),
-        (
-            PVTypes.DOUBLE,
-            {"low": -1.0, "high": 1.0},
-            (-1.0, 1.0, "", Format.DEFAULT, 2),
-        ),
-        (
-            PVTypes.DOUBLE,
-            {"precision": 4},
-            (MIN_FLOAT, MAX_FLOAT, "", Format.DEFAULT, 4),
-        ),
-        (
-            PVTypes.DOUBLE,
-            {"format": "ENGINEERING"},
-            (MIN_FLOAT, MAX_FLOAT, "", Format.ENGINEERING, 2),
-        ),
-    ],
-)
-def test_ntscalar_display(pvtype, display_config, expected_values):
-    for recipetype in [PVScalarRecipe, PVScalarArrayRecipe]:
-        recipe = recipetype(pvtype, description="test PV", initial_value=0)
-
-        assert recipe.display is None
-
-        recipe.set_display_limits(**display_config)
-
-        assert recipe.display.limit_low == expected_values[0]
-        assert recipe.display.limit_high == expected_values[1]
-        assert recipe.display.units == expected_values[2]
-        assert recipe.display.format is expected_values[3]
-        assert recipe.display.precision == expected_values[4]
+from p4p_ext.thread.sharednt import SharedNT
 
 
 @pytest.mark.parametrize(
-    "pvtype, time_val",
+    "pvtype, expected_handlername",
     [
-        (PVTypes.INTEGER, 123.456),
-        (PVTypes.DOUBLE, 123.456),
-        (PVTypes.INTEGER, None),
-        (PVTypes.DOUBLE, None),
+        ("d", ["control", "alarm", "alarm_limit", "timestamp"]),
+        ("ad", ["control", "alarm", "alarm_limit", "timestamp"]),
+        ("i", ["control", "alarm", "alarm_limit", "timestamp"]),
+        ("ai", ["control", "alarm", "alarm_limit", "timestamp"]),
     ],
 )
-@patch("time.time", return_value=456.789)
-def test_ntscalar_timestamp(mock_time, pvtype, time_val):
-    for recipetype in [PVScalarRecipe, PVScalarArrayRecipe]:
-        recipe = recipetype(pvtype, description="test PV", initial_value=0)
+def testntscalar_create(pvtype, expected_handlername):
+    testpv = SharedNT(
+        nt=NTScalar(pvtype),
+    )
 
-        assert recipe.timestamp is None
-
-        if time_val is not None:
-            recipe.set_timestamp(time_val)
-            assert recipe.timestamp.time == time_val
-        else:
-            assert recipe.timestamp is None
-
-        pv = recipe.create_pv("TEST:NAME")
-
-        if time_val is not None:
-            # once we've added the PVs and started the server, the PV timestamp should be respected
-            assert math.isclose(pv.current().timestamp, time_val)
-        else:
-            # if the timestamp isn't set, we use the default time.time return val
-            assert math.isclose(pv.current().timestamp, mock_time.return_value)
+    assert len(testpv.handler) == 4
+    assert list(testpv.handler.keys()) == expected_handlername
 
 
 @pytest.mark.parametrize(
-    "pvtype, control_config, expected_values",
+    "pvtype, expected_handlername",
     [
         (
-            PVTypes.INTEGER,
-            {},
-            (
-                MIN_INT32,
-                MAX_INT32,
-                0,
-            ),
+            "d",
+            [
+                "control",
+                "alarm",
+                "alarm_limit",
+            ],
         ),
         (
-            PVTypes.INTEGER,
-            {"low": -5, "high": 5, "min_step": 1},
-            (
-                -5,
-                5,
-                1,
-            ),
+            "ad",
+            [
+                "control",
+                "alarm",
+                "alarm_limit",
+            ],
         ),
         (
-            PVTypes.DOUBLE,
-            {},
-            (
-                MIN_FLOAT,
-                MAX_FLOAT,
-                0,
-            ),
+            "i",
+            [
+                "control",
+                "alarm",
+                "alarm_limit",
+            ],
         ),
         (
-            PVTypes.DOUBLE,
-            {"low": -5, "high": 5, "min_step": 0.1},
-            (
-                -5,
-                5,
-                0.1,
-            ),
+            "ai",
+            [
+                "control",
+                "alarm",
+                "alarm_limit",
+            ],
         ),
     ],
 )
-def test_ntscalar_control(pvtype, control_config, expected_values):
-    for recipetype in [PVScalarRecipe, PVScalarArrayRecipe]:
-        recipe = recipetype(pvtype, description="test PV", initial_value=0)
+def testntscalar_create_with_handlers(pvtype, expected_handlername):
+    testpv = SharedNT(
+        nt=NTScalar(pvtype),
+        auth_handlers=OrderedDict({"pre1": Handler(), "pre2": Handler()}),
+        user_handlers=OrderedDict({"post1": Handler(), "post2": Handler()}),
+    )
 
-        assert recipe.control is None
-
-        recipe.set_control_limits(**control_config)
-
-        assert recipe.control.limit_low == expected_values[0]
-        assert recipe.control.limit_high == expected_values[1]
-        assert recipe.control.min_step == expected_values[2]
+    assert len(testpv.handler) == 8
+    assert list(testpv.handler.keys()) == ["pre1", "pre2", *expected_handlername, "post1", "post2", "timestamp"]
 
 
-@pytest.mark.parametrize(
-    "pvtype, alarm_config, expected_values",
-    [
-        (
-            PVTypes.INTEGER,
-            {},
-            (MIN_INT32, MIN_INT32, MAX_INT32, MAX_INT32),
-        ),
-        (
-            PVTypes.INTEGER,
-            {"low_alarm": -5, "low_warning": -3, "high_alarm": 5, "high_warning": 3},
-            (-5, -3, 3, 5),
-        ),
-        (
-            # TODO confirm if this is the right behaviour?
-            PVTypes.INTEGER,
-            {
-                "low_alarm": -5,
-                "high_alarm": 5,
-            },
-            (-5, MIN_INT32, MAX_INT32, 5),
-        ),
-        (
-            PVTypes.INTEGER,
-            {"low_alarm": -5, "low_warning": 5},
-            (-5, 5, MAX_INT32, MAX_INT32),
-        ),
-        (
-            PVTypes.DOUBLE,
-            {},
-            (MIN_FLOAT, MIN_FLOAT, MAX_FLOAT, MAX_FLOAT),
-        ),
-        (
-            PVTypes.DOUBLE,
-            {"low_alarm": -5, "low_warning": -3, "high_alarm": 5, "high_warning": 3},
-            (-5, -3, 3, 5),
-        ),
-        (
-            # TODO confirm if this is the right behaviour?
-            PVTypes.DOUBLE,
-            {
-                "low_alarm": -5,
-                "high_alarm": 5,
-            },
-            (-5, MIN_FLOAT, MAX_FLOAT, 5),
-        ),
-        (
-            PVTypes.DOUBLE,
-            {"low_alarm": -5, "low_warning": 5},
-            (-5, 5, MAX_FLOAT, MAX_FLOAT),
-        ),
-    ],
-)
-def test_ntscalar_alarm_limit(pvtype, alarm_config, expected_values):
-    for recipetype in [PVScalarRecipe, PVScalarArrayRecipe]:
-        recipe = recipetype(pvtype, description="test PV", initial_value=0)
+def testntenum_create():
+    testpv = SharedNT(nt=NTEnum(), initial={"index": 0, "choices": ["OFF", "ON"]})
 
-        assert recipe.alarm_limit is None
-
-        recipe.set_alarm_limits(**alarm_config)
-
-        assert recipe.alarm_limit.low_alarm_limit == expected_values[0]
-        assert recipe.alarm_limit.low_warning_limit == expected_values[1]
-        assert recipe.alarm_limit.high_warning_limit == expected_values[2]
-        assert recipe.alarm_limit.high_alarm_limit == expected_values[3]
-        assert recipe.alarm_limit.low_alarm_severity == AlarmSeverity.MAJOR_ALARM
-        assert recipe.alarm_limit.low_warning_severity == AlarmSeverity.MINOR_ALARM
-        assert recipe.alarm_limit.high_warning_severity == AlarmSeverity.MINOR_ALARM
-        assert recipe.alarm_limit.high_alarm_severity == AlarmSeverity.MAJOR_ALARM
-        assert recipe.alarm_limit.hysteresis == 0
+    assert len(testpv.handler) == 1
+    assert list(testpv.handler.keys()) == ["timestamp"]
 
 
-@pytest.mark.parametrize(
-    "put_value, expected_alarm_state",
-    [
-        (
-            -6,
-            AlarmSeverity.MAJOR_ALARM,
-        ),
-        (
-            -4,
-            AlarmSeverity.MINOR_ALARM,
-        ),
-        (
-            0,
-            AlarmSeverity.NO_ALARM,
-        ),
-        (
-            4,
-            AlarmSeverity.MINOR_ALARM,
-        ),
-        (
-            6,
-            AlarmSeverity.MAJOR_ALARM,
-        ),
-    ],
-)
-def test_ntscalar_alarm_state_post(put_value, expected_alarm_state):
-    pvtype = PVTypes.DOUBLE
-    alarm_config = {"low_alarm": -5, "low_warning": -3, "high_alarm": 5, "high_warning": 3}
-    recipe = PVScalarRecipe(pvtype, description="test PV", initial_value=0)
+def testntenum_create_with_handlers():
+    testpv = SharedNT(
+        nt=NTEnum(),
+        initial={"index": 0, "choices": ["OFF", "ON"]},
+        auth_handlers=OrderedDict({"pre1": Handler(), "pre2": Handler()}),
+        user_handlers=OrderedDict({"post1": Handler(), "post2": Handler()}),
+    )
 
-    recipe.set_alarm_limits(**alarm_config)
-
-    pv = recipe.create_pv()
-
-    pv.post(put_value)
-
-    pvstate = pv.current().raw.todict()
-    assert pvstate.get("alarm").get("severity") == expected_alarm_state.value
+    assert len(testpv.handler) == 5
+    assert list(testpv.handler.keys()) == ["pre1", "pre2", "post1", "post2", "timestamp"]
 
 
-def test_ntscalar_string_errors():
-    # string NTScalars don't support any of the standard numeric NTScalar fields like display,
-    # control or alarm limits
-    for recipetype in [PVScalarRecipe, PVScalarArrayRecipe]:
-        recipe = recipetype(PVTypes.STRING, description="test PV", initial_value=0)
-
-        # check display
-        assert recipe.display is None
-        with pytest.raises(SyntaxError) as e:
-            recipe.set_display_limits()
-        assert "not supported" in str(e)
-
-        # check control
-        assert recipe.control is None
-        with pytest.raises(SyntaxError) as e:
-            recipe.set_control_limits()
-        assert "not supported" in str(e)
-
-        # check valueAlarm
-        assert recipe.alarm_limit is None
-        with pytest.raises(SyntaxError) as e:
-            recipe.set_alarm_limits()
-        assert "not supported" in str(e)
-
-
-def test_ntscalar_enum_error():
-    with pytest.raises(ValueError) as e:
-        PVScalarRecipe(PVTypes.ENUM, description="test", initial_value=1)
-
-    assert "Unsupported pv type" in str(e)
-
-
-@pytest.mark.parametrize(
-    "recipe, pvtype, with_limits, expected_handler, expected_value",
-    [
-        (PVScalarRecipe, PVTypes.DOUBLE, True, NTScalarRulesHandler, 1),
-        (PVScalarRecipe, PVTypes.INTEGER, True, NTScalarRulesHandler, 1),
-        (PVScalarRecipe, PVTypes.DOUBLE, False, NTScalarRulesHandler, 1),
-        (PVScalarRecipe, PVTypes.INTEGER, False, NTScalarRulesHandler, 1),
-        (PVScalarArrayRecipe, PVTypes.DOUBLE, True, NTScalarArrayRulesHandler, [1]),
-        (PVScalarArrayRecipe, PVTypes.INTEGER, True, NTScalarArrayRulesHandler, [1]),
-        (PVScalarArrayRecipe, PVTypes.DOUBLE, False, NTScalarArrayRulesHandler, [1]),
-        (PVScalarArrayRecipe, PVTypes.INTEGER, False, NTScalarArrayRulesHandler, [1]),
-    ],
-)
-@patch("time.time")
-def test_ntscalar_numeric_create_pv(mock_time, recipe, pvtype, with_limits, expected_handler, expected_value):
-    mock_time.return_value = 123.456
-    initial = 1.0
-    recipe = recipe(pvtype, description="test", initial_value=initial)
-
-    if with_limits:
-        recipe.set_display_limits()
-        recipe.set_control_limits()
-        recipe.set_alarm_limits()
-
-    pv = recipe.create_pv(pv_name="UNIT:TEST:PV")
-
-    pvdict = pv.current().raw.todict()
-
-    assert isinstance(pv._handler, expected_handler)
-    assert isinstance(pv.nt, NTScalar)  # change to check the name instead?
-    assert pv.isOpen() is True
-
-    assert pv.current().real == expected_value
-    assert pv.current().timestamp == mock_time.return_value
-    assert pvdict.get("alarm") is not None
-    if with_limits:
-        assert pvdict.get("display") is not None
-        assert pvdict.get("control") is not None
-        assert pvdict.get("valueAlarm") is not None
-    else:
-        assert pvdict.get("display") is None
-        assert pvdict.get("control") is None
-        assert pvdict.get("valueAlarm") is None
-
-
-@pytest.mark.parametrize(
-    "recipe, expected_handler, expected_value",
-    [
-        (PVScalarRecipe, NTScalarRulesHandler, "test"),
-        # TODO work out how to fix this - currently failing with error:
-        # ValueError: Unable to wrap ['test'] with <bound method NTScalar.wrap of <p4p.nt.scalar.NTScalar
-        pytest.param(
-            PVScalarArrayRecipe,
-            NTScalarArrayRulesHandler,
-            ["test"],
-            marks=pytest.mark.xfail,
-        ),
-    ],
-)
-@patch("time.time")
-def test_ntscalar_string_create_pv(mock_time, recipe, expected_handler, expected_value):
-    mock_time.return_value = 123.456
-    initial = "test"
-    recipe = recipe(PVTypes.STRING, description="test", initial_value=initial)
-
-    pv = recipe.create_pv(pv_name="UNIT:TEST:PV")
-
-    pvdict = pv.current().raw.todict()
-
-    assert isinstance(pv._handler, expected_handler)
-    assert isinstance(pv.nt, NTScalar)
-    assert pv.isOpen() is True
-    assert pv.current().timestamp == mock_time.return_value
-    assert pvdict["value"] == expected_value
-    assert pvdict.get("alarm") is not None
-    # string PVs shouldn't have any of these fields
-    assert pvdict.get("display") is None
-    assert pvdict.get("control") is None
-    assert pvdict.get("valueAlarm") is None
+@pytest.mark.filterwarnings("ignore")  # Ignore "RuntimeError: Empty SharedPV" warning
+def testbadnt():
+    with pytest.raises(NotImplementedError):
+        SharedNT(nt=bool)

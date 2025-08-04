@@ -12,7 +12,14 @@ from p4p.server.raw import Handler
 from p4p.server.thread import SharedPV
 
 from p4p_ext.composite_handler import CompositeHandler
-from p4p_ext.nthandlers import NTEnumRulesHandler, NTScalarRulesHandler
+from p4p_ext.nthandlers import ComposeableRulesHandler
+from p4p_ext.rules import (
+    AlarmRule,
+    ControlRule,
+    ScalarToArrayWrapperRule,
+    TimestampRule,
+    ValueAlarmRule,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +32,8 @@ class SharedNT(SharedPV):
 
     def __init__(
         self,
-        pre_nthandlers: OrderedDict[str, Handler] | None = None,
-        post_nthandlers: OrderedDict[str, Handler] | None = None,
+        auth_handlers: OrderedDict[str, Handler] | None = None,
+        user_handlers: OrderedDict[str, Handler] | None = None,
         **kws,
     ):
         # Check if there is a handler specified in the kws, and if not override it
@@ -35,24 +42,51 @@ class SharedNT(SharedPV):
         # Create a CompositeHandler. If there is no user supplied handler, and this is not
         # an NT type then it won't do anything. But it will still represent a stable interface
 
-        if pre_nthandlers:
-            self.handlers = CompositeHandler(pre_nthandlers)
+        if auth_handlers:
+            handler = CompositeHandler(auth_handlers)
         else:
-            self.handlers = CompositeHandler()
+            handler = CompositeHandler()
 
         if "nt" in kws:
             nt: NTBase = kws["nt"]
-            if isinstance(nt, NTScalar):
-                self.handlers["NTScalar"] = NTScalarRulesHandler()
-            if isinstance(nt, NTEnum):
-                self.handlers["NTEnum"] = NTEnumRulesHandler()
 
-        if post_nthandlers:
-            self.handlers = self.handlers | post_nthandlers
+            match nt:
+                case NTScalar():
+                    nttype_str: str = nt.type.getID()
+                    if nttype_str.startswith("epics:nt/NTScalarArray"):
+                        handler["control"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ControlRule()))
+                        handler["alarm"] = ComposeableRulesHandler(
+                            AlarmRule()
+                        )  # ScalarToArrayWrapperRule unnecessary - no access to values
+                        handler["alarm_limit"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ValueAlarmRule()))
+                        handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
+                    elif nttype_str.startswith("epics:nt/NTScalar"):
+                        handler["control"] = ComposeableRulesHandler(ControlRule())
+                        handler["alarm"] = ComposeableRulesHandler(AlarmRule())
+                        handler["alarm_limit"] = ComposeableRulesHandler(ValueAlarmRule())
+                        handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
+                    else:
+                        raise TypeError(f"Unrecognised NT type: {nttype_str}")
+                case NTEnum():
+                    handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
+                case _:
+                    raise NotImplementedError(f"SharedNT does not support type: {nt.__class__.__name__}")
 
-        kws["handler"] = self.handlers
+        if user_handlers:
+            handler = handler | user_handlers
+            handler.move_to_end("timestamp", last=True)  # Ensure timestamp is last
+
+        kws["handler"] = handler
 
         super().__init__(**kws)
+
+    @property
+    def handler(self) -> CompositeHandler:
+        return self._handler
+
+    @handler.setter
+    def handler(self, value: CompositeHandler):
+        self._handler = value
 
     ## Disable handler decorators until we have a solid design.
     # Re-enable when / if possible

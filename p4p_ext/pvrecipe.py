@@ -15,6 +15,8 @@ from p4p.nt import NTEnum, NTScalar
 from p4p.server.asyncio import SharedPV as SharedPV_asyncio
 from p4p.server.thread import SharedPV as SharedPV_threaded
 
+from p4p_ext.thread.sharednt import SharedNT
+
 from .definitions import (
     MAX_FLOAT,
     MAX_INT32,
@@ -23,9 +25,6 @@ from .definitions import (
     AlarmSeverity,
     Format,
     PVTypes,
-)
-from .nthandlers import (
-    BaseRulesHandler,
 )
 from .utils import time_in_seconds_and_nanoseconds
 
@@ -110,10 +109,6 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
         self.construct_settings["extra"] = [("descriptor", "s")]
         self.config_settings["descriptor"] = self.description
 
-        # A list of methods that will be called after the pv has been added to
-        # a SimpleServer object and that server is started.
-        self.on_server_start_methods = []
-
     @abstractmethod
     def create_pv(self, pv_name: str | None = None) -> SharedPvT:
         """Turn the recipe into an NT object with an array"""
@@ -130,9 +125,6 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
 
     def build_pv(
         self,
-        sharedpv: type[SharedPvT],
-        handler: BaseRulesHandler,
-        pv_name: str | None,
     ) -> SharedPvT:
         """
         This method is called by create_pv in the child classes after construct settings is set.
@@ -159,14 +151,11 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
 
         self._config_timestamp()
 
-        pvobj = sharedpv(nt=nt, initial=self.initial_value, handler=handler)
-        pvobj.post(self.config_settings)
-        handler._name = pv_name
-
-        pvobj.on_start_methods = self.on_server_start_methods
+        pvobj = SharedNT(nt=nt, initial={"value": self.initial_value, **self.config_settings})
+        # handler._name = pv_name
 
         if self.read_only:
-            handler.set_read_only()
+            pvobj.handler.read_only = True
 
         return pvobj
 

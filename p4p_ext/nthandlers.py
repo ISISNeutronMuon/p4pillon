@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import logging
 from collections import OrderedDict
-from typing import Callable
+from collections.abc import Callable
 
 from p4p import Value
 from p4p.server import ServerOperation
 from p4p.server.raw import Handler, SharedPV
 
+from p4p_ext.composite_handler import AbortHandlerException
 from p4p_ext.utils import overwrite_unmarked
 
 from .rules import (
@@ -44,6 +45,10 @@ class BaseRulesHandler(Handler):
         """Allow access to the rules so that parameters such as read_only may be set"""
         return self.rules.get(rule_name)
 
+    def open(self, value: Value) -> None:
+        """Handler call by an open operation."""
+        self._apply_rules(lambda x: x.init_rule(value))
+
     def post(self, pv: SharedPV, value: Value) -> None:
         """Handler call by a post operation, requires support from SharedPV derived class"""
         logger.debug("In handler post()")
@@ -55,7 +60,7 @@ class BaseRulesHandler(Handler):
 
     def put(self, pv: SharedPV, op: ServerOperation) -> None:
         """
-        Handler triggered by put operaitons. Note that this has additional information
+        Handler triggered by put operations. Note that this has additional information
         about the source of the put such as the IP address of the caller.
         """
         logger.debug("In handler put()")
@@ -113,6 +118,54 @@ class BaseRulesHandler(Handler):
         else:
             # Switch off the read-only rule by deleting it
             self.rules.pop("read_only", None)
+
+
+class ComposeableRulesHandler(Handler):
+    """
+    Convert the Rules interface to a simple Handler interface.
+    """
+
+    def __init__(self, rule: BaseRule) -> None:
+        super().__init__()
+        self.rule = rule
+
+    def open(self, value: Value) -> None:
+        """Handler call by an open operation."""
+        logger.debug("In handler open()")
+        self.rule.init_rule(value)
+
+    def post(self, pv: SharedPV, value: Value) -> None:
+        """Handler call by a post operation, requires support from SharedPV derived class"""
+        logger.debug("In handler post()")
+
+        current_state = pv.current().raw  # We only need the Value from the PV
+        overwrite_unmarked(current_state, value)
+
+        self.rule.post_rule(current_state, value)
+
+    def put(self, pv: SharedPV, op: ServerOperation) -> None:
+        """
+        Handler triggered by put operations. Note that this has additional information
+        about the source of the put such as the IP address of the caller.
+        """
+        logger.debug("In handler put()")
+
+        overwrite_unmarked(pv.current().raw, op.value().raw)
+
+        rules_flow = self.rule.put_rule(pv, op)
+        if rules_flow == RulesFlow.ABORT:
+            raise AbortHandlerException(rules_flow.error)
+
+    @property
+    def read_only(self) -> bool:
+        """
+        Set rule as resd_only.
+        """
+        return self.rule.read_only
+
+    @read_only.setter
+    def read_only(self, read_only: bool):
+        self.rule.read_only = read_only
 
 
 class NTScalarRulesHandler(BaseRulesHandler):

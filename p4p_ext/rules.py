@@ -228,7 +228,7 @@ class BaseRule(ABC):
         operations
         """
 
-        oldpvstate: Value = pv.current().raw
+        # oldpvstate: Value = pv.current().raw
         newpvstate: Value = op.value().raw
 
         logger.debug("Evaluating %s.put_rule", self._name)
@@ -247,7 +247,8 @@ class BaseRule(ABC):
                         newpvstate[changed_field] = oldpvstate[changed_field]
                         newpvstate.mark(changed_field, False)
 
-        return self.post_rule(oldpvstate, newpvstate)
+        return RulesFlow.CONTINUE
+        # return self.post_rule(oldpvstate, newpvstate)
 
 
 class BaseScalarRule(BaseRule, ABC):
@@ -326,7 +327,6 @@ class TimestampRule(BaseRule):
         Override the base class's rule because timeStamp changes are triggered
         by changes to any field and not just to the timeStamp field
         """
-
         # If nothing at all has changed then don't update the timeStamp
         # TODO: Check if this is expected behaviour for Normative Types
         if not newpvstate.changedSet():
@@ -343,10 +343,14 @@ class TimestampRule(BaseRule):
         """Update the timeStamp of a PV"""
 
         seconds, nanoseconds = time_in_seconds_and_nanoseconds(time.time())
-        if "timeStamp.secondsPastEpoch" not in newpvstate.changedSet():
+        # TODO: there's a bug in the _wrap which means that timestamps are always marked as changed
+        #       Fix this when that bug is fixed.
+        # if "timeStamp.secondsPastEpoch" not in newpvstate.changedSet():
+        if True:
             logger.debug("using secondsPastEpoch from time.time()")
             newpvstate["timeStamp.secondsPastEpoch"] = seconds
-        if "timeStamp.nanoseconds" not in newpvstate.changedSet():
+        # if "timeStamp.nanoseconds" not in newpvstate.changedSet():
+        if True:
             newpvstate["timeStamp.nanoseconds"] = nanoseconds
             logger.debug("using nanoseconds from time.time()")
 

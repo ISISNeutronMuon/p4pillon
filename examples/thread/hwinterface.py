@@ -56,6 +56,9 @@ class HWWriteHandler(Handler):
         if value.changed("value"):
             self.hardware.value = value["value"]
 
+    def put(self, pv: SharedNT, op: ServerOperation):
+        pass
+
 
 def main():
     """
@@ -81,7 +84,7 @@ def main():
             "valueAlarm.highAlarmSeverity": 2,  # Not obvious, but without this the highAlarmLimit above will not work
         },
     )
-    pv_hwget.handlers["NTScalar"].set_read_only()  # Make the readback read-only
+    pv_hwget.handler.read_only = True  # Make the readback read-only
 
     pv_hwset = SharedNT(
         nt=NTScalar(
@@ -89,8 +92,8 @@ def main():
             control=True,
         ),  # scalar double
         initial={"value": hw.poll(), "control.limitHigh": 25},
-        pre_nthandlers=OrderedDict({"spy": UserReportHandler()}),
-        post_nthandlers=OrderedDict({"hwwrite": HWWriteHandler(hw)}),
+        auth_handlers=OrderedDict({"spy": UserReportHandler()}),
+        user_handlers=OrderedDict({"hwwrite": HWWriteHandler(hw)}),
     )
 
     pvs = {
@@ -102,7 +105,10 @@ def main():
         providers=[pvs],
     ):
         print("Server starting. Press Ctrl+C (or equivalent) to stop.")
-        print(f"Server is providing PVs: {list(pvs.keys())}")
+        print("Server is providing PVs: ")
+        for pv_name, pv in pvs.items():
+            print(f"  {pv_name} with handlers {list(pv.handler.keys())}")
+
         try:
             while True:
                 pv_hwget.post({"value": hw.poll()})

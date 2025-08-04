@@ -48,11 +48,6 @@ class SimpleServer(BaseSimpleServer):
 
         self._server = Server(providers=[self._provider])
 
-        for pv_name, pv in self._pvs.items():
-            for method in pv.on_start_methods:
-                logger.debug("Applying on server start method for pv %s method %s", pv_name, method)
-                method(server=self, pv_name=pv_name, pv=pv)
-
         logger.debug("Started Server with %s", self.pvlist)
 
         self._running = True
