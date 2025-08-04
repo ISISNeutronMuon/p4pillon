@@ -244,7 +244,7 @@ class BaseRule(ABC):
                 # The second step prevents changes being made.
                 for changed_field in newpvstate.changedSet():
                     if changed_field.startswith(field):
-                        newpvstate[changed_field] = oldpvstate[changed_field]
+                        newpvstate[changed_field] = pv.current().raw[changed_field]
                         newpvstate.mark(changed_field, False)
 
         return RulesFlow.CONTINUE
