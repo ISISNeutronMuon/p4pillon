@@ -111,6 +111,9 @@ def assert_enum_value_changed(pvname: str, put_value: dict, put_timestamp: float
     pv_state = ctx.get(pvname)
     current_value = pv_state.raw.todict()["value"]
     assert put_value == current_value
+    print(
+        f"time from PV = {pv_state.timestamp}, time at put = {put_timestamp}, diff = {pv_state.timestamp - put_timestamp}"
+    )
     assert pv_state.timestamp >= put_timestamp
 
 

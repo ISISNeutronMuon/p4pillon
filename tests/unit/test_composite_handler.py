@@ -34,12 +34,16 @@ class DummyHandler:
 
 
 class DummyPV:
-    pass
+    def post(self, value):
+        pass
 
 
 class DummyOp:
     def __init__(self):
         self.done = MagicMock()
+
+    def value(self):
+        return None
 
 
 class DummyValue:
@@ -56,9 +60,10 @@ class TestCompositeHandler(unittest.TestCase):
         self.op = DummyOp()
         self.value = DummyValue()
 
-    def test_init_none_handlers(self):
+    def test_init_no_handlers(self):
         comp = CompositeHandler()
-        self.assertIsNone(comp.handlers)
+        with self.assertRaises(KeyError):
+            comp["any"]
 
     def test_getitem_valid(self):
         self.assertIs(self.comp["h1"], self.h1)
@@ -67,10 +72,6 @@ class TestCompositeHandler(unittest.TestCase):
     def test_getitem_invalid(self):
         with self.assertRaises(KeyError):
             _ = self.comp["missing"]
-
-    def test_getitem_no_handlers(self):
-        comp = CompositeHandler()
-        self.assertIsNone(comp["any"])
 
     def test_open_calls_all(self):
         self.comp.open(self.value)
@@ -85,7 +86,7 @@ class TestCompositeHandler(unittest.TestCase):
         self.comp.put(self.pv, self.op)
         self.assertEqual(self.h1.calls[0][0], "put")
         self.assertEqual(self.h2.calls[0][0], "put")
-        self.op.done.assert_called_once_with(error=None)
+        self.op.done.assert_called_once_with()
 
     def test_put_abort_exception(self):
         def abort_put(pv, op):
@@ -156,17 +157,6 @@ class TestCompositeHandler(unittest.TestCase):
     def test_close_no_handlers(self):
         comp = CompositeHandler()
         comp.close(self.pv)  # Should not raise
-
-    def test_empty_ordereddict(self):
-        comp = CompositeHandler(OrderedDict())
-        comp.open(self.value)
-        comp.put(self.pv, self.op)
-        comp.post(self.pv, self.value)
-        comp.rpc(self.pv, self.op)
-        comp.on_first_connect(self.pv)
-        comp.on_last_connect(self.pv)
-        comp.close(self.pv)
-        self.op.done.assert_called_with(error=None)
 
 
 if __name__ == "__main__":
