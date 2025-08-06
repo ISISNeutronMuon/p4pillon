@@ -119,6 +119,40 @@ def test_field_change(pvname, yaml_server, pv_config, ctx):
         pytest.xfail(reason="Currently unable to change fields in NTScalarArrays")
 
 
+def test_alarm_limit_change_readonly(basic_server, ctx):
+    # for each PV that is alarmed, we change the upper alarm limit on the PV
+    # and check if setting the value to something above/below that triggers
+    # the correct alarm state
+    pvname = "TEST:ALARM:LIMIT:PV"
+
+    alarm_config = {
+        "low_alarm": -9,
+        "low_warning": -4,
+        "high_warning": 4,
+        "high_alarm": 9,
+    }
+    pv_double1 = PVScalarRecipe(PVTypes.DOUBLE, "An example alarmed PV", 0)
+    pv_double1.set_alarm_limits(**alarm_config)
+    basic_server.add_pv(pvname, pv_double1)
+
+    # TODO: This is a very messy way of making a rule not read_only!
+    basic_server[pvname]._handler["alarm_limit"].read_only = True
+
+    basic_server.start()
+
+    ctx.put(pvname, -5)
+    assert_pv_in_minor_alarm_state(pvname, ctx)
+
+    put_metadata(ctx, pvname, "valueAlarm.lowWarningLimit", -6)
+    assert_pv_in_minor_alarm_state(pvname, ctx)
+
+    ctx.put(pvname, -10)
+    assert_pv_in_major_alarm_state(pvname, ctx)
+
+    put_metadata(ctx, pvname, "valueAlarm.lowAlarmLimit", -11)
+    assert_pv_in_major_alarm_state(pvname, ctx)
+
+
 def test_alarm_limit_change(basic_server, ctx):
     # for each PV that is alarmed, we change the upper alarm limit on the PV
     # and check if setting the value to something above/below that triggers
@@ -134,6 +168,9 @@ def test_alarm_limit_change(basic_server, ctx):
     pv_double1 = PVScalarRecipe(PVTypes.DOUBLE, "An example alarmed PV", 0)
     pv_double1.set_alarm_limits(**alarm_config)
     basic_server.add_pv(pvname, pv_double1)
+
+    # TODO: This is a very messy way of making a rule not read_only!
+    basic_server[pvname]._handler["alarm_limit"].read_only = False
 
     basic_server.start()
 
