@@ -40,9 +40,9 @@ finally:
 ```
 The initial state of the PVs may be examined using the commands:
 ```console
-$> python -m p4p.client.cli get demo:pv:1
+$ python -m p4p.client.cli get demo:pv:1
 demo:pv:1 Thu Aug 14 22:20:28 2025 17.5
-$> python -m p4p.client.cli get demo:pv:2
+$ python -m p4p.client.cli get demo:pv:2
 demo:pv:2 Thu Aug 14 22:20:28 2025 -10.0
 ```
 
@@ -93,7 +93,9 @@ python -m p4p.client.cli --raw get demo:pv:name
 Note that we use the `--raw` option to see the full structure of the PV rather than a summary.
 
 You should see output like this:
-```
+```console
+$ python -m p4p.client.cli --raw get demo:pv:name
+
 demo:pv:name struct "epics:nt/NTScalar:1.0" {
     double value = 2.2
     struct "alarm_t" {
@@ -126,19 +128,20 @@ demo:pv:name struct "epics:nt/NTScalar:1.0" {
 }
 ```
 This shows that the PV has been constructed as expected and is reporting the correct value and other settings. However, if we drop off the `--raw` option in the get command and examine the output an issue becomes more obvious. Note that the timestamp is incorrect.
-```
+```console
+$ python -m p4p.client.cli get demo:pv:name
 demo:pv:name Thu Jan  1 00:00:00 1970 2.2
 ```
 Let's now try putting a value to the PV and then checking the result:
-```
-> python -m p4p.client.cli put demo:pv:name=6.6
+```console
+$ python -m p4p.client.cli put demo:pv:name=6.6
 demo:pv:name=6.6 ok
-> python -m p4p.client.cli get demo:pv:name
+$ python -m p4p.client.cli get demo:pv:name
 demo:pv:name Thu Jan  1 00:00:00 1970 6.6
 ```
 We can observe that the value has correctly changed, but that the timestamp remains incorrect. Let's take another more detailed look at the full structure:
-```
-> python -m p4p.client.cli --raw get demo:pv:name
+```console
+$ python -m p4p.client.cli --raw get demo:pv:name
 
 demo:pv:name struct "epics:nt/NTScalar:1.0" {
     double value = 6
@@ -183,9 +186,10 @@ Examine the PV's `alarm` field:
 The value of 6.6 is over the `valueAlarm.highWarningLimit` but the alarm severity, status, and message do not reflect this. 
 
 Similarly if we set the value of the PV to 12.7...
-```
-> python -m p4p.client.cli put demo:pv:name=12.7
-> python -m p4p.client.cli --raw get demo:pv:name
+```console
+$ python -m p4p.client.cli put demo:pv:name=12.7
+demo:pv:name=12.7 ok
+$ python -m p4p.client.cli --raw get demo:pv:name
 
 demo:pv:name struct "epics:nt/NTScalar:1.0" {
     double value = 12.7
@@ -240,8 +244,8 @@ Server.forever(
 Note that we have replaced the `SharedPV` with a `SharedNT` from p4p_ext, and that we have removed the `handle` function with the `@pv.put` decorator.
 
 Let's examine the results of the same commands as above:
-```
-> python -m p4p.client.cli --raw get demo:pv:name
+```console
+$ python -m p4p.client.cli --raw get demo:pv:name
 
 demo:pv:name struct "epics:nt/NTScalar:1.0" {
     double value = 2.2
@@ -274,19 +278,18 @@ demo:pv:name struct "epics:nt/NTScalar:1.0" {
     } valueAlarm
 }
 
-> python -m p4p.client.cli get demo:pv:name
-
+$ python -m p4p.client.cli get demo:pv:name
 demo:pv:name Thu Aug 14 21:24:33 2025 2.2
 ```
 The timestamp is already being set correctly.
 
 Let's try the other commands...
-```
-> python -m p4p.client.cli put demo:pv:name=6.6
+```console
+$ python -m p4p.client.cli put demo:pv:name=6.6
 demo:pv:name=6.6 ok
-> python -m p4p.client.cli get demo:pv:name
+$ python -m p4p.client.cli get demo:pv:name
 demo:pv:name Thu Aug 14 21:30:29 2025 6.6
-> python -m p4p.client.cli --raw get demo:pv:name
+$ python -m p4p.client.cli --raw get demo:pv:name
 demo:pv:name struct "epics:nt/NTScalar:1.0" {
     double value = 6.6
     struct "alarm_t" {
