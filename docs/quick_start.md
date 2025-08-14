@@ -144,7 +144,7 @@ We can observe that the value has correctly changed, but that the timestamp rema
 $ python -m p4p.client.cli --raw get demo:pv:name
 
 demo:pv:name struct "epics:nt/NTScalar:1.0" {
-    double value = 6
+    double value = 6.6
     struct "alarm_t" {
         int32_t severity = 0
         int32_t status = 0
