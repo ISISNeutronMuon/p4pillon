@@ -1,3 +1,10 @@
+# /// script
+# dependencies = [
+#   "p4p",
+#   "p4p_ext@git+https://github.com/ISISNeutronMuon/p4p_ext",
+# ]
+# ///
+
 import asyncio
 
 from p4p.server import Server, StaticProvider

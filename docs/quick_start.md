@@ -1,9 +1,16 @@
 # Quick Start
-p4p_ext is a library written using [p4p](https://epics-base.github.io/p4p/) which implements the logic of NormativeTypes. This makes it easier to create PVA Servers, i.e. create PVs to report information to other EPICS tools or which take input from such a source.
+The example below requires only the installation of the p4p and p4p_ext Python packages. If using `uv` the command `uv run .\examples\quick_start\start.py` should start the server script.
 
 ## Example
 The example below creates two PVs, `demo:pv:1` and `demo:pv:2`. It sets the first up with alarm and control limits. The second PV is identical to the first except it has a different initial value and is set as read only. This script may be found in the `examples/quick_start` directory and is called `start.py`.
 ```py
+# /// script
+# dependencies = [
+#   "p4p",
+#   "p4p_ext@git+https://github.com/ISISNeutronMuon/p4p_ext",
+# ]
+# ///
+
 import asyncio
 
 from p4p.server import Server, StaticProvider
@@ -45,12 +52,25 @@ demo:pv:1 Thu Aug 14 22:20:28 2025 17.5
 $ python -m p4p.client.cli get demo:pv:2
 demo:pv:2 Thu Aug 14 22:20:28 2025 -10.0
 ```
+We can attempt to set values and verify what effect that has:
+```
+$ python -m p4p.client.cli put demo:pv:1=101
+demo:pv:1=101 ok
+$ python -m p4p.client.cli get demo:pv:1
+demo:pv:1 Sun Aug 17 14:04:08 2025 100.0
+$ python -m p4p.client.cli put demo:pv:2=13
+demo:pv:2=13 Error: This PV is read-only
+$ python -m p4p.client.cli get demo:pv:2
+demo:pv:2 Sun Aug 17 13:59:55 2025 -10.0
+```
 
-## Explanation
-The p4p library provides an Python interface to the pvAccess protocol and the structure of the Normative types. But it does not implement the logic of the Normative Types. We illustrate what that means below.
+To examine 
+
+## How p4p_ext extends p4p
+The p4p library provides an Python interface to the pvAccess protocol and the structure of the Normative types. It does not implement the logic of the Normative Types. We illustrate what that means below.
 
 ### SharedPV
-We here repeat the simple "mailbox" PV from the [p4p Server Example](https://epics-base.github.io/p4p/server.html#example) with some small changes to the SharedPV. We add in additional fields (`control` and `valueAlarm`) and set them with initial values. This script is available in the `examples/quick_start` directory as `mailbox_sharedpv.py`. Note that this example uses [threads](https://docs.python.org/3/library/threading.html), whereas the example in the previous section, above, uses [asyncio](https://docs.python.org/3/library/asyncio.html).
+We here repeat the simple "mailbox" PV from the [p4p Server Example](https://epics-base.github.io/p4p/server.html#example) with some small changes to the SharedPV variable `pv`. We add in additional fields (`control` and `valueAlarm`) and set them with initial values. This script is available in the `examples/quick_start` directory as `mailbox_sharedpv.py`. Note that this example uses [threads](https://docs.python.org/3/library/threading.html), whereas the example in the previous section, above, uses [asyncio](https://docs.python.org/3/library/asyncio.html).
 
 ```py
 from p4p.nt import NTScalar
@@ -183,7 +203,7 @@ Examine the PV's `alarm` field:
         string message = ""
     } alarm
 ```
-The value of 6.6 is over the `valueAlarm.highWarningLimit` but the alarm severity, status, and message do not reflect this. 
+The value of 6.6 is over the `valueAlarm.highWarningLimit`of 5 but the alarm severity, status, and message do not reflect this. 
 
 Similarly if we set the value of the PV to 12.7...
 ```console
@@ -210,7 +230,7 @@ demo:pv:name struct "epics:nt/NTScalar:1.0" {
 
 The value has been set to 12.7, despite the `control.limitHigh` being 10 which should not permit values above 10.0. Similarly the alarm severity, status, and message, and the timestamp remain unchanged. 
 
-The PV's Normative Type fields are present, but they do not do anything.
+The PV's Normative Type fields are present, but the logic implied by their presence is not implemented.
 
 ### SharedNT
 Let's try implementing the same simple "mailbox" server with p4p_ext. This file is available in the `examples/quick_start` directory and is called `mailbox_sharednt.py`.
@@ -307,7 +327,7 @@ demo:pv:name struct "epics:nt/NTScalar:1.0" {
 ```
 ... again truncating fields which have not changed.
 
-Notice that the alarm severity and message have been set.
+When you `put` the value the timestamp on the PV should reflect that time. Notice that the alarm severity and message have been set. 
 
 ```console
 $ python -m p4p.client.cli put demo:pv:name=12.7
@@ -330,4 +350,4 @@ demo:pv:name struct "epics:nt/NTScalar:1.0" {
     [...]
 }
 ```
-The value has been limited to 10, the alarm severity has been updated to a value of 2 (i.e. MAJOR), and the timestamp has been set.
+The value has been limited to 10, the alarm severity has been updated to a value of 2 (i.e. MAJOR), and the timestamp has been updated appropriately.

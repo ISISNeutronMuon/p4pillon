@@ -62,83 +62,80 @@ class CitiesHandler(Handler):
 
     def put(self, pv: SharedPV, op):
         # This simply enables the put operation to work for the NTEnum PV.
-        # pv.post(op.value())
-        op.done()
+        pass
 
 
-class SetupPVs:
-    def __init__(self, loop: asyncio.AbstractEventLoop):
-        self._loop = loop
-        self._provider = StaticProvider()
+async def setup_pvs() -> StaticProvider:
+    """
+    Initialise the PVs and return a StaticProvider ready to go.
+    """
+    provider = StaticProvider()
 
-        self._loop.run_until_complete(asyncio.wait_for(self.asyncSetUp(), 5))
+    cities = ["New York", "Bergen", "Cairo", "Tokyo", "Auckland"]
 
-    @property
-    def providers(self) -> tuple[StaticProvider]:
-        return (self._provider,)
+    weather = await get_weather_forecast(cities[0])
+    temperatures = await get_today_temperatures(weather)
+    rainchances = await get_today_rainchances(weather)
+    max_rainchance, umbrella_needed = await get_umbrella_advice(list(rainchances.values()))
 
-    async def asyncSetUp(self):
-        cities = ["New York", "Bergen", "Cairo", "Tokyo", "Auckland"]
+    temperatures_pv = SharedNT(
+        nt=NTScalar("ai", display=True, valueAlarm=True),
+        initial={
+            "value": list(temperatures.values()),
+            "display.description": "Forecast temperature every 3 hours",
+            "display.units": "C",
+            "valueAlarm.active": True,
+            "valueAlarm.highAlarmLimit": 25,
+            "valueAlarm.highAlarmSeverity": 2,
+            "valueAlarm.highWarningLimit": 18,
+            "valueAlarm.highWarningSeverity": 1,
+            "valueAlarm.lowWarningLimit": 5,
+            "valueAlarm.lowWarningSeverity": 1,
+            "valueAlarm.lowAlarmLimit": 0,
+            "valueAlarm.lowAlarmSeverity": 2,
+        },
+    )
+    rainchance_pv = SharedNT(
+        nt=NTScalar("d", display=True, valueAlarm=True),
+        initial={
+            "value": max_rainchance,
+            "display.description": "Forecast maximum chance of rain",
+            "display.units": "%",
+            "valueAlarm.active": True,
+            "valueAlarm.highAlarmLimit": 20,
+            "valueAlarm.highAlarmSeverity": 2,
+        },
+    )
+    umbrella_pv = SharedNT(nt=NTEnum(), initial={"index": umbrella_needed, "choices": ["Not Needed", "Needed"]})
 
-        weather = await get_weather_forecast(cities[0])
-        temperatures = await get_today_temperatures(weather)
-        rainchances = await get_today_rainchances(weather)
-        max_rainchance, umbrella_needed = await get_umbrella_advice(list(rainchances.values()))
+    cities_handler = CitiesHandler(temperatures_pv, rainchance_pv, umbrella_pv)
+    cities_pv = SharedNT(
+        nt=NTEnum(), initial={"index": 0, "choices": cities}, user_handlers={"city_change": cities_handler}
+    )
 
-        temperatures_pv = SharedNT(
-            nt=NTScalar("ai", valueAlarm=True),
-            initial={
-                "value": list(temperatures.values()),
-                "valueAlarm.active": True,
-                "valueAlarm.highAlarmLimit": 25,
-                "valueAlarm.highAlarmSeverity": 2,
-                "valueAlarm.highWarningLimit": 18,
-                "valueAlarm.highWarningSeverity": 1,
-                "valueAlarm.lowWarningLimit": 5,
-                "valueAlarm.lowWarningSeverity": 1,
-                "valueAlarm.lowAlarmLimit": 0,
-                "valueAlarm.lowAlarmSeverity": 2,
-            },
-        )
-        rainchance_pv = SharedNT(
-            nt=NTScalar("d", valueAlarm=True),
-            initial={
-                "value": max_rainchance,
-                "valueAlarm.active": True,
-                "valueAlarm.highAlarmLimit": 20,
-                "valueAlarm.highAlarmSeverity": 2,
-            },
-        )
-        umbrella_pv = SharedNT(nt=NTEnum(), initial={"index": umbrella_needed, "choices": ["Not Needed", "Needed"]})
+    provider.add("demo:temperatures", temperatures_pv)
+    provider.add("demo:city", cities_pv)
+    provider.add("demo:rainchance", rainchance_pv)
+    provider.add("demo:umbrella", umbrella_pv)
 
-        cities_handler = CitiesHandler(temperatures_pv, rainchance_pv, umbrella_pv)
-        cities_pv = SharedNT(
-            nt=NTEnum(), initial={"index": 0, "choices": cities}, user_handlers={"city_change": cities_handler}
-        )
-
-        self._provider.add("demo:temperatures", temperatures_pv)
-        self._provider.add("demo:city", cities_pv)
-        self._provider.add("demo:rainchance", rainchance_pv)
-        self._provider.add("demo:umbrella", umbrella_pv)
+    return provider
 
 
-def main():
-    loop = asyncio.new_event_loop()
-    provider_wrapper = SetupPVs(loop)
+async def main():
+    """
+    Asynchronous main function.
+    Sets up the PVs in a StaticProvider and keeps a Server running until interrupted.
+    """
+    provider = await setup_pvs()
 
     try:
-        # `Server.forever()` is for p4p threading and shouldn't
-        # be used with async.
-        server = Server(provider_wrapper.providers)
+        server = Server((provider,))
         with server:
-            done = asyncio.Event()
-
-            # loop.add_signal_handler(signal.SIGINT, done.set)
-            # loop.add_signal_handler(signal.SIGTERM, done.set)
-            loop.run_until_complete(done.wait())
+            while True:
+                await asyncio.sleep(1)
     finally:
-        loop.close()
+        pass
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
