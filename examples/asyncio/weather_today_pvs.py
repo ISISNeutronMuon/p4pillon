@@ -3,7 +3,6 @@ import asyncio
 from p4p import Value
 from p4p.nt import NTEnum, NTScalar
 from p4p.server import Server, StaticProvider
-from p4p.server.asyncio import SharedPV
 from p4p.server.raw import Handler
 
 from examples.asyncio.weather_today import (
@@ -22,7 +21,7 @@ class CitiesHandler(Handler):
     temperatures and rain chances PVs accordingly.
     """
 
-    def __init__(self, temperatures_pv: SharedPV, rainchance_pv: SharedPV, umbrella_pv: SharedPV):
+    def __init__(self, temperatures_pv: SharedNT, rainchance_pv: SharedNT, umbrella_pv: SharedNT):
         self._temperatures_pv = temperatures_pv
         self._rainchance_pv = rainchance_pv
         self._umbrella_pv = umbrella_pv
@@ -39,7 +38,7 @@ class CitiesHandler(Handler):
         self._rainchance_pv.post(max_rainchance)
         self._umbrella_pv.post(umbrella_needed)
 
-    async def post_async(self, pv: SharedPV, value: Value):
+    async def post_async(self, pv: SharedNT, value: Value):
         """Handle the post operation task asynchronously."""
         if value.changed("value.index"):
             cities = pv.current().raw["value.choices"]
@@ -55,12 +54,12 @@ class CitiesHandler(Handler):
         task = loop.create_task(self.update_weather(city))
         task.add_done_callback(lambda x: x)
 
-    def post(self, pv: SharedPV, value):
+    def post(self, pv: SharedNT, value):
         loop = asyncio.get_running_loop()
         task = loop.create_task(self.post_async(pv, value))
         task.add_done_callback(lambda x: x)
 
-    def put(self, pv: SharedPV, op):
+    def put(self, pv: SharedNT, op):
         # This simply enables the put operation to work for the NTEnum PV.
         pass
 
@@ -96,7 +95,7 @@ async def setup_pvs() -> StaticProvider:
         },
     )
     rainchance_pv = SharedNT(
-        nt=NTScalar("d", display=True, valueAlarm=True),
+        nt=NTScalar("i", display=True, valueAlarm=True),
         initial={
             "value": max_rainchance,
             "display.description": "Forecast maximum chance of rain",
