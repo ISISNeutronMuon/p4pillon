@@ -2,7 +2,7 @@
 Let's work through an example of using p4p_ext to add an EPICS interface to existing Python code. By necessity this will be a relatively simple example, but should give an idea of the kind of approach that may be used.
 
 ## Forecast and Umbrella
-For our example, we will be adapting a program that informs a user about the probability of rain today and whether they will need an umbrella. Run `weather_today` with your local city to see its output, e.g.
+For our example, we will be adapting a program that informs a user about the probability of rain today and whether they will need an umbrella. Run `weather_today` with your local city as an argument to see its output, e.g.
 ```shell
 $  python -m examples.asyncio.weather_today "Oxford"
 ### Today's Weather Forecast for Oxford ###
