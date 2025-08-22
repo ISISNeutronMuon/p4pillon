@@ -1,0 +1,8 @@
+title: p4p_ext
+description: Opinionated extensions and additional functionality for the p4p library.
+theme: just-the-docs
+
+url: https://https://isisneutronmuon.github.io/p4p_ext/
+
+aux_links: # remove if you don't want this link to appear on your pages
+  Template Repository: https://github.com/ISISNeutronMuon/p4p_ext/
