@@ -1,5 +1,5 @@
 ---
-title: p4p_ext
+title: Adding EPICS to existing code
 back_to_top: true
 back_to_top_text: "Back to top"
 ---
@@ -12,7 +12,7 @@ Let's work through an example of using p4p_ext to add an EPICS interface to exis
 1. TOC
 {:toc}
 
-## Forecast and Umbrella
+## Weather Forecast for a City
 For our example, we will be adapting a program that informs a user about the probability of rain today and whether they will need an umbrella. Run `weather_today` with your local city as an argument to see its output, e.g.
 ```shell
 $  python -m examples.interface.weather_today "Oxford"
@@ -48,7 +48,7 @@ Given a list of rain probabilities (i.e. the values from the dict returned by `g
 
 There are also `print_forecast()` and `main()` functions, but these will not be relevant to adapting the existing code with an EPICS interface.
 
-## What the EPICS Interface will look like
+## Defining the EPICS Interface
 We need to decide what our EPICS interface will look like. Some of these decisions will be motivated by needing to demonstrate aspects of p4p_ext, but they should still make sense.
 
 Here's our design:
