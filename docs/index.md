@@ -6,7 +6,7 @@ It is recommended that developers have a basic understanding of a number of EPIC
 * Normative Types, a brief introduction is provided here.
 * [p4p](https://epics-base.github.io/p4p/index.html) - a Python implementation of the pvAccess protocol and Normative Type structures, amongst other things.
 
-## Components
+## Components 
 p4p_ext provides the following user tools:
 
 * SharedNT - provides a version of p4p's SharedPV that implements the logic of Normative Types through the use of p4p Handlers.
