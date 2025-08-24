@@ -1,3 +1,8 @@
+---
+title: p4p_ext
+nav_order: 1
+---
+
 # p4p_ext
 p4p_ext is a library written using [p4p](https://epics-base.github.io/p4p/) which implements the logic of Normative Types. This makes it easier to create PVA Servers, i.e. create PVs to report information to other EPICS tools or which take input from such a source. The PVs created using p4p_ext are able to apply control limits, trigger value alarms, etc.
 
@@ -19,7 +24,7 @@ There are also some developer tools which may be useful outside of p4p:
 * Rules - a specialised version of a Handler which makes common Handler patterns easier to implement.
 
 ## Warnings 
-> [!CAUTION]
+{: .warning }
 > SharedNT is not an alternative to the Process Database implemented in a traditional EPICS IOC. Although the Normative Type logic is implemented, it does not implement locking. This means that in the case of multiple simultaneous updates it is possible for a PV to become inconsistent. At this time we suggest that the SharedNT code be used for rapid prototyping and systems where consistency/reliability are not critical.
 
 ## Installation

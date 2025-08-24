@@ -104,7 +104,7 @@ $ python -m p4p.client.cli get demo:city
 to check the PV has changed as expected.
 
 ## Adding the Other PVs
-Let's modify the `setup_pvs` function to add the other PVs discussed. We will initialise their values based on the value of the `demo:city` PV, so this will also be out first point tying into the code we were going to adapt.
+Let's modify the `setup_pvs` function to add the other PVs discussed. We will initialise their values based on the value of the `demo:city` PV, so this will also be our first time interfacing with the weather code we are going to adapt.
 ```py
 async def setup_pvs() -> StaticProvider:
     """

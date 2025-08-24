@@ -1,3 +1,8 @@
+---
+title: Quick Start
+nav_order: 2
+---
+
 # Quick Start
 The example below requires only the installation of the p4p and p4p_ext Python packages. If using `uv` the command `uv run .\examples\quick_start\start.py` should start the server script.
 
