@@ -42,10 +42,8 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
-        pip install git+https://github.com/ISISNeutronMuon/p4p
         pip install .[test]
         PIP_PATH=$(which pip)
-        $PIP_PATH install .[test]
     - name: Run tests
       run: |
         PYTHON_PATH=$(which python)
