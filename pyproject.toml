@@ -9,7 +9,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "p4p",
+    "p4p>=4.2.1",
     "pyyaml>=6.0.2",
 ]
 classifiers = [
@@ -33,7 +33,7 @@ maintainers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/ISISNeutronMuon/p4p_ext"
+Repository = "https://github.com/epics-base/p4p"
 
 [project.optional-dependencies]
 test = [
@@ -45,8 +45,6 @@ dist = [
     "build>=1.2.2.post1",
     "twine>=6.1.0",
 ]
-[tool.uv.sources]
-p4p = { git = "https://github.com/ISISNeutronMuon/p4p" }
 
 ## Build system configuration
 [build-system]
@@ -85,5 +83,8 @@ extend-select = [
   "UP",  # pyupgrade
   "I", # isort
 ]
+
+[tool.uv.sources]
+p4p = { git = "https://github.com/epics-base/p4p" }
 
 

@@ -12,9 +12,9 @@ from typing import Generic, TypeVar
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
 
 from p4p.nt import NTEnum, NTScalar
-from p4p.server.asyncio import SharedPV as SharedPV_asyncio
-from p4p.server.thread import SharedPV as SharedPV_threaded
 
+from p4p_ext.server.asyncio import SharedPV as SharedPV_asyncio
+from p4p_ext.server.thread import SharedPV as SharedPV_threaded
 from p4p_ext.thread.sharednt import SharedNT
 
 from .definitions import (

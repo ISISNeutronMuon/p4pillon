@@ -2,8 +2,8 @@ from collections import OrderedDict
 
 import pytest
 from p4p.nt import NTEnum, NTScalar
-from p4p.server.raw import Handler
 
+from p4p_ext.server.raw import Handler
 from p4p_ext.thread.sharednt import SharedNT
 
 
