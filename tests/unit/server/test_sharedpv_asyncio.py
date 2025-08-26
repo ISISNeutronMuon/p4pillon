@@ -46,3 +46,8 @@ class TestAsyncioHandler:
         self.pv.open(5)
         self.pv.close(sync=True)
         assert self.handler.last_op == "close"
+
+    def teardown_method(self, _method):
+        self.pv.close()
+        del self.handler
+        del self.pv
