@@ -9,11 +9,11 @@ description = "Extensions to the p4p Server API, to aid in creation and managmen
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "p4p>=4.2.0",
-    "pyyaml>=6.0.2",
+    "p4p>=4.2",
+    "pyyaml>=6.0",
 ]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 3 - Alpha",
   "Environment :: Console",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: BSD License",
