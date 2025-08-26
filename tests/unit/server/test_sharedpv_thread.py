@@ -1,4 +1,3 @@
-
 from p4p.nt import NTScalar
 
 from p4p_ext.server.thread import Handler, SharedPV
@@ -47,4 +46,3 @@ class TestThreadHandler:
         self.pv.open(5)
         self.pv.close(sync=True)
         assert self.handler.last_op == "close"
-
