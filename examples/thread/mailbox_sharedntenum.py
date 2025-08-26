@@ -1,6 +1,6 @@
-from p4p.nt import NTEnum
 from p4p.server import Server
 
+from p4p_ext.nt import NTEnum
 from p4p_ext.thread.sharednt import SharedNT
 
 pv = SharedNT(
