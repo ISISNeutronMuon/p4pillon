@@ -7,11 +7,8 @@ from __future__ import annotations
 import logging
 from collections import OrderedDict
 
-from p4p.nt import NTBase, NTEnum, NTScalar
-from p4p.server.raw import Handler
-from p4p.server.thread import SharedPV
-
 from p4p_ext.composite_handler import CompositeHandler
+from p4p_ext.nt import NTBase, NTEnum, NTScalar
 from p4p_ext.nthandlers import ComposeableRulesHandler
 from p4p_ext.rules import (
     AlarmRule,
@@ -20,6 +17,8 @@ from p4p_ext.rules import (
     TimestampRule,
     ValueAlarmRule,
 )
+from p4p_ext.server.raw import Handler
+from p4p_ext.server.thread import SharedPV
 
 logger = logging.getLogger(__name__)
 

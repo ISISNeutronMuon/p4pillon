@@ -8,10 +8,10 @@ import logging
 
 from p4p.client.thread import Context
 from p4p.server import Server, StaticProvider
-from p4p.server.thread import SharedPV
 
 from p4p_ext.pvrecipe import BasePVRecipe
-from p4p_ext.server import BaseSimpleServer
+from p4p_ext.server.simpleserver import BaseSimpleServer
+from p4p_ext.server.thread import SharedPV
 
 logger = logging.getLogger(__name__)
 

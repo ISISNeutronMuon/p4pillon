@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from p4p.server.asyncio import SharedPV
-
 from p4p_ext.definitions import PVTypes
 from p4p_ext.nthandlers import NTEnumRulesHandler, NTScalarArrayRulesHandler, NTScalarRulesHandler
 from p4p_ext.pvrecipe import BasePVRecipe
 from p4p_ext.pvrecipe import PVScalarRecipe as _PVScalarRecipe
+from p4p_ext.server.asyncio import SharedPV
 
 
 class PVScalarRecipe(_PVScalarRecipe):

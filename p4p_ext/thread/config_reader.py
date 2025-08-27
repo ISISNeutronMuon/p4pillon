@@ -9,7 +9,7 @@ import yaml
 
 from p4p_ext.definitions import PVTypes
 from p4p_ext.pvrecipe import BasePVRecipe
-from p4p_ext.server import BaseSimpleServer
+from p4p_ext.server.simpleserver import BaseSimpleServer
 from p4p_ext.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
 
 logger = logging.getLogger(__name__)
