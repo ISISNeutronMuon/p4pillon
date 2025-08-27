@@ -9,7 +9,7 @@ Extensions to the [p4p](https://epics-base.github.io/p4p/) [Server API](https://
 
 p4p_ext may be installed via 
 ```console
-pip install p4p-ext
+$ pip install p4p-ext
 ```
 
 ### Python Version
@@ -46,27 +46,27 @@ Install the extra dependencies required for testing using `pip install .[test]` 
 To run tests invoke [pytest](https://docs.pytest.org/en/latest/):
 
 ```console
-python -m pytest tests
+$ python -m pytest tests
 ```
 or to run all tests and output a coverage report:
 ```
-uv run --extra=test python -m coverage run --source=. -m pytest -x tests
-uv run --extra=test python -m coverage report
+$ uv run --extra=test python -m coverage run --source=. -m pytest -x tests
+$ uv run --extra=test python -m coverage report
 ```
 
 ### Linting and Formatting
 This repository's CI/CD pipeling (using GitHub Actions) checks that source code meets PEP 8, and other more stringent, coding standards. This uses the [ruff](https://docs.astral.sh/ruff/) linter and code formatter. It is included in the `.[test] dependencies (see above) and may be manually invoked:
 
 ```console
-ruff check --fix
-ruff format
+$ ruff check --fix
+$ ruff format
 ```
 
 ## Releases
 The release process requires use of the `.[dist]` dependencies, which may be installed with `pip install .[dist]`. A build may then be triggered with `python -m build`. Alternatively, use:
 
 ```console
-uv run --extra=dist python -m build
+$ uv run --extra=dist python -m build
 ```
 
 Publication to either PyPi or TestPyPI is performed automatically via CI/CD (i.e. GitHub Actions) and is driven by tags. Any commit intended for package publication must be tagged with a unique tag, and the semantic version must be greater than any existing tag. 
