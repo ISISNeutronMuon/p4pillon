@@ -1,7 +1,3 @@
-## Notes
-# Consider removing `[tool.hatch.metadata] allow-direct-references = true` when 
-# the dependency on the p4p fork is no longer needed.
-
 [project]
 name = "p4p_ext"
 dynamic = ["version"]
