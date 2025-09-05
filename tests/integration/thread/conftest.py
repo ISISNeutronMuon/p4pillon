@@ -4,8 +4,8 @@ import pytest
 import yaml
 from p4p.client.thread import Context
 
-from p4p_ext.thread.config_reader import parse_config
-from p4p_ext.thread.server import SimpleServer
+from p4p_ext.config_reader import parse_config
+from p4p_ext.thread.server import server_ext
 
 root_dir = Path(__file__).parents[2]
 
@@ -27,7 +27,7 @@ def ntenum_config():
 
 
 @pytest.fixture()
-def enum_yaml_server(ntenum_config) -> SimpleServer:
+def enum_yaml_server(ntenum_config) -> server_ext:
     """fixture that handles creation and desctruction of server for use during tests"""
     # NOTE this could be tidied up by moving the tests into classes and using
     # setupclass and teardownclass methods as suggested here:
@@ -40,7 +40,7 @@ def enum_yaml_server(ntenum_config) -> SimpleServer:
 
 
 @pytest.fixture()
-def yaml_server(ntscalar_config) -> SimpleServer:
+def yaml_server(ntscalar_config) -> server_ext:
     """fixture that handles creation and desctruction of server for use during tests"""
     # NOTE this could be tidied up by moving the tests into classes and using
     # setupclass and teardownclass methods as suggested here:
@@ -53,8 +53,8 @@ def yaml_server(ntscalar_config) -> SimpleServer:
 
 
 @pytest.fixture()
-def basic_server() -> SimpleServer:
-    server = SimpleServer(
+def basic_server() -> server_ext:
+    server = server_ext(
         prefix="TEST:",
     )
     yield server
@@ -70,7 +70,7 @@ def ctx() -> Context:
 
 def start_server(config: dict):
     # NOTE this will be replaced by a more universal `parse_yaml` function or equivalent
-    server = SimpleServer(
+    server = server_ext(
         prefix="TEST:",
     )
     parse_config(config, server)

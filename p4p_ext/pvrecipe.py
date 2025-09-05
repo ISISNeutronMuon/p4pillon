@@ -11,10 +11,18 @@ from dataclasses import dataclass
 from typing import Generic, TypeVar
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
 
+from p4p_ext import concurrency
 from p4p_ext.nt import NTEnum, NTScalar
-from p4p_ext.server.asyncio import SharedPV as SharedPV_asyncio
-from p4p_ext.server.thread import SharedPV as SharedPV_threaded
-from p4p_ext.thread.sharednt import SharedNT
+
+if concurrency == 'thread':
+    from p4p_ext.server.thread import SharedPV
+    from p4p_ext.thread.sharednt import SharedNT
+elif concurrency == 'asyncio':
+    from p4p_ext.asyncio.sharednt import SharedNT
+    from p4p_ext.server.asyncio import SharedPV
+    
+else:
+    raise ValueError(f'Unknown value for concurrency: {concurrency}')
 
 from .definitions import (
     MAX_FLOAT,
@@ -28,7 +36,7 @@ from .definitions import (
 from .utils import time_in_seconds_and_nanoseconds
 
 NumericTypeT = TypeVar("NumericTypeT", int, Numeric)
-SharedPvT = TypeVar("SharedPvT", SharedPV_threaded, SharedPV_asyncio)
+SharedPvT = TypeVar("SharedPvT", bound=SharedPV)
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +175,7 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
         self.timestamp = Timestamp(timestamp)
 
 
-class PVScalarRecipe(BasePVRecipe, ABC):
+class PVScalarRecipe(BasePVRecipe):
     """Recipe to build an NTScalar"""
 
     def __post_init__(self):
@@ -175,6 +183,16 @@ class PVScalarRecipe(BasePVRecipe, ABC):
         if self.pvtype != PVTypes.DOUBLE and self.pvtype != PVTypes.INTEGER and self.pvtype != PVTypes.STRING:
             raise ValueError(f"Unsupported pv type {self.pvtype} for class {{self.__class__.__name__}}")
 
+    def create_pv(self, pv_name: str | None = None) -> SharedPV:
+        """Turn the recipe into an actual NTScalar, NTEnum, or
+        other BasePV derived object"""
+
+        self._config_display()
+        self._config_control()
+        self._config_alarm_limit()
+
+        return super().build_pv()
+    
     def set_control_limits(self, low: Numeric | None = None, high: Numeric | None = None, min_step=0):
         """
         Add control limits
@@ -328,3 +346,42 @@ class PVScalarRecipe(BasePVRecipe, ABC):
             self.config_settings["control.limitLow"] = self.control.limit_low
             self.config_settings["control.limitHigh"] = self.control.limit_high
             self.config_settings["control.minStep"] = self.control.min_step
+
+class PVScalarArrayRecipe(PVScalarRecipe):
+    """
+    A recipe for creating a PV of type NTScalar.
+
+    This class is used to create a PV that represents an array of scalar values,
+    allowing for the definition of initial values, descriptions, and other properties.
+    """
+
+    def create_pv(self, pv_name: str | None = None) -> SharedPV:
+        """Turn the recipe into an actual NTScalar with an array"""
+
+        self._config_display()
+        self._config_control()
+        self._config_alarm_limit()
+
+        if not isinstance(self.initial_value, list):
+            self.initial_value = [self.initial_value]
+
+        return super().build_pv()
+
+
+class PVEnumRecipe(BasePVRecipe):
+    """
+    A recipe for creating a PV of type NTEnum.
+
+    This class is used to create a PV that represents an enumeration type,
+    allowing for the definition of enum values and their corresponding labels.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        if not self.pvtype == PVTypes.ENUM:
+            raise ValueError(f"Unsupported pv type {self.pvtype} for class {{self.__class__.__name__}}")
+
+    def create_pv(self, pv_name: str | None = None) -> SharedPV:
+        """Turn the recipe into an actual NTEnum"""
+
+        return super().build_pv()

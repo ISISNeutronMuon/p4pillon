@@ -5,13 +5,13 @@ from unittest.mock import patch
 import pytest
 from p4p.server import StaticProvider
 
-from p4p_ext.thread.server import SimpleServer
+from p4p_ext.thread.server import server_ext
 
 root_dir = Path(__file__).parents[2]
 
 
 def test_server_instantiation():
-    server = SimpleServer(
+    server = server_ext(
         prefix="DEV:",
     )
     assert server.prefix == "DEV:"
@@ -28,7 +28,7 @@ def test_server_instantiation():
     [("TEST:PV"), ("DEV:TEST:PV")],
 )
 def test_server_retrieve_pvs(mock_recipe, pv_name):
-    server = SimpleServer(
+    server = server_ext(
         prefix="DEV:",
     )
     server.add_pv(pv_name, mock_recipe)
@@ -41,7 +41,7 @@ def test_server_retrieve_pvs(mock_recipe, pv_name):
 @patch("p4p_ext.thread.server.StaticProvider", autospec=True)
 @patch("p4p_ext.thread.server.Server", autospec=True)
 def test_server_start(server, provider, caplog, mock_ntpv):
-    test_server = SimpleServer(
+    test_server = server_ext(
         prefix="DEV:",
     )
 
@@ -62,7 +62,7 @@ def test_server_start(server, provider, caplog, mock_ntpv):
 @patch("p4p_ext.thread.server.Server", autospec=True)
 @patch("p4p_ext.pvrecipe.PVScalarRecipe", autospec=True)
 def test_server_add_pv(recipe, server, provider, caplog):
-    test_server = SimpleServer(
+    test_server = server_ext(
         prefix="DEV:",
     )
 
@@ -81,7 +81,7 @@ def test_server_add_pv(recipe, server, provider, caplog):
 @patch("p4p_ext.thread.server.StaticProvider", autospec=True)
 @patch("p4p_ext.thread.server.Server", autospec=True)
 def test_server_stop(server, provider, caplog, mock_ntpv):
-    test_server = SimpleServer(
+    test_server = server_ext(
         prefix="DEV:",
     )
 
@@ -102,7 +102,7 @@ def test_server_stop(server, provider, caplog, mock_ntpv):
 @patch("p4p_ext.thread.server.Server", autospec=True)
 @patch("p4p_ext.pvrecipe.PVScalarRecipe", autospec=True)
 def test_server_remove_pv(recipe, server, provider, caplog, mock_ntpv):
-    test_server = SimpleServer(
+    test_server = server_ext(
         prefix="DEV:",
     )
 

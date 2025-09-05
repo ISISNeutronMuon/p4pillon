@@ -8,14 +8,13 @@ from typing import Any
 import yaml
 
 from p4p_ext.definitions import PVTypes
-from p4p_ext.pvrecipe import BasePVRecipe
-from p4p_ext.server.simpleserver import BaseSimpleServer
-from p4p_ext.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
+from p4p_ext.pvrecipe import BasePVRecipe, PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
+from p4p_ext.server.server import server_ext
 
 logger = logging.getLogger(__name__)
 
 
-def parse_config_file(filename: str, server: BaseSimpleServer | None = None) -> dict[str, BasePVRecipe]:
+def parse_config_file(filename: str, server: server_ext | None = None) -> dict[str, BasePVRecipe]:
     """
     Parse a yaml file and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
@@ -27,7 +26,7 @@ def parse_config_file(filename: str, server: BaseSimpleServer | None = None) -> 
     return parse_config(pvconfigs, server)
 
 
-def parse_config_string(yaml_str: str, server: BaseSimpleServer | None = None) -> dict[str, BasePVRecipe]:
+def parse_config_string(yaml_str: str, server: server_ext | None = None) -> dict[str, BasePVRecipe]:
     """
     Parse a yaml string and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None
@@ -39,7 +38,7 @@ def parse_config_string(yaml_str: str, server: BaseSimpleServer | None = None) -
 
 
 def parse_config(
-    yaml_obj: dict[str, dict[str, Any]], server: BaseSimpleServer | None = None
+    yaml_obj: dict[str, dict[str, Any]], server: server_ext | None = None
 ) -> dict[str, BasePVRecipe]:
     """
     Parse a dictionary that has been filled using yaml.load() and return a dictionary of PVScalarRecipe objects.
