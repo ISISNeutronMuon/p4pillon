@@ -1,25 +1,19 @@
-# p4p_ext
+# p4pillon
 Extensions to the [p4p](https://epics-base.github.io/p4p/) [Server API](https://epics-base.github.io/p4p/server.html), to aid in creation and managment of pvAccess servers.  
 
-[![p4p_ext](https://github.com/ISISNeutronMuon/p4p_ext/actions/workflows/build.yaml/badge.svg)](https://github.com/ISISNeutronMuon/p4p_ext/actions/workflows/build.yaml)
+[![p4pillon](https://github.com/ISISNeutronMuon/p4pillon/actions/workflows/build.yaml/badge.svg)](https://github.com/ISISNeutronMuon/p4pillon/actions/workflows/build.yaml)
 
 ## Installation
-> [!NOTE]
-> Installation via pip is not yet available.
-
-p4p_ext may be installed via 
+p4pillon may be installed via 
 ```console
-$ pip install p4p-ext
+$ pip install p4pillon
 ```
 
 ### Python Version
 Requires Python 3.10 or later. These extensions make extensive use of [typing](https://docs.python.org/3/library/typing.html) and other recent Python features.
 
 ## Documentation
-> [!NOTE]
-> User documentation is not yet live.
-
-Documentation intended for developers using the library is available.  
+Documentation intended for developers using the library is available [here](https://isisneutronmuon.github.io/p4pillon/).  
 
 ### Extensions
 A brief overview of the components of the library.
@@ -38,11 +32,11 @@ p4p only allows a single `Handler` class to be associated with a `SharedPV`. To 
 
 `Rule`s are component `Handler`s used with the `CompositeHandler` used to implement the NT Logic discussed above. The `Rule` class is derived from the `Handler` class but implements a commonly encountered flow from `put()` (for identification and authorisation), to `put()` (for operations that require comparison between the current state of the PV and its possible future state), and `open()` (for operations that only need consider the possible future state of the PV).
 
-#### PVRecipe and SimpleServer
-`PVRecipe` is a factory method used to simplify creation of `SharedNT` objects, i.e. PVs that implement Normative Type logic. It may be used in conjunction with the `SimpleServer` class to simplify management of event loops and PV lifecycle.
+#### PVRecipe and Server
+`PVRecipe` is a factory method used to simplify creation of `SharedNT` objects, i.e. PVs that implement Normative Type logic. It may be used in conjunction with the p4pillon `Server` class to simplify management of event loops and PV lifecycle.
 
 #### 
-The `config_reader` parses a YAML file in order to construct `SharedNT` PVs which are managed by the `SimpleServer`. This is the simplest way to create and configure 
+The `config_reader` parses a YAML file in order to construct `SharedNT` PVs which are managed by the p4pillon `Server`. This is the simplest way to create and configure 
 
 ## Testing
 Install the extra dependencies required for testing using `pip install .[test]` or similar.
