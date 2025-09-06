@@ -11,8 +11,8 @@ from p4p import Value
 from p4p.nt import NTScalar
 from p4p.server import Server, ServerOperation
 
-from p4p_ext.nthandlers import Handler
-from p4p_ext.thread.sharednt import SharedNT
+from p4pillon.nthandlers import Handler
+from p4pillon.thread.sharednt import SharedNT
 
 
 class SimulatedHardware:

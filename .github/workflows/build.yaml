@@ -1,4 +1,4 @@
-name: p4p_ext
+name: p4pillon
 
 on: 
   push:

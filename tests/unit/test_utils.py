@@ -1,4 +1,4 @@
-from p4p_ext.utils import time_in_seconds_and_nanoseconds
+from p4pillon.utils import time_in_seconds_and_nanoseconds
 
 
 def test_time_in_seconds_and_nanoseconds():

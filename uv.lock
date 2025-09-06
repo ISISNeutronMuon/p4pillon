@@ -639,7 +639,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "p4p-ext"
+name = "p4pillon"
 source = { editable = "." }
 dependencies = [
     { name = "p4p" },

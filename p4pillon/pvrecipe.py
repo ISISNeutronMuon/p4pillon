@@ -11,10 +11,10 @@ from dataclasses import dataclass
 from typing import Generic, TypeVar
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
 
-from p4p_ext.nt import NTEnum, NTScalar
-from p4p_ext.server.asyncio import SharedPV as SharedPV_asyncio
-from p4p_ext.server.thread import SharedPV as SharedPV_threaded
-from p4p_ext.thread.sharednt import SharedNT
+from p4pillon.nt import NTEnum, NTScalar
+from p4pillon.server.asyncio import SharedPV as SharedPV_asyncio
+from p4pillon.server.thread import SharedPV as SharedPV_threaded
+from p4pillon.thread.sharednt import SharedNT
 
 from .definitions import (
     MAX_FLOAT,

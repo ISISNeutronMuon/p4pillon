@@ -1,4 +1,4 @@
-"""Enums used by p4p_ext"""
+"""Enums used by p4pillon"""
 
 from enum import Enum, IntEnum
 

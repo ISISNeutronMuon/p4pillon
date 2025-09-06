@@ -2,8 +2,8 @@ import logging
 
 from p4p.server import Server
 
-from p4p_ext.definitions import PVTypes
-from p4p_ext.thread.pvrecipe import PVScalarRecipe
+from p4pillon.definitions import PVTypes
+from p4pillon.thread.pvrecipe import PVScalarRecipe
 
 logging.basicConfig(level=logging.DEBUG)
 

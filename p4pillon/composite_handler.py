@@ -12,7 +12,7 @@ from collections import OrderedDict
 from p4p import Value
 from p4p.server import ServerOperation
 
-from p4p_ext.server.raw import Handler, SharedPV
+from p4pillon.server.raw import Handler, SharedPV
 
 
 class HandlerException(Exception):

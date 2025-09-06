@@ -1,6 +1,6 @@
 from p4p.nt import NTScalar
 
-from p4p_ext.server.thread import Handler, SharedPV
+from p4pillon.server.thread import Handler, SharedPV
 
 
 class TestThreadHandler:

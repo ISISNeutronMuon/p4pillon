@@ -10,8 +10,8 @@ import logging
 
 from p4p.server import Server, StaticProvider
 
-from p4p_ext.asyncio.pvrecipe import PVScalarRecipe
-from p4p_ext.definitions import PVTypes
+from p4pillon.asyncio.pvrecipe import PVScalarRecipe
+from p4pillon.definitions import PVTypes
 
 DEFAULT_TIMEOUT = 1
 

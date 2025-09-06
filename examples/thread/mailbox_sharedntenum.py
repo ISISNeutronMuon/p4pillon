@@ -1,7 +1,7 @@
 from p4p.server import Server
 
-from p4p_ext.nt import NTEnum
-from p4p_ext.thread.sharednt import SharedNT
+from p4pillon.nt import NTEnum
+from p4pillon.thread.sharednt import SharedNT
 
 pv = SharedNT(
     nt=NTEnum(display=True),  # scalar double
