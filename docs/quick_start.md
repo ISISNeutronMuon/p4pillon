@@ -4,7 +4,7 @@ nav_order: 2
 ---
 
 # Quick Start
-The example below requires only the installation of the p4p and p4p_ext Python packages. If using `uv` the command `uv run .\examples\quick_start\start.py` should start the server script.
+The example below requires only the installation of the p4p and p4pillon Python packages. If using `uv` the command `uv run .\examples\quick_start\start.py` should start the server script.
 
 ## Example
 The example below creates two PVs, `demo:pv:1` and `demo:pv:2`. It sets the first up with alarm and control limits. The second PV is identical to the first except it has a different initial value and is set as read only. This script may be found in the `examples/quick_start` directory and is called `start.py`.
@@ -12,7 +12,7 @@ The example below creates two PVs, `demo:pv:1` and `demo:pv:2`. It sets the firs
 # /// script
 # dependencies = [
 #   "p4p",
-#   "p4p_ext@git+https://github.com/ISISNeutronMuon/p4p_ext",
+#   "p4pillon@git+https://github.com/ISISNeutronMuon/p4pillon",
 # ]
 # ///
 
@@ -20,8 +20,8 @@ import asyncio
 
 from p4p.server import Server, StaticProvider
 
-from p4p_ext.asyncio.pvrecipe import PVScalarRecipe
-from p4p_ext.definitions import PVTypes
+from p4pillon.asyncio.pvrecipe import PVScalarRecipe
+from p4pillon.definitions import PVTypes
 
 loop = asyncio.new_event_loop()  # create the asyncio event loop
 
@@ -71,7 +71,7 @@ demo:pv:2 Sun Aug 17 13:59:55 2025 -10.0
 
 To examine 
 
-## How p4p_ext extends p4p
+## How p4pillon extends p4p
 The p4p library provides an Python interface to the pvAccess protocol and the structure of the Normative types. It does not implement the logic of the Normative Types. We illustrate what that means below.
 
 ### SharedPV
@@ -238,12 +238,12 @@ The value has been set to 12.7, despite the `control.limitHigh` being 10 which s
 The PV's Normative Type fields are present, but the logic implied by their presence is not implemented.
 
 ### SharedNT
-Let's try implementing the same simple "mailbox" server with p4p_ext. This file is available in the `examples/quick_start` directory and is called `mailbox_sharednt.py`.
+Let's try implementing the same simple "mailbox" server with p4pillon. This file is available in the `examples/quick_start` directory and is called `mailbox_sharednt.py`.
 ```py
 from p4p.nt import NTScalar
 from p4p.server import Server
 
-from p4p_ext.thread.sharednt import SharedNT
+from p4pillon.thread.sharednt import SharedNT
 
 pv = SharedNT(
     nt=NTScalar("d", control=True, valueAlarm=True),  # scalar double
@@ -266,7 +266,7 @@ Server.forever(
     ]
 )  # runs until KeyboardInterrupt
 ```
-Note that we have replaced the `SharedPV` with a `SharedNT` from p4p_ext, and that we have removed the `handle` function with the `@pv.put` decorator.
+Note that we have replaced the `SharedPV` with a `SharedNT` from p4pillon, and that we have removed the `handle` function with the `@pv.put` decorator.
 
 Let's examine the results of the same commands as above:
 ```console

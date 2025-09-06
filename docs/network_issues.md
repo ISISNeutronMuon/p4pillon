@@ -5,7 +5,7 @@ title: Network and Discovery Issues
 # Network Connection and Discovery Issues
 An EPICS control system is made of [many distributed components](https://docs.epics-controls.org/en/latest/software/epics-related-software.html), for example:
 
-- [IOC](https://docs.epics-controls.org/en/latest/appdevguide/gettingStarted.html)s or p4p_ext programs that create PVs and manage the interfaces to hardware or ML models.
+- [IOC](https://docs.epics-controls.org/en/latest/appdevguide/gettingStarted.html)s or p4pillon programs that create PVs and manage the interfaces to hardware or ML models.
 - Programs such as [Phoebus / CS-Studio](https://control-system-studio.readthedocs.io/en/latest/index.html), [EDM](https://controlssoftware.sns.ornl.gov/edm/), or [React Automation Studio](https://github.com/React-Automation-Studio/React-Automation-Studio) that present human-machine interfaces (HMIs), allowing operators to control remote systems. 
 - Alarm handlers and viewers.
 - Data archiving tools, e.g. [EPICS Archiver Appliance](https://epicsarchiver.readthedocs.io/).
@@ -14,7 +14,7 @@ An EPICS control system is made of [many distributed components](https://docs.ep
 The pvAccess protocol is used to communicate between these services running on a myriad of systems connected via a network. What is less obvious is that the pvAccess protocol also manages discovery of PVs. You may encounter issues when this discovery process breaks down. 
 
 ## Symptoms of Connection and Disovery Issues
-You have a server (e.g a p4p_ext program or IOC) and a client (e.g. `python -m p4p.client.cli get <pv>`, Phoebus, `pvget`, etc.). Although both the server and client appear to be working correctly, the client reports a `Timeout` when attempting to retrieve values from a PV on the server. This is the same error reported when attempting to retrieve values from a PV that definitely does not exist.
+You have a server (e.g a p4pillon program or IOC) and a client (e.g. `python -m p4p.client.cli get <pv>`, Phoebus, `pvget`, etc.). Although both the server and client appear to be working correctly, the client reports a `Timeout` when attempting to retrieve values from a PV on the server. This is the same error reported when attempting to retrieve values from a PV that definitely does not exist.
 
 Often the problem occurs in deployment. Everything works as expected in the local development environment, but clients cannot connect to the server in deployment.
 

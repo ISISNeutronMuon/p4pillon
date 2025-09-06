@@ -7,7 +7,7 @@ back_to_top_text: "Back to top"
 # Adding an EPICS Interface to existing Python Code
 {: .no_toc }
 
-Let's work through an example of using p4p_ext to add an EPICS interface to existing Python code. By necessity this will be a relatively simple example, but should give an idea of the kind of approach that may be used.
+Let's work through an example of using p4pillon to add an EPICS interface to existing Python code. By necessity this will be a relatively simple example, but should give an idea of the kind of approach that may be used.
 
 1. TOC
 {:toc}
@@ -49,7 +49,7 @@ Given a list of rain probabilities (i.e. the values from the dict returned by `g
 There are also `print_forecast()` and `main()` functions, but these will not be relevant to adapting the existing code with an EPICS interface.
 
 ## Defining the EPICS Interface
-We need to decide what our EPICS interface will look like. Some of these decisions will be motivated by needing to demonstrate aspects of p4p_ext, but they should still make sense.
+We need to decide what our EPICS interface will look like. Some of these decisions will be motivated by needing to demonstrate aspects of p4pillon, but they should still make sense.
 
 Here's our design:
 * input a city name. We will restrict the allowed cities to a pre-defined set of cities. This means that we can reduce our error-handling (how do we indicate a problem with getting a forecast for "New Frozenburg"?) and will also allow us to demonstrate use of an NTEnum. This PV will be called `demo:city` and will support puts, i.e is writeable. 
@@ -67,7 +67,7 @@ import asyncio
 from p4p.nt import NTEnum
 from p4p.server import Server, StaticProvider
 
-from p4p_ext.asyncio.sharednt import SharedNT
+from p4pillon.asyncio.sharednt import SharedNT
 
 
 async def setup_pvs() -> dict[str, SharedNT]:
@@ -136,7 +136,7 @@ from examples.asyncio.weather_today import (
     get_umbrella_advice,
     get_weather_forecast,
 )
-from p4p_ext.asyncio.sharednt import SharedNT
+from p4pillon.asyncio.sharednt import SharedNT
 
 async def setup_pvs() -> dict[str, SharedNT]:
     """
@@ -379,7 +379,7 @@ class CitiesHandler(Handler):
 ```
 The functions `open()`, `post()` and `put()` are present in the `Handler` parent class. 
 
-The `put()` function is trivial, it simply overrides the parent class with nothing! This is necessary because the default `Handler` `put()` rejects put operations, and we want to make it possible (later) for this `Handler` to allow users to change `demo:city`. Behind the scenes the SharedNT (or more precisely its `CompositeHandler`) calls our `post()` function. So, this `put()` is essentially the same in behaviour as the `post()` function. For more details on this, see the documentation on p4p_ext [Handlers](handlers).
+The `put()` function is trivial, it simply overrides the parent class with nothing! This is necessary because the default `Handler` `put()` rejects put operations, and we want to make it possible (later) for this `Handler` to allow users to change `demo:city`. Behind the scenes the SharedNT (or more precisely its `CompositeHandler`) calls our `post()` function. So, this `put()` is essentially the same in behaviour as the `post()` function. For more details on this, see the documentation on p4pillon [Handlers](handlers).
 
 The `open()` function is also relatively straightforward. It is called when the PV associated with the `Handler` is opened, i.e. when it is given a value. This is on construction in this example code. It creates an asyncio task which updates the other PVs in the background.
 
