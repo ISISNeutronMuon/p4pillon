@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
-from p4p_ext.pvrecipe import BasePVRecipe
-from p4p_ext.server.raw import SharedPV
+from p4pillon.pvrecipe import BasePVRecipe
+from p4pillon.server.raw import SharedPV
 
 
 class BaseSimpleServer(ABC):

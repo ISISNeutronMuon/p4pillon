@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from p4p.server import StaticProvider
 
-from p4p_ext.thread.server import SimpleServer
+from p4pillon.thread.server import SimpleServer
 
 root_dir = Path(__file__).parents[2]
 
@@ -38,8 +38,8 @@ def test_server_retrieve_pvs(mock_recipe, pv_name):
     assert server["DEV:TEST:PV"] == mock_recipe.create_pv.return_value
 
 
-@patch("p4p_ext.thread.server.StaticProvider", autospec=True)
-@patch("p4p_ext.thread.server.Server", autospec=True)
+@patch("p4pillon.thread.server.StaticProvider", autospec=True)
+@patch("p4pillon.thread.server.Server", autospec=True)
 def test_server_start(server, provider, caplog, mock_ntpv):
     test_server = SimpleServer(
         prefix="DEV:",
@@ -58,9 +58,9 @@ def test_server_start(server, provider, caplog, mock_ntpv):
     assert test_server._running is True
 
 
-@patch("p4p_ext.thread.server.StaticProvider", autospec=True)
-@patch("p4p_ext.thread.server.Server", autospec=True)
-@patch("p4p_ext.pvrecipe.PVScalarRecipe", autospec=True)
+@patch("p4pillon.thread.server.StaticProvider", autospec=True)
+@patch("p4pillon.thread.server.Server", autospec=True)
+@patch("p4pillon.pvrecipe.PVScalarRecipe", autospec=True)
 def test_server_add_pv(recipe, server, provider, caplog):
     test_server = SimpleServer(
         prefix="DEV:",
@@ -78,8 +78,8 @@ def test_server_add_pv(recipe, server, provider, caplog):
     assert caplog.messages[0] == "Added DEV:TEST:PV:2 to server"
 
 
-@patch("p4p_ext.thread.server.StaticProvider", autospec=True)
-@patch("p4p_ext.thread.server.Server", autospec=True)
+@patch("p4pillon.thread.server.StaticProvider", autospec=True)
+@patch("p4pillon.thread.server.Server", autospec=True)
 def test_server_stop(server, provider, caplog, mock_ntpv):
     test_server = SimpleServer(
         prefix="DEV:",
@@ -98,9 +98,9 @@ def test_server_stop(server, provider, caplog, mock_ntpv):
     assert test_server._running is False
 
 
-@patch("p4p_ext.thread.server.StaticProvider", autospec=True)
-@patch("p4p_ext.thread.server.Server", autospec=True)
-@patch("p4p_ext.pvrecipe.PVScalarRecipe", autospec=True)
+@patch("p4pillon.thread.server.StaticProvider", autospec=True)
+@patch("p4pillon.thread.server.Server", autospec=True)
+@patch("p4pillon.pvrecipe.PVScalarRecipe", autospec=True)
 def test_server_remove_pv(recipe, server, provider, caplog, mock_ntpv):
     test_server = SimpleServer(
         prefix="DEV:",

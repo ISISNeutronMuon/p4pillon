@@ -5,9 +5,9 @@ import numpy
 import pytest
 from p4p.nt import NTScalar
 
-from p4p_ext.definitions import AlarmSeverity
-from p4p_ext.rules import ControlRule, RulesFlow, ScalarToArrayWrapperRule, TimestampRule, ValueAlarmRule
-from p4p_ext.utils import overwrite_unmarked
+from p4pillon.definitions import AlarmSeverity
+from p4pillon.rules import ControlRule, RulesFlow, ScalarToArrayWrapperRule, TimestampRule, ValueAlarmRule
+from p4pillon.utils import overwrite_unmarked
 
 
 class TestTimestamp:

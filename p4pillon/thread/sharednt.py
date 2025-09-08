@@ -7,18 +7,18 @@ from __future__ import annotations
 import logging
 from collections import OrderedDict
 
-from p4p_ext.composite_handler import CompositeHandler
-from p4p_ext.nt import NTBase, NTEnum, NTScalar
-from p4p_ext.nthandlers import ComposeableRulesHandler
-from p4p_ext.rules import (
+from p4pillon.composite_handler import CompositeHandler
+from p4pillon.nt import NTBase, NTEnum, NTScalar
+from p4pillon.nthandlers import ComposeableRulesHandler
+from p4pillon.rules import (
     AlarmRule,
     ControlRule,
     ScalarToArrayWrapperRule,
     TimestampRule,
     ValueAlarmRule,
 )
-from p4p_ext.server.raw import Handler
-from p4p_ext.server.thread import SharedPV
+from p4pillon.server.raw import Handler
+from p4pillon.server.thread import SharedPV
 
 logger = logging.getLogger(__name__)
 

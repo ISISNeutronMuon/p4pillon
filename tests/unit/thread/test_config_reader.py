@@ -3,9 +3,9 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from p4p_ext.definitions import PVTypes
-from p4p_ext.thread.config_reader import parse_config
-from p4p_ext.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
+from p4pillon.definitions import PVTypes
+from p4pillon.thread.config_reader import parse_config
+from p4pillon.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
 
 
 @pytest.mark.parametrize(

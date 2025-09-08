@@ -22,8 +22,8 @@ from p4p import Type, Value
 from p4p.server import ServerOperation
 from p4p.server.raw import ServOpWrap, SharedPV
 
-from p4p_ext.definitions import AlarmSeverity
-from p4p_ext.utils import overwrite_marked, time_in_seconds_and_nanoseconds
+from p4pillon.definitions import AlarmSeverity
+from p4pillon.utils import overwrite_marked, time_in_seconds_and_nanoseconds
 
 logger = logging.getLogger(__name__)
 

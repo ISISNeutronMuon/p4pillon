@@ -2,9 +2,9 @@ from collections import OrderedDict
 
 import pytest
 
-from p4p_ext.nt import NTEnum, NTScalar
-from p4p_ext.server.raw import Handler
-from p4p_ext.thread.sharednt import SharedNT
+from p4pillon.nt import NTEnum, NTScalar
+from p4pillon.server.raw import Handler
+from p4pillon.thread.sharednt import SharedNT
 
 
 @pytest.mark.parametrize(

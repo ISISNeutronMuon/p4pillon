@@ -4,9 +4,9 @@ from unittest.mock import patch
 import pytest
 from p4p.nt import NTScalar
 
-from p4p_ext.composite_handler import CompositeHandler
-from p4p_ext.definitions import MAX_FLOAT, MAX_INT32, MIN_FLOAT, MIN_INT32, AlarmSeverity, Format, PVTypes
-from p4p_ext.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
+from p4pillon.composite_handler import CompositeHandler
+from p4pillon.definitions import MAX_FLOAT, MAX_INT32, MIN_FLOAT, MIN_INT32, AlarmSeverity, Format, PVTypes
+from p4pillon.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
 
 
 @pytest.mark.parametrize(

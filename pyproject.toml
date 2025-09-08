@@ -3,7 +3,7 @@
 # the dependency on the p4p fork is no longer needed.
 
 [project]
-name = "p4p_ext"
+name = "p4pillon"
 dynamic = ["version"]
 description = "Add your description here"
 readme = "README.md"
@@ -55,7 +55,7 @@ build-backend = "hatchling.build"
 version-file = "_version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["p4p_ext/"]
+packages = ["p4pillon/"]
 
 [tool.hatch.version]
 source = "vcs"

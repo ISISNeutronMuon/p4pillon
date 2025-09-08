@@ -1,6 +1,6 @@
 from p4p.nt import NTScalar
 
-from p4p_ext.server.asyncio import Handler, SharedPV
+from p4pillon.server.asyncio import Handler, SharedPV
 
 
 class TestAsyncioHandler:

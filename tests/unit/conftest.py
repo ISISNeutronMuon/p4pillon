@@ -11,19 +11,19 @@ def mock_recipe():
 
 @pytest.fixture
 def mock_server_op():
-    with patch("p4p_ext.handlers.ServerOperation", autospec=True) as server_op:
+    with patch("p4pillon.handlers.ServerOperation", autospec=True) as server_op:
         yield server_op
 
 
 @pytest.fixture
 def mock_server():
-    with patch("p4p_ext.server.Server", autospec=True) as server:
+    with patch("p4pillon.server.Server", autospec=True) as server:
         yield server
 
 
 @pytest.fixture
 def mock_ntpv():
-    with patch("p4p_ext.thread.sharednt.SharedNT", autospec=True) as shared_pv:
+    with patch("p4pillon.thread.sharednt.SharedNT", autospec=True) as shared_pv:
         yield shared_pv
 
 

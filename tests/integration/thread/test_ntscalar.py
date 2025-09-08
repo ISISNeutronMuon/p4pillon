@@ -16,9 +16,9 @@ from helpers import put_different_value_scalar, put_metadata
 from p4p._p4p import RemoteError
 from p4p.client.thread import Context
 
-from p4p_ext.definitions import PVTypes
-from p4p_ext.thread.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
-from p4p_ext.thread.server import SimpleServer
+from p4pillon.definitions import PVTypes
+from p4pillon.thread.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
+from p4pillon.thread.server import SimpleServer
 from tests.integration.thread.assertions import (
     assert_correct_alarm_config,
     assert_correct_control_config,

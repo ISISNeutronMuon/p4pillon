@@ -1,5 +1,5 @@
 """
-Test p4p_ext/handler.py
+Test p4pillon/handler.py
 WARNING: AI generated code, replace with proper test cases.
 """
 
@@ -7,7 +7,7 @@ import unittest
 from collections import OrderedDict
 from unittest.mock import MagicMock
 
-from p4p_ext.composite_handler import AbortHandlerException, CompositeHandler
+from p4pillon.composite_handler import AbortHandlerException, CompositeHandler
 
 
 class DummyHandler:

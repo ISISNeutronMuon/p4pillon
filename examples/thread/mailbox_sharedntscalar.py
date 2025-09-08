@@ -1,7 +1,7 @@
 from p4p.nt import NTScalar
 from p4p.server import Server
 
-from p4p_ext.thread.sharednt import SharedNT
+from p4pillon.thread.sharednt import SharedNT
 
 pv = SharedNT(
     nt=NTScalar(
