@@ -7,8 +7,9 @@ from __future__ import annotations
 import logging
 from collections import OrderedDict
 
+from p4p import Value
+
 from p4pillon.composite_handler import CompositeHandler
-from p4pillon.nt import NTBase, NTEnum, NTScalar
 from p4pillon.nthandlers import ComposeableRulesHandler
 from p4pillon.rules import (
     AlarmRule,
@@ -46,12 +47,19 @@ class SharedNT(SharedPV):
         else:
             handler = CompositeHandler()
 
-        if "nt" in kws:
-            nt: NTBase = kws["nt"]
+        if "nt" in kws or "initial" in kws:
+            nttype_str: str = ""
+            if kws.get("nt", None):
+                try:
+                    nttype_str = kws["nt"].type.getID()
+                except AttributeError:
+                    nttype_str = f"{type(kws['nt'])}"
+            else:
+                if isinstance(kws["initial"], Value):
+                    nttype_str = kws["initial"].getID()
 
-            match nt:
-                case NTScalar():
-                    nttype_str: str = nt.type.getID()
+            match nttype_str:
+                case s if s.startswith("epics:nt/NTScalar"):
                     if nttype_str.startswith("epics:nt/NTScalarArray"):
                         handler["control"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ControlRule()))
                         handler["alarm"] = ComposeableRulesHandler(
@@ -66,10 +74,12 @@ class SharedNT(SharedPV):
                         handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
                     else:
                         raise TypeError(f"Unrecognised NT type: {nttype_str}")
-                case NTEnum():
+                case s if s.startswith("epics:nt/NTEnum"):
                     handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
                 case _:
-                    raise NotImplementedError(f"SharedNT does not support type: {nt.__class__.__name__}")
+                    if not nttype_str:
+                        nttype_str = "Unknown"
+                    raise NotImplementedError(f"SharedNT does not support type: {nttype_str}")
 
         if user_handlers:
             handler = handler | user_handlers

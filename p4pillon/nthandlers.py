@@ -138,10 +138,14 @@ class ComposeableRulesHandler(Handler):
         """Handler call by a post operation, requires support from SharedPV derived class"""
         logger.debug("In handler post()")
 
-        current_state = pv.current().raw  # We only need the Value from the PV
-        overwrite_unmarked(current_state, value)
+        try:
+            pv_value = pv.current().raw
+        except AttributeError:
+            pv_value = pv.current()
 
-        self.rule.post_rule(current_state, value)
+        overwrite_unmarked(pv_value, value)
+
+        self.rule.post_rule(pv_value, value)
 
     def put(self, pv: SharedPV, op: ServerOperation) -> None:
         """
@@ -150,9 +154,19 @@ class ComposeableRulesHandler(Handler):
         """
         logger.debug("In handler put()")
 
-        overwrite_unmarked(pv.current().raw, op.value().raw)
+        try:
+            pv_value = pv.current().raw
+        except AttributeError:
+            pv_value = pv.current()
 
-        rules_flow = self.rule.put_rule(pv, op)
+        try:
+            op_value = op.value().raw
+        except AttributeError:
+            op_value = op.value()
+
+        overwrite_unmarked(pv_value, op_value)
+
+        rules_flow = self.rule.put_rule(pv_value, op_value, op)
         if rules_flow == RulesFlow.ABORT:
             raise AbortHandlerException(rules_flow.error)
 
