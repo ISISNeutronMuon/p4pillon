@@ -53,10 +53,14 @@ class BaseRulesHandler(Handler):
         """Handler call by a post operation, requires support from SharedPV derived class"""
         logger.debug("In handler post()")
 
-        current_state = pv.current().raw  # We only need the Value from the PV
-        overwrite_unmarked(current_state, value)
+        try:
+            pv_value = pv.current().raw
+        except AttributeError:
+            pv_value = pv.current()
 
-        self._apply_rules(lambda x: x.post_rule(current_state, value))
+        overwrite_unmarked(pv_value, value)
+
+        self._apply_rules(lambda x: x.post_rule(pv_value, value))
 
     def put(self, pv: SharedPV, op: ServerOperation) -> None:
         """
@@ -65,9 +69,18 @@ class BaseRulesHandler(Handler):
         """
         logger.debug("In handler put()")
 
-        overwrite_unmarked(pv.current().raw, op.value().raw)
+        # Maybe risky to do the try except in this form, but presumably the
+        # types of pv and op will match?
+        try:
+            pv_value = pv.current().raw
+            op_value = op.value().raw
+        except AttributeError:
+            pv_value = pv.current()
+            op_value = op.value()
 
-        rules_flow = self._apply_rules(lambda x: x.put_rule(pv, op))
+        overwrite_unmarked(pv_value, op_value)
+
+        rules_flow = self._apply_rules(lambda x: x.put_rule(pv_value, op_value, op))
         if rules_flow != RulesFlow.ABORT:
             pv.post(value=op.value())
             op.done()
@@ -154,14 +167,13 @@ class ComposeableRulesHandler(Handler):
         """
         logger.debug("In handler put()")
 
+        # Maybe risky to do the try except in this form, but presumably the
+        # types of pv and op will match?
         try:
             pv_value = pv.current().raw
-        except AttributeError:
-            pv_value = pv.current()
-
-        try:
             op_value = op.value().raw
         except AttributeError:
+            pv_value = pv.current()
             op_value = op.value()
 
         overwrite_unmarked(pv_value, op_value)
