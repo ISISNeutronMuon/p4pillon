@@ -14,7 +14,7 @@ from typing import SupportsFloat as Numeric  # Hack to type hint number types
 from p4pillon.nt import NTEnum, NTScalar
 from p4pillon.server.asyncio import SharedPV as SharedPV_asyncio
 from p4pillon.server.thread import SharedPV as SharedPV_threaded
-from p4pillon.thread.sharednt import SharedNT
+from p4pillon.sharednt import SharedNT
 
 from .definitions import (
     MAX_FLOAT,

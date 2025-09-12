@@ -3,7 +3,7 @@ import time
 from p4p.nt import NTScalar
 
 from p4pillon.asyncio.server import Server
-from p4pillon.thread.sharednt import SharedNT
+from p4pillon.asyncio.sharednt import SharedNT
 
 pv = SharedNT(
     nt=NTScalar(
