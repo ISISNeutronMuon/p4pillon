@@ -4,7 +4,7 @@ import pytest
 import yaml
 from p4p.client.thread import Context
 
-from p4pillon.thread.config_reader import parse_config
+from p4pillon.config_reader import parse_config
 from p4pillon.thread.server import Server
 
 root_dir = Path(__file__).parents[2]
