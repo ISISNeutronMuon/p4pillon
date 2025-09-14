@@ -74,7 +74,7 @@ class SharedNT(SharedPV):
 
                     alarm_ntenum_constructor = None
                     if handler_constructors:
-                        alarm_ntenum_constructor = handler_constructors.get("AlarmNTEnumRule", None)
+                        alarm_ntenum_constructor = handler_constructors.get("alarmNTEnum", None)
                     handler["alarmNTEnum"] = ComposeableRulesHandler(AlarmNTEnumRule(alarm_ntenum_constructor))
                     handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
                 case _:

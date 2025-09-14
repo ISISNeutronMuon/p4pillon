@@ -76,8 +76,8 @@ def testntscalar_create_with_handlers(pvtype, expected_handlername):
 def testntenum_create():
     testpv = SharedNT(nt=NTEnum(), initial={"index": 0, "choices": ["OFF", "ON"]})
 
-    assert len(testpv.handler) == 1
-    assert list(testpv.handler.keys()) == ["timestamp"]
+    assert len(testpv.handler) == 3
+    assert list(testpv.handler.keys()) == ["alarm", "alarmNTEnum", "timestamp"]
 
 
 def testntenum_create_with_handlers():
@@ -88,8 +88,8 @@ def testntenum_create_with_handlers():
         user_handlers=OrderedDict({"post1": Handler(), "post2": Handler()}),
     )
 
-    assert len(testpv.handler) == 5
-    assert list(testpv.handler.keys()) == ["pre1", "pre2", "post1", "post2", "timestamp"]
+    assert len(testpv.handler) == 7
+    assert list(testpv.handler.keys()) == ["pre1", "pre2", "alarm", "alarmNTEnum", "post1", "post2", "timestamp"]
 
 
 @pytest.mark.filterwarnings("ignore")  # Ignore "RuntimeError: Empty SharedPV" warning
