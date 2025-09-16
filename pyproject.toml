@@ -5,7 +5,7 @@
 [project]
 name = "p4pillon"
 dynamic = ["version"]
-description = "Add your description here"
+description = "Extensions to the p4p Server API, to aid in creation and managment of pvAccess servers."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
