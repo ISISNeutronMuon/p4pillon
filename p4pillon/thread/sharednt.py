@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import logging
 from collections import OrderedDict
+from typing import Any
 
 from p4p import Value
 
 from p4pillon.composite_handler import CompositeHandler
 from p4pillon.nthandlers import ComposeableRulesHandler
 from p4pillon.rules import (
+    AlarmNTEnumRule,
     AlarmRule,
     ControlRule,
     ScalarToArrayWrapperRule,
@@ -34,6 +36,7 @@ class SharedNT(SharedPV):
         self,
         auth_handlers: OrderedDict[str, Handler] | None = None,
         user_handlers: OrderedDict[str, Handler] | None = None,
+        handler_constructors: dict[str, Any] | None = None,
         **kws,
     ):
         # Check if there is a handler specified in the kws, and if not override it
@@ -75,6 +78,12 @@ class SharedNT(SharedPV):
                     else:
                         raise TypeError(f"Unrecognised NT type: {nttype_str}")
                 case s if s.startswith("epics:nt/NTEnum"):
+                    handler["alarm"] = ComposeableRulesHandler(AlarmRule())
+
+                    alarm_ntenum_constructor = None
+                    if handler_constructors:
+                        alarm_ntenum_constructor = handler_constructors.get("alarmNTEnum", None)
+                    handler["alarmNTEnum"] = ComposeableRulesHandler(AlarmNTEnumRule(alarm_ntenum_constructor))
                     handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
                 case _:
                     if not nttype_str:
