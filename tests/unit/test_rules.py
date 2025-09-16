@@ -245,12 +245,10 @@ class TestControl:
         overwrite_unmarked(old_state, new_state)
 
         with (
-            patch("p4p.server.raw.SharedPV", autospec=True) as sharedpv,
             patch("p4p.server.ServerOperation", autospec=True) as server_op,
         ):
-            sharedpv.current.return_value = nt.unwrap(old_state)
             server_op.value.return_value = nt.unwrap(new_state)
-            result = rule.put_rule(sharedpv, server_op)  # New rules no long auto-call post_rule
+            result = rule.put_rule(old_state, new_state, server_op)  # New rules no long auto-call post_rule
             result = rule.post_rule(old_state, new_state)
 
         assert result is RulesFlow.CONTINUE

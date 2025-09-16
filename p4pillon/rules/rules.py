@@ -19,7 +19,6 @@ from p4p import Type, Value
 from p4p.server import ServerOperation
 from p4p.server.raw import ServOpWrap
 
-from p4pillon.server.raw import SharedPV
 from p4pillon.utils import overwrite_marked
 
 logger = logging.getLogger(__name__)
@@ -94,7 +93,7 @@ def check_applicable_put(func):
 
     @wraps(func)
     def wrapped_function(self: BaseRule, *args, **kwargs):
-        if not self.is_applicable(args[1].value().raw):
+        if not self.is_applicable(args[1]):
             logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint: disable=protected-access
             return RulesFlow.CONTINUE
 
@@ -218,15 +217,12 @@ class BaseRule(ABC):
         return self.init_rule(newpvstate)
 
     @check_applicable_put
-    def put_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:
+    def put_rule(self, oldpvstate: Value, newpvstate: Value, _op: ServerOperation) -> RulesFlow:
         """
         Rule with access to ServerOperation information, i.e. triggered by a
         handler put. These may perform authentication / authorisation style
         operations
         """
-
-        # oldpvstate: Value = pv.current().raw
-        newpvstate: Value = op.value().raw
 
         logger.debug("Evaluating %s.put_rule", self._name)
 
@@ -241,7 +237,7 @@ class BaseRule(ABC):
                 # The second step prevents changes being made.
                 for changed_field in newpvstate.changedSet():
                     if changed_field.startswith(field):
-                        newpvstate[changed_field] = pv.current().raw[changed_field]
+                        newpvstate[changed_field] = oldpvstate[changed_field]
                         newpvstate.mark(changed_field, False)
 
         return RulesFlow.CONTINUE
