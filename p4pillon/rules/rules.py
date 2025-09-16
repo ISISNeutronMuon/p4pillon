@@ -19,7 +19,6 @@ from p4p import Type, Value
 from p4p.server import ServerOperation
 from p4p.server.raw import ServOpWrap
 
-from p4pillon.server.raw import SharedPV
 from p4pillon.utils import overwrite_marked
 
 logger = logging.getLogger(__name__)
