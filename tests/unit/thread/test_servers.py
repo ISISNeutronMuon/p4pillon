@@ -58,3 +58,34 @@ def test_server_start():
     assert test_server._running is True
     assert len(test_server._pvs) == 1 
     assert list(test_server._pvs)[0] == "DEV:TEST:PV:1"
+
+
+def test_server_stop():
+    test_server = Server(
+        prefix="DEV:",
+    )
+
+    test_server.start()
+    assert test_server._running is True
+
+    test_server.stop()
+    assert test_server._running is False
+    
+def test_server_remove_pv():
+    test_server = Server(
+        prefix="DEV:",
+    )
+
+    pv = SharedNT(nt=NTScalar("d", valueAlarm=True,),  # scalar double
+        initial={"value": 4.5, "valueAlarm.active": True, "valueAlarm.highAlarmLimit": 17},
+    )
+
+    test_server._pvs = {"DEV:TEST:PV:1": pv}
+
+    test_server.start()
+    assert len(test_server._pvs) == 1 
+    assert list(test_server._pvs)[0] == "DEV:TEST:PV:1"
+    test_server.remove_pv("DEV:TEST:PV:1")
+    assert len(test_server._pvs) == 0 
+    assert test_server._pvs.get("DEV:TEST:PV:1") is None
+    
