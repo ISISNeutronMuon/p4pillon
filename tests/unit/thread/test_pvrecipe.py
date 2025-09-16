@@ -369,7 +369,7 @@ def test_ntenum_create_pv(mock_time):
 
     assert pv.isOpen()
     assert isinstance(pv._handler, CompositeHandler)
-    assert list(pv._handler.keys()) == ["timestamp"]
+    assert list(pv.handler.keys()) == ["alarm", "alarmNTEnum", "timestamp"]
     assert pv.nt.type.getID() == "epics:nt/NTEnum:1.0"
     assert pv.isOpen() is True
     assert pv.current().timestamp == mock_time.return_value
