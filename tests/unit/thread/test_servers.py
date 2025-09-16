@@ -4,8 +4,12 @@ from unittest.mock import patch
 
 import pytest
 from p4p.nt import NTScalar
+from p4p.nt import NTScalar
 from p4p.server import StaticProvider
 
+from p4pillon.thread.pvrecipe import BasePVRecipe
+from p4pillon.thread.server import Server
+from p4pillon.thread.sharednt import SharedNT
 from p4pillon.thread.pvrecipe import BasePVRecipe
 from p4pillon.thread.server import Server
 from p4pillon.thread.sharednt import SharedNT
@@ -14,6 +18,7 @@ root_dir = Path(__file__).parents[2]
 
 
 def test_server_instantiation():
+    server = Server(
     server = Server(
         prefix="DEV:",
     )
@@ -32,8 +37,11 @@ def test_server_instantiation():
 )
 def test_server_retrieve_pvs(mock_recipe: BasePVRecipe, pv_name):
     server = Server(
+def test_server_retrieve_pvs(mock_recipe: BasePVRecipe, pv_name):
+    server = Server(
         prefix="DEV:",
     )
+    server.add_pv(pv_name, mock_recipe.create_pv.return_value)
     server.add_pv(pv_name, mock_recipe.create_pv.return_value)
 
     # we should be able to access the PV either with the full prefix added or without it
@@ -41,6 +49,8 @@ def test_server_retrieve_pvs(mock_recipe: BasePVRecipe, pv_name):
     assert server["DEV:TEST:PV"] == mock_recipe.create_pv.return_value
 
 
+def test_server_start():
+    test_server = Server(
 def test_server_start():
     test_server = Server(
         prefix="DEV:",
@@ -51,8 +61,15 @@ def test_server_start():
     )
 
     test_server._pvs = {"DEV:TEST:PV:1": pv}
+    pv = SharedNT(nt=NTScalar("d", valueAlarm=True,),  # scalar double
+        initial={"value": 4.5, "valueAlarm.active": True, "valueAlarm.highAlarmLimit": 17},
+    )
+
+    test_server._pvs = {"DEV:TEST:PV:1": pv}
 
     assert test_server._running is False
+
+    test_server.start()
 
     test_server.start()
     assert test_server._running is True
