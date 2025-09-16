@@ -1,6 +1,7 @@
 """Enums used by p4pillon"""
 
 from enum import Enum, IntEnum
+from typing import TypedDict
 
 
 class PVTypes(Enum):
@@ -33,6 +34,14 @@ class AlarmStatus(IntEnum):
     CONF_STATUS = 5
     UNDEFINED_STATUS = 6
     CLIENT_STATUS = 7
+
+
+class AlarmDict(TypedDict):
+    """Normative Type alarm or alarm_t as Python dictionary"""
+
+    severity: AlarmSeverity
+    status: AlarmStatus
+    message: str
 
 
 class Format(Enum):
