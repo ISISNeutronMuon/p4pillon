@@ -132,18 +132,24 @@ class Server:
 
         self._running = False
 
-    def add_pv(self, pv_name: str, pv_recipe: BasePVRecipe) -> SharedPV:
+    def add_pv(self, pv_name: str, pv: BasePVRecipe | SharedPV) -> SharedPV:
         """
         Add a PV to the server
 
         :param pv_name: The name of the PV to be added.
-        :param pv_recipe: The recipe with instructions for creating the PV.
+        :param pv: The SharedPV or a pv recipe for creating the PV.
         :return: The created PV.
         """
-
+        
         if not pv_name.startswith(self.prefix):
             pv_name = self.prefix + pv_name
-        returnval = self._pvs[pv_name] = pv_recipe.create_pv(pv_name)
+        
+        if isinstance(pv, BasePVRecipe):
+            returnval = pv.create_pv(pv_name)
+        else:
+            returnval = pv
+        
+        self._pvs[pv_name] = returnval
 
         # If the server is already running then we need to add this PV to
         # the live system
