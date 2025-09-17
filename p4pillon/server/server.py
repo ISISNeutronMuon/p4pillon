@@ -35,7 +35,7 @@ class Server:
 
     def __init__(self, prefix: str = "") -> None:
         """
-        Initialize the SimpleServer instance.
+        Initialize the Server instance.
 
         :param prefix: The prefix to be added to the PVs (Process Variables) of the server e.g. DEV: Defaults to "".
         """
@@ -51,7 +51,7 @@ class Server:
         self._ctxt = Context("pva")
 
     def start(self) -> None:
-        """Start the SimpleServer"""
+        """Start the Server"""
 
         # iterate over all the PVs and initialise them if they haven't
         # been already, add them to the provider and start the server
@@ -67,7 +67,7 @@ class Server:
         self._running = True
 
     def stop(self) -> None:
-        """Stop the SimpleServer"""
+        """Stop the Server"""
 
         # iterate over all the PVs and close them before removing them
         # from the provider and closing the server
