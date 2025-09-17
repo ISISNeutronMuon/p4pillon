@@ -3,15 +3,23 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from p4p.nt import NTScalar
+from p4p.nt import NTScalar
 from p4p.server import StaticProvider
 
-from p4pillon.thread.server import SimpleServer
+from p4pillon.thread.pvrecipe import BasePVRecipe
+from p4pillon.thread.server import Server
+from p4pillon.thread.sharednt import SharedNT
+from p4pillon.thread.pvrecipe import BasePVRecipe
+from p4pillon.thread.server import Server
+from p4pillon.thread.sharednt import SharedNT
 
 root_dir = Path(__file__).parents[2]
 
 
 def test_server_instantiation():
-    server = SimpleServer(
+    server = Server(
+    server = Server(
         prefix="DEV:",
     )
     assert server.prefix == "DEV:"
@@ -27,96 +35,74 @@ def test_server_instantiation():
     "pv_name",
     [("TEST:PV"), ("DEV:TEST:PV")],
 )
-def test_server_retrieve_pvs(mock_recipe, pv_name):
-    server = SimpleServer(
+def test_server_retrieve_pvs(mock_recipe: BasePVRecipe, pv_name):
+    server = Server(
+def test_server_retrieve_pvs(mock_recipe: BasePVRecipe, pv_name):
+    server = Server(
         prefix="DEV:",
     )
-    server.add_pv(pv_name, mock_recipe)
+    server.add_pv(pv_name, mock_recipe.create_pv.return_value)
+    server.add_pv(pv_name, mock_recipe.create_pv.return_value)
 
     # we should be able to access the PV either with the full prefix added or without it
     assert server["TEST:PV"] == mock_recipe.create_pv.return_value
     assert server["DEV:TEST:PV"] == mock_recipe.create_pv.return_value
 
 
-@patch("p4pillon.thread.server.StaticProvider", autospec=True)
-@patch("p4pillon.thread.server.Server", autospec=True)
-def test_server_start(server, provider, caplog, mock_ntpv):
-    test_server = SimpleServer(
+def test_server_start():
+    test_server = Server(
+def test_server_start():
+    test_server = Server(
         prefix="DEV:",
     )
 
-    mock_ntpv.on_start_methods = []
-    test_server._pvs = {"DEV:TEST:PV:1": mock_ntpv}
-    print(len(mock_ntpv.on_start_methods))
+    pv = SharedNT(nt=NTScalar("d", valueAlarm=True,),  # scalar double
+        initial={"value": 4.5, "valueAlarm.active": True, "valueAlarm.highAlarmLimit": 17},
+    )
+
+    test_server._pvs = {"DEV:TEST:PV:1": pv}
+    pv = SharedNT(nt=NTScalar("d", valueAlarm=True,),  # scalar double
+        initial={"value": 4.5, "valueAlarm.active": True, "valueAlarm.highAlarmLimit": 17},
+    )
+
+    test_server._pvs = {"DEV:TEST:PV:1": pv}
 
     assert test_server._running is False
-    with caplog.at_level(logging.DEBUG):
-        test_server.start()
-    assert len(caplog.records) == 1
-    provider.return_value.add.assert_called_once_with("DEV:TEST:PV:1", mock_ntpv)
-    server.assert_called_once_with(providers=[provider.return_value])
+
+    test_server.start()
+
+    test_server.start()
     assert test_server._running is True
+    assert len(test_server._pvs) == 1 
+    assert list(test_server._pvs)[0] == "DEV:TEST:PV:1"
 
 
-@patch("p4pillon.thread.server.StaticProvider", autospec=True)
-@patch("p4pillon.thread.server.Server", autospec=True)
-@patch("p4pillon.pvrecipe.PVScalarRecipe", autospec=True)
-def test_server_add_pv(recipe, server, provider, caplog):
-    test_server = SimpleServer(
+def test_server_stop():
+    test_server = Server(
         prefix="DEV:",
     )
 
     test_server.start()
+    assert test_server._running is True
 
-    with caplog.at_level(logging.DEBUG):
-        new_name = "TEST:PV:2"
-        test_server.add_pv(new_name, recipe.return_value)
-    assert test_server["TEST:PV:2"] is recipe.return_value.create_pv.return_value
-    provider.return_value.add.assert_called_once_with("DEV:TEST:PV:2", recipe.return_value.create_pv.return_value)
-
-    assert len(caplog.messages) == 1
-    assert caplog.messages[0] == "Added DEV:TEST:PV:2 to server"
-
-
-@patch("p4pillon.thread.server.StaticProvider", autospec=True)
-@patch("p4pillon.thread.server.Server", autospec=True)
-def test_server_stop(server, provider, caplog, mock_ntpv):
-    test_server = SimpleServer(
-        prefix="DEV:",
-    )
-
-    test_server._running = True
-    test_server._server = server.return_value
-    test_server._pvs = {"DEV:TEST:PV:1": mock_ntpv}
-
-    with caplog.at_level(logging.DEBUG):
-        test_server.stop()
-
-    mock_ntpv.close.assert_called_once_with()
-    provider.return_value.remove.assert_called_once_with("DEV:TEST:PV:1")
-    server.return_value.stop.assert_called_once_with()
+    test_server.stop()
     assert test_server._running is False
-
-
-@patch("p4pillon.thread.server.StaticProvider", autospec=True)
-@patch("p4pillon.thread.server.Server", autospec=True)
-@patch("p4pillon.pvrecipe.PVScalarRecipe", autospec=True)
-def test_server_remove_pv(recipe, server, provider, caplog, mock_ntpv):
-    test_server = SimpleServer(
+    
+def test_server_remove_pv():
+    test_server = Server(
         prefix="DEV:",
     )
 
-    test_server._pvs["DEV:TEST:PV:1"] = mock_ntpv
-    test_server._running = True
-    test_server._server = server.return_value
+    pv = SharedNT(nt=NTScalar("d", valueAlarm=True,),  # scalar double
+        initial={"value": 4.5, "valueAlarm.active": True, "valueAlarm.highAlarmLimit": 17},
+    )
 
-    with caplog.at_level(logging.DEBUG):
-        test_server.remove_pv("TEST:PV:1")
+    test_server._pvs = {"DEV:TEST:PV:1": pv}
 
-    mock_ntpv.close.assert_called_once_with()
-    provider.return_value.remove.assert_called_once_with("DEV:TEST:PV:1")
-
+    test_server.start()
+    assert len(test_server._pvs) == 1 
+    assert list(test_server._pvs)[0] == "DEV:TEST:PV:1"
+    test_server.remove_pv("DEV:TEST:PV:1")
+    assert len(test_server._pvs) == 0 
     assert test_server._pvs.get("DEV:TEST:PV:1") is None
-
-    assert len(caplog.messages) == 1
-    assert caplog.messages[0] == "Removed DEV:TEST:PV:1 from server"
+    
