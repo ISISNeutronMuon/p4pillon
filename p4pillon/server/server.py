@@ -6,26 +6,14 @@ from __future__ import annotations
 
 import logging
 
+from p4p.client.raw import Context
 from p4p.server import Server as _Server
 from p4p.server import StaticProvider
+from p4p.server.raw import SharedPV
 
-from p4pillon import concurrency
 from p4pillon.pvrecipe import BasePVRecipe
 
-if concurrency == "thread":
-    from p4p.client.thread import Context
-
-    from p4pillon.server.thread import SharedPV
-elif concurrency == "asyncio":
-    from p4p.client.asyncio import Context
-
-    from p4pillon.server.asyncio import SharedPV
-else:
-    raise ValueError(f"Unknown value for concurrency: {concurrency}")
-
 logger = logging.getLogger(__name__)
-
-print(f"In p4pillon.server.server. Concurrency is {concurrency}")
 
 
 class Server:

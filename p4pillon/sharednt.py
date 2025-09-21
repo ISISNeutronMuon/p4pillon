@@ -10,7 +10,6 @@ from typing import Any
 
 from p4p import Value
 
-from p4pillon import concurrency
 from p4pillon.composite_handler import CompositeHandler
 from p4pillon.nthandlers import ComposeableRulesHandler
 from p4pillon.rules import (
@@ -21,14 +20,7 @@ from p4pillon.rules import (
     TimestampRule,
     ValueAlarmRule,
 )
-from p4pillon.server.raw import Handler
-
-if concurrency == "thread":
-    from p4pillon.server.thread import SharedPV
-elif concurrency == "asyncio":
-    from p4pillon.server.asyncio import SharedPV
-else:
-    raise ValueError(f"Unknown value for concurrency: {concurrency}")
+from p4pillon.server.raw import Handler, SharedPV
 
 logger = logging.getLogger(__name__)
 
