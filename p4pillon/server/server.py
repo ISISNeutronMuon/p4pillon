@@ -12,20 +12,20 @@ from p4p.server import StaticProvider
 from p4pillon import concurrency
 from p4pillon.pvrecipe import BasePVRecipe
 
-if concurrency == 'thread':
+if concurrency == "thread":
     from p4p.client.thread import Context
 
     from p4pillon.server.thread import SharedPV
-elif concurrency == 'asyncio':
+elif concurrency == "asyncio":
     from p4p.client.asyncio import Context
 
     from p4pillon.server.asyncio import SharedPV
 else:
-    raise ValueError(f'Unknown value for concurrency: {concurrency}')
+    raise ValueError(f"Unknown value for concurrency: {concurrency}")
 
 logger = logging.getLogger(__name__)
 
-print(f'In p4pillon.server.server. Concurrency is {concurrency}')
+print(f"In p4pillon.server.server. Concurrency is {concurrency}")
 
 
 class Server:
@@ -88,15 +88,15 @@ class Server:
         :param pv: The SharedPV or a pv recipe for creating the PV.
         :return: The created PV.
         """
-        
+
         if not pv_name.startswith(self.prefix):
             pv_name = self.prefix + pv_name
-        
+
         if isinstance(pv, BasePVRecipe):
             returnval = pv.create_pv(pv_name)
         else:
             returnval = pv
-        
+
         self._pvs[pv_name] = returnval
 
         # If the server is already running then we need to add this PV to

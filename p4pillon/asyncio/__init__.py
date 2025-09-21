@@ -1,3 +1,3 @@
 import p4pillon
 
-p4pillon.concurrency = 'asyncio'
+p4pillon.concurrency = "asyncio"
