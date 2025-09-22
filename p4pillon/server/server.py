@@ -5,6 +5,7 @@ Server is used to create PVs and manage their lifetimes
 from __future__ import annotations
 
 import logging
+from abc import ABC
 
 from p4p.client.raw import Context
 from p4p.server import Server as _Server
@@ -16,10 +17,12 @@ from p4pillon.server.raw import SharedPV
 logger = logging.getLogger(__name__)
 
 
-class Server:
+class Server(ABC):
     """
     Creates PVs and manages their lifetimes
     """
+
+    _context = Context  # Shame we can't define an abstact class variable
 
     def __init__(self, prefix: str = "") -> None:
         """
@@ -36,7 +39,7 @@ class Server:
 
         self._running = False
 
-        self._ctxt = Context("pva")
+        self._ctxt = Server._context("pva")
 
     def start(self) -> None:
         """Start the Server"""
