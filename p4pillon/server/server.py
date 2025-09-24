@@ -5,33 +5,24 @@ Server is used to create PVs and manage their lifetimes
 from __future__ import annotations
 
 import logging
+from abc import ABC
 
+from p4p.client.raw import Context
 from p4p.server import Server as _Server
 from p4p.server import StaticProvider
 
-from p4pillon import concurrency
 from p4pillon.pvrecipe import BasePVRecipe
-
-if concurrency == 'thread':
-    from p4p.client.thread import Context
-
-    from p4pillon.server.thread import SharedPV
-elif concurrency == 'asyncio':
-    from p4p.client.asyncio import Context
-
-    from p4pillon.server.asyncio import SharedPV
-else:
-    raise ValueError(f'Unknown value for concurrency: {concurrency}')
+from p4pillon.server.raw import SharedPV
 
 logger = logging.getLogger(__name__)
 
-print(f'In p4pillon.server.server. Concurrency is {concurrency}')
 
-
-class Server:
+class Server(ABC):
     """
     Creates PVs and manages their lifetimes
     """
+
+    _context = Context  # Shame we can't define an abstact class variable
 
     def __init__(self, prefix: str = "") -> None:
         """
@@ -48,7 +39,7 @@ class Server:
 
         self._running = False
 
-        self._ctxt = Context("pva")
+        self._ctxt = Server._context("pva")
 
     def start(self) -> None:
         """Start the Server"""
@@ -88,15 +79,15 @@ class Server:
         :param pv: The SharedPV or a pv recipe for creating the PV.
         :return: The created PV.
         """
-        
+
         if not pv_name.startswith(self.prefix):
             pv_name = self.prefix + pv_name
-        
+
         if isinstance(pv, BasePVRecipe):
             returnval = pv.create_pv(pv_name)
         else:
             returnval = pv
-        
+
         self._pvs[pv_name] = returnval
 
         # If the server is already running then we need to add this PV to

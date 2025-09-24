@@ -38,9 +38,7 @@ def parse_config_string(yaml_str: str, server: Server | None = None) -> dict[str
     return parse_config(pvconfigs, server)
 
 
-def parse_config(
-    yaml_obj: dict[str, dict[str, Any]], server: Server | None = None
-) -> dict[str, BasePVRecipe]:
+def parse_config(yaml_obj: dict[str, dict[str, Any]], server: Server | None = None) -> dict[str, BasePVRecipe]:
     """
     Parse a dictionary that has been filled using yaml.load() and return a dictionary of PVScalarRecipe objects.
     Optionally add the pvs to a server if server != None

@@ -3,13 +3,14 @@ Patch in p4p PR #172 - support for open(), post(), and close() handler functions
 """
 
 import logging
+from abc import ABC
 
 from p4p.server.raw import SharedPV as _SharedPV
 
 _log = logging.getLogger(__name__)
 
 
-class Handler:
+class Handler(ABC):
     """Skeleton of SharedPV Handler
 
     Use of this as a base class is optional.
@@ -82,7 +83,7 @@ class Handler:
         pass
 
 
-class SharedPV(_SharedPV):
+class SharedPV(_SharedPV, ABC):
     """Shared state Process Variable.  Callback based implementation.
 
     .. note:: if initial=None, the PV is initially **closed** and

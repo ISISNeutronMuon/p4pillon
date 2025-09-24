@@ -1,18 +1,11 @@
 # Run interactively to have the server stay up and then terminate using server.stop()
-import time
-
-from p4pillon import concurrency
-from p4pillon import config_reader
-
-if concurrency == 'thread':
-    from p4pillon.thread.server import Server
-elif concurrency == 'asyncio':
-    from p4pillon.asyncio.server import Server
-else:
-    raise ValueError(f'Unknown value for concurrency: {concurrency}')
-
 # Uncomment the lines below to turn on debugging output to the screen
 import logging
+import time
+
+from p4pillon import config_reader
+from p4pillon.thread.server import Server
+
 logging.getLogger().setLevel(logging.DEBUG)
 logging.getLogger().addHandler(logging.StreamHandler())
 

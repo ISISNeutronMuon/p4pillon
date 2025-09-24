@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from typing import Generic, TypeVar
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
 
-from p4pillon import concurrency
 from p4pillon.definitions import (
     MAX_FLOAT,
     MAX_INT32,
@@ -22,16 +21,9 @@ from p4pillon.definitions import (
     PVTypes,
 )
 from p4pillon.nt import NTEnum, NTScalar
+from p4pillon.server.raw import SharedPV
 from p4pillon.sharednt import SharedNT
 from p4pillon.utils import time_in_seconds_and_nanoseconds
-
-if concurrency == 'thread':
-    from p4pillon.server.thread import SharedPV
-elif concurrency == 'asyncio':
-    from p4pillon.server.asyncio import SharedPV
-else:
-    raise ValueError(f'Unknown value for concurrency: {concurrency}')
-
 
 NumericTypeT = TypeVar("NumericTypeT", int, Numeric)
 SharedPvT = TypeVar("SharedPvT", bound=SharedPV)
@@ -128,7 +120,9 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
         self.config_settings["timeStamp.secondsPastEpoch"] = seconds
         self.config_settings["timeStamp.nanoseconds"] = nanoseconds
 
-    def build_pv(self,) -> SharedPvT:
+    def build_pv(
+        self,
+    ) -> SharedPvT:
         """
         This method is called by create_pv in the child classes after construct settings is set.
         """
@@ -173,7 +167,7 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
 
 class PVScalarRecipe(BasePVRecipe):
     """Recipe to build an NTScalar"""
-    
+
     def create_pv(self, pv_name: str | None = None) -> SharedPV:
         """Turn the recipe into an actual NTScalar, NTEnum, or
         other BasePV derived object"""
@@ -183,7 +177,7 @@ class PVScalarRecipe(BasePVRecipe):
         self._config_alarm_limit()
 
         return super().build_pv()
-    
+
     def __post_init__(self):
         super().__post_init__()
         if self.pvtype != PVTypes.DOUBLE and self.pvtype != PVTypes.INTEGER and self.pvtype != PVTypes.STRING:
@@ -353,16 +347,16 @@ class PVScalarArrayRecipe(PVScalarRecipe):
     """
 
     def create_pv(self, pv_name: str | None = None) -> SharedPV:
-            """Turn the recipe into an actual NTScalar with an array"""
+        """Turn the recipe into an actual NTScalar with an array"""
 
-            self._config_display()
-            self._config_control()
-            self._config_alarm_limit()
+        self._config_display()
+        self._config_control()
+        self._config_alarm_limit()
 
-            if not isinstance(self.initial_value, list):
-                self.initial_value = [self.initial_value]
+        if not isinstance(self.initial_value, list):
+            self.initial_value = [self.initial_value]
 
-            return super().build_pv()
+        return super().build_pv()
 
 
 class PVEnumRecipe(BasePVRecipe):
