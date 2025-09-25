@@ -4,4 +4,4 @@ from p4pillon.server.server import Server as _Server
 
 
 class Server(_Server):
-    _context = Context
+    _context = _Server._context = Context
