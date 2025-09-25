@@ -6,7 +6,7 @@ import pytest
 from p4p.nt import NTScalar
 
 from p4pillon.definitions import AlarmSeverity
-from p4pillon.rules import ControlRule, RulesFlow, ScalarToArrayWrapperRule, TimestampRule, ValueAlarmRule
+from p4pillon.rules import CalcRule, ControlRule, RulesFlow, ScalarToArrayWrapperRule, TimestampRule, ValueAlarmRule
 from p4pillon.utils import overwrite_unmarked
 
 
@@ -502,3 +502,25 @@ class TestAlarmLimit:
 
         assert new_state["alarm.severity"] == expected_severity.value
         assert new_state["alarm.message"] == expected_message
+
+class TestCalcRule:
+    def test_create_calc_rule(self):
+        rule = CalcRule()
+
+        assert rule._name == "calc"
+
+    def test_initialise_calc_rule(self):
+        rule = CalcRule()
+        
+        aServer = "fakeServer"
+        calc = {"calc_str": "pv[0]+10",
+                "variables": "a:pv:name",
+                "server": aServer,
+                "pv_name": "this:pv:name"
+                }
+        rule.set_calc(calc)
+        assert rule._calc_str == "pv[0]+10"
+        assert type(rule._variables) is list
+        assert len(rule._variables) == 1 and rule._variables[0] == "a:pv:name"
+        assert rule._server == "fakeServer"
+        assert rule._pv_name == "this:pv:name"

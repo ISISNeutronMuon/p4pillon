@@ -30,7 +30,8 @@ class CalcRule(BaseScalarRule):
     
         self._variables = []
         self._calc_str: str = ""
-        self.add_calc(kws["calc"])
+        if "calc" in kws:
+            self.set_calc(kws["calc"])
 
     @property
     def _name(self) -> str:
@@ -61,7 +62,7 @@ class CalcRule(BaseScalarRule):
             See https://epics-base.github.io/p4p/client.html#monitor for further information."""
             self._server.put_pv_value(self._pv_name, {})
 
-    def add_calc(self, calc) -> None:
+    def set_calc(self, calc) -> None:
         """
         Define the calculation to be performed.
         The required argument calc is a dictionary with the following keys: 
@@ -71,7 +72,10 @@ class CalcRule(BaseScalarRule):
             self._calc_str = calc["calc_str"]
         
         if "variables" in calc:
-            self._variables = calc["variables"]
+            if type(calc["variables"]) is list:
+                self._variables = calc["variables"]
+            if type(calc["variables"]) is str:
+                self._variables = [calc["variables"]]
         
         if "server" in calc:
             self._server = calc["server"]
