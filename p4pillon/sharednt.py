@@ -16,6 +16,7 @@ from p4pillon.nthandlers import ComposeableRulesHandler
 from p4pillon.rules import (
     AlarmNTEnumRule,
     AlarmRule,
+    CalcRule,
     ControlRule,
     ScalarToArrayWrapperRule,
     TimestampRule,
@@ -64,6 +65,9 @@ class SharedNT(SharedPV, ABC):
             match nttype_str:
                 case s if s.startswith("epics:nt/NTScalar"):
                     if nttype_str.startswith("epics:nt/NTScalarArray"):
+                        if "calc" in kws:
+                            handler["calc"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(CalcRule(**kws)))
+                            kws.pop("calc") # Removing this from kws as it shouldn't be passed to super().__init__(**kws)
                         handler["control"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ControlRule()))
                         handler["alarm"] = ComposeableRulesHandler(
                             AlarmRule()
@@ -71,6 +75,9 @@ class SharedNT(SharedPV, ABC):
                         handler["alarm_limit"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ValueAlarmRule()))
                         handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
                     elif nttype_str.startswith("epics:nt/NTScalar"):
+                        if "calc" in kws:
+                            handler["calc"] = ComposeableRulesHandler(CalcRule(**kws))
+                            kws.pop("calc") # Removing this from kws as it shouldn't be passed to super().__init__(**kws)
                         handler["control"] = ComposeableRulesHandler(ControlRule())
                         handler["alarm"] = ComposeableRulesHandler(AlarmRule())
                         handler["alarm_limit"] = ComposeableRulesHandler(ValueAlarmRule())

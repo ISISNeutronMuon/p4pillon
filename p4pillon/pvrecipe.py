@@ -131,6 +131,10 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
             + f" Config settings are:\n {self.config_settings} \n Initial value:\n {self.initial_value}\n"
         )
 
+        kws = {}
+        if hasattr(self,"calc"):
+            kws["calc"] = self.calc
+
         logger.debug(debug_str)
 
         if (
@@ -148,8 +152,7 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
 
         self._config_timestamp()
 
-        pvobj = SharedNT(nt=nt, initial={"value": self.initial_value, **self.config_settings})
-        # handler._name = pv_name
+        pvobj = SharedNT(nt=nt, initial={"value": self.initial_value, **self.config_settings}, **kws)
 
         if self.read_only:
             pvobj.handler.read_only = True
