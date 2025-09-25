@@ -503,6 +503,7 @@ class TestAlarmLimit:
         assert new_state["alarm.severity"] == expected_severity.value
         assert new_state["alarm.message"] == expected_message
 
+
 class TestCalcRule:
     def test_create_calc_rule(self):
         rule = CalcRule()
@@ -511,13 +512,9 @@ class TestCalcRule:
 
     def test_initialise_calc_rule(self):
         rule = CalcRule()
-        
+    
         aServer = "fakeServer"
-        calc = {"calc_str": "pv[0]+10",
-                "variables": "a:pv:name",
-                "server": aServer,
-                "pv_name": "this:pv:name"
-                }
+        calc = {"calc_str": "pv[0]+10", "variables": "a:pv:name", "server": aServer, "pv_name": "this:pv:name"}
         rule.set_calc(calc)
         assert rule._calc_str == "pv[0]+10"
         assert type(rule._variables) is list

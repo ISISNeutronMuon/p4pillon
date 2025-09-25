@@ -12,6 +12,7 @@ from .rules import BaseScalarRule, RulesFlow
 
 logger = logging.getLogger(__name__)
 
+
 class CalcRule(BaseScalarRule):
     """
     This class implements a calculation using a string that represents the calculation and
@@ -20,13 +21,14 @@ class CalcRule(BaseScalarRule):
     The following members need to be initialised in order to use the rule:
         "calc_str" is the string that defines the calculation to perform, e.g "pv[0]+2.12*pv[1]". 
                     NB dependent variables are specified using the syntax pv[0], pv[1], ...
-                       the math module is imported as m so methods are available, e.g. "pv[0]*m.sin(pv[1])" 
+                    the math module is imported as m so methods are available, e.g. "pv[0]*m.sin(pv[1])" 
         "variables" is a string or list of dependent PVs, e.g. "a:pv:name" or ["pv:name:1", "pv:name:2"]
                     NB the order of the PVs in the list corresponds to pv[0], pv[1], ... in calc_str
         "server": Server is the server object to register monitor callbacks with.
         "pv_name": str is the name of the pv to be updated. A put is called on this variable when any 
                     dependent PV is updated.
     """
+
     def __init__(self, **kws):
         super().__init__()
     
@@ -46,11 +48,12 @@ class CalcRule(BaseScalarRule):
         will thus always be applicable.
         """
         return None
-    
+
     class MonitorCB:
         """
         Used to provide call back methods for subscribing to Context.monitor
         """
+
         def __init__(self, server, pv_name):
             """
             This class is used within  rule to provide a call back method for Context.monitor
@@ -68,32 +71,34 @@ class CalcRule(BaseScalarRule):
         """
         Define the calculation to be performed.
         The required argument calc is a dictionary with the following keys: 
-            "calc_str", "variables", "server", "pv_name".                    
+        "calc_str", "variables", "server", "pv_name".                    
         """
         if "calc_str" in calc:
             self._calc_str = calc["calc_str"]
-        
+
         if "variables" in calc:
             if type(calc["variables"]) is list:
                 self._variables = calc["variables"]
             if type(calc["variables"]) is str:
                 self._variables = [calc["variables"]]
-        
+
         if "server" in calc:
             self._server = calc["server"]
-        
+
         if "pv_name" in calc:
             self._pv_name = calc["pv_name"]
-        
+
     def init_rule(self, value: Value, **kwargs):
         """
         Method to initialise monitor call backs for the variables to be monitored.
         This should be added as an on start method when creating the pv.
         """
-        if self._calc_str == "" or \
-           self._variables == [] or \
-           type(self._server).__name__ != "Server" or \
-           self._pv_name == "":
+        if (
+            self._calc_str == "" 
+            or self._variables == [] 
+            or type(self._server).__name__ != "Server" 
+            or self._pv_name == ""
+        ):
             logger.error("calc rule not initialised correctly")
             raise ValueError
         logger.debug(f"value is {value}, calc is {self._calc_str}, variables are {self._variables}")

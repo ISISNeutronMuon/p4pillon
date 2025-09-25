@@ -54,8 +54,8 @@ def parse_config(yaml_obj: dict[str, dict[str, Any]], server: Server | None = No
 
         if server is not None:
             if hasattr(recipe, "calc"):
-                recipe.calc['server'] = server
-                recipe.calc['pv_name'] = name
+                recipe.calc["server"] = server
+                recipe.calc["pv_name"] = name
             server.add_pv(name, recipe)
 
     return pvrecipes

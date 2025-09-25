@@ -132,7 +132,7 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
         )
 
         kws = {}
-        if hasattr(self,"calc"):
+        if hasattr(self, "calc"):
             kws["calc"] = self.calc
 
         logger.debug(debug_str)
