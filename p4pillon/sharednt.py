@@ -66,7 +66,7 @@ class SharedNT(SharedPV, ABC):
                 case s if s.startswith("epics:nt/NTScalar"):
                     if nttype_str.startswith("epics:nt/NTScalarArray"):
                         if "calc" in kws:
-                            handler["calc"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(CalcRule(**kws)))
+                            #handler["calc"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(CalcRule(**kws)))
                             kws.pop("calc") # Removing this from kws as it shouldn't be passed to super().__init__(**kws)
                         handler["control"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ControlRule()))
                         handler["alarm"] = ComposeableRulesHandler(
