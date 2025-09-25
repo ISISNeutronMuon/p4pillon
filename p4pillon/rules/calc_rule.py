@@ -4,6 +4,7 @@ Rule to implement calc record functionality.
 
 import ast
 import logging
+import math as m  # noqa: F401
 
 from p4p import Value
 
@@ -19,6 +20,7 @@ class CalcRule(BaseScalarRule):
     The following members need to be initialised in order to use the rule:
         "calc_str" is the string that defines the calculation to perform, e.g "pv[0]+2.12*pv[1]". 
                     NB dependent variables are specified using the syntax pv[0], pv[1], ...
+                       the math module is imported as m so methods are available, e.g. "pv[0]*m.sin(pv[1])" 
         "variables" is a string or list of dependent PVs, e.g. "a:pv:name" or ["pv:name:1", "pv:name:2"]
                     NB the order of the PVs in the list corresponds to pv[0], pv[1], ... in calc_str
         "server": Server is the server object to register monitor callbacks with.
