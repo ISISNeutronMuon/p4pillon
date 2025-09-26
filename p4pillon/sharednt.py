@@ -69,7 +69,7 @@ class SharedNT(SharedPV, ABC):
                             # handler["calc"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(CalcRule(**kws)))
                             kws.pop(
                                 "calc"
-                            ) # Removing this from kws as it shouldn't be passed to super().__init__(**kws)
+                            )  # Removing this from kws as it shouldn't be passed to super().__init__(**kws)
                         handler["control"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ControlRule()))
                         handler["alarm"] = ComposeableRulesHandler(
                             AlarmRule()
@@ -81,7 +81,7 @@ class SharedNT(SharedPV, ABC):
                             handler["calc"] = ComposeableRulesHandler(CalcRule(**kws))
                             kws.pop(
                                 "calc"
-                            ) # Removing this from kws as it shouldn't be passed to super().__init__(**kws)
+                            )  # Removing this from kws as it shouldn't be passed to super().__init__(**kws)
                         handler["control"] = ComposeableRulesHandler(ControlRule())
                         handler["alarm"] = ComposeableRulesHandler(AlarmRule())
                         handler["alarm_limit"] = ComposeableRulesHandler(ValueAlarmRule())

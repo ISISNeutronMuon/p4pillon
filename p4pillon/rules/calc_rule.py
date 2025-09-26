@@ -19,19 +19,18 @@ class CalcRule(BaseScalarRule):
     a list of PV names of the variables used in the calculation.
 
     The following members need to be initialised in order to use the rule:
-        "calc_str" is the string that defines the calculation to perform, e.g "pv[0]+2.12*pv[1]". 
+        "calc_str" is the string that defines the calculation to perform, e.g "pv[0]+2.12*pv[1]".
                     NB dependent variables are specified using the syntax pv[0], pv[1], ...
-                    the math module is imported as m so methods are available, e.g. "pv[0]*m.sin(pv[1])" 
+                    the math module is imported as m so you can do, e.g. "pv[0]*m.sin(pv[1])"
         "variables" is a string or list of dependent PVs, e.g. "a:pv:name" or ["pv:name:1", "pv:name:2"]
                     NB the order of the PVs in the list corresponds to pv[0], pv[1], ... in calc_str
-        "server": Server is the server object to register monitor callbacks with.
-        "pv_name": str is the name of the pv to be updated. A put is called on this variable when any 
+        "server"  is the Server object to register monitor callbacks with.
+        "pv_name" is the name of the pv to be updated. A put is called on this variable when any
                     dependent PV is updated.
     """
 
     def __init__(self, **kws):
         super().__init__()
-    
         self._variables = []
         self._calc_str: str = ""
         if "calc" in kws:
@@ -40,11 +39,11 @@ class CalcRule(BaseScalarRule):
     @property
     def _name(self) -> str:
         return "calc"
-    
+
     @property
     def _fields(self) -> None:
         """
-        A return value of None means this rule is not dependent on any fields in the PV and 
+        A return value of None means this rule is not dependent on any fields in the PV and
         will thus always be applicable.
         """
         return None
@@ -70,8 +69,8 @@ class CalcRule(BaseScalarRule):
     def set_calc(self, calc) -> None:
         """
         Define the calculation to be performed.
-        The required argument calc is a dictionary with the following keys: 
-        "calc_str", "variables", "server", "pv_name".                    
+        The required argument calc is a dictionary with the following keys:
+        "calc_str", "variables", "server", "pv_name".
         """
         if "calc_str" in calc:
             self._calc_str = calc["calc_str"]
@@ -94,9 +93,9 @@ class CalcRule(BaseScalarRule):
         This should be added as an on start method when creating the pv.
         """
         if (
-            self._calc_str == "" 
-            or self._variables == [] 
-            or type(self._server).__name__ != "Server" 
+            self._calc_str == ""
+            or self._variables == []
+            or type(self._server).__name__ != "Server"
             or self._pv_name == ""
         ):
             logger.error("calc rule not initialised correctly")

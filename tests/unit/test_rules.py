@@ -512,7 +512,7 @@ class TestCalcRule:
 
     def test_initialise_calc_rule(self):
         rule = CalcRule()
-    
+
         aServer = "fakeServer"
         calc = {"calc_str": "pv[0]+10", "variables": "a:pv:name", "server": aServer, "pv_name": "this:pv:name"}
         rule.set_calc(calc)
