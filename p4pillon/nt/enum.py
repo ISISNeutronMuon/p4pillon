@@ -13,7 +13,7 @@ if __p4p_version > "4.2.1":
     pass
 else:
 
-    def __wrap(self, value, choices=None, **kws):
+    def __wrap(self, value, choices=None, **kwargs):
         """Pack python value into Value
 
         Accepts dict to explicitly initialize fields by name.
@@ -23,7 +23,7 @@ else:
         if isinstance(value, Value):
             pass
         elif isinstance(value, ntwrappercommon):
-            kws.setdefault("timestamp", value.timestamp)
+            kwargs.setdefault("timestamp", value.timestamp)
             value = value.raw
         elif isinstance(value, dict):
             # if index, choices not in value.keys(), then
@@ -44,7 +44,7 @@ else:
 
         # pylint: disable=W0212
         self._choices = value["value.choices"] or self._choices  # pyright: ignore[reportOptionalSubscript]
-        return self._annotate(value, **kws)  # pylint: disable=W0212
+        return self._annotate(value, **kwargs)  # pylint: disable=W0212
 
     NTEnum.Value = Value  # pyright: ignore[reportAttributeAccessIssue]
     NTEnum.wrap = __wrap

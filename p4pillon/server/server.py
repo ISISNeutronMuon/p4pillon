@@ -128,3 +128,23 @@ class Server(ABC):
         if not pv_name.startswith(self.prefix):
             pv_name = self.prefix + pv_name
         return self._pvs.get(pv_name)
+
+    def get_pv_value(self, pv_name: str):
+        """
+        Get the value of a PV using SharedPV.current() if the PV is on this server
+        or self._ctxt.get() if it is not.
+        """
+        shared_pv = self[pv_name]
+        if shared_pv:
+            logger.debug("Getting value using SharedPV for pv %s", pv_name)
+            return shared_pv.current()
+
+        logger.debug("Doing Context get for pv %s", pv_name)
+        return self._ctxt.get(pv_name)
+
+    def put_pv_value(self, pv_name: str, value):
+        """
+        Put the value to a PV using the server Context member self._ctxt
+        """
+        logger.debug("Trying putting value %r to pv %s", value, pv_name)
+        self._ctxt.put(pv_name, value)

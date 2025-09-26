@@ -130,7 +130,7 @@ class SharedPV(_SharedPV, ABC):
     See :ref:`unwrap`
     """
 
-    def open(self, value, nt=None, wrap=None, unwrap=None, **kws):
+    def open(self, value, nt=None, wrap=None, unwrap=None, **kwargs):
         """Mark the PV as opened an provide its initial value.
         This initial value is later updated with post().
 
@@ -146,9 +146,9 @@ class SharedPV(_SharedPV, ABC):
         self._unwrap = unwrap or (nt and nt.unwrap) or self._unwrap
 
         try:
-            V = self._wrap(value, **kws)
+            V = self._wrap(value, **kwargs)
         except Exception as exc:  # py3 will chain automatically, py2 won't
-            raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kws}") from exc
+            raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kwargs}") from exc
 
         # Guard goes here because we can have handlers that don't inherit from
         # the Handler base class
@@ -161,7 +161,7 @@ class SharedPV(_SharedPV, ABC):
 
         _SharedPV.open(self, V)
 
-    def post(self, value, **kws):
+    def post(self, value, **kwargs):
         """Provide an update to the Value of this PV.
 
         :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
@@ -172,9 +172,9 @@ class SharedPV(_SharedPV, ABC):
         Common arguments include: timestamp= , severity= , and message= .
         """
         try:
-            V = self._wrap(value, **kws)
+            V = self._wrap(value, **kwargs)
         except Exception as exc:  # py3 will chain automatically, py2 won't
-            raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kws}") from exc
+            raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kwargs}") from exc
 
         # Guard goes here because we can have handlers that don't inherit from
         # the Handler base class
