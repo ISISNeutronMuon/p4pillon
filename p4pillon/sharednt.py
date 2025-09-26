@@ -38,9 +38,9 @@ class SharedNT(SharedPV, ABC):
         auth_handlers: OrderedDict[str, Handler] | None = None,
         user_handlers: OrderedDict[str, Handler] | None = None,
         handler_constructors: dict[str, Any] | None = None,
-        **kws,
+        **kwargs,
     ):
-        # Check if there is a handler specified in the kws, and if not override it
+        # Check if there is a handler specified in the kwargs, and if not override it
         # with an NT handler.
 
         # Create a CompositeHandler. If there is no user supplied handler, and this is not
@@ -51,25 +51,25 @@ class SharedNT(SharedPV, ABC):
         else:
             handler = CompositeHandler()
 
-        if "nt" in kws or "initial" in kws:
+        if "nt" in kwargs or "initial" in kwargs:
             nttype_str: str = ""
-            if kws.get("nt", None):
+            if kwargs.get("nt", None):
                 try:
-                    nttype_str = kws["nt"].type.getID()
+                    nttype_str = kwargs["nt"].type.getID()
                 except AttributeError:
-                    nttype_str = f"{type(kws['nt'])}"
+                    nttype_str = f"{type(kwargs['nt'])}"
             else:
-                if isinstance(kws["initial"], Value):
-                    nttype_str = kws["initial"].getID()
+                if isinstance(kwargs["initial"], Value):
+                    nttype_str = kwargs["initial"].getID()
 
             match nttype_str:
                 case s if s.startswith("epics:nt/NTScalar"):
                     if nttype_str.startswith("epics:nt/NTScalarArray"):
-                        if "calc" in kws:
-                            # handler["calc"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(CalcRule(**kws)))
-                            kws.pop(
+                        if "calc" in kwargs:
+                            # handler["calc"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(CalcRule(**kwargs)))
+                            kwargs.pop(
                                 "calc"
-                            )  # Removing this from kws as it shouldn't be passed to super().__init__(**kws)
+                            )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
                         handler["control"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ControlRule()))
                         handler["alarm"] = ComposeableRulesHandler(
                             AlarmRule()
@@ -77,11 +77,11 @@ class SharedNT(SharedPV, ABC):
                         handler["alarm_limit"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ValueAlarmRule()))
                         handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
                     elif nttype_str.startswith("epics:nt/NTScalar"):
-                        if "calc" in kws:
-                            handler["calc"] = ComposeableRulesHandler(CalcRule(**kws))
-                            kws.pop(
+                        if "calc" in kwargs:
+                            handler["calc"] = ComposeableRulesHandler(CalcRule(**kwargs))
+                            kwargs.pop(
                                 "calc"
-                            )  # Removing this from kws as it shouldn't be passed to super().__init__(**kws)
+                            )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
                         handler["control"] = ComposeableRulesHandler(ControlRule())
                         handler["alarm"] = ComposeableRulesHandler(AlarmRule())
                         handler["alarm_limit"] = ComposeableRulesHandler(ValueAlarmRule())
@@ -105,9 +105,9 @@ class SharedNT(SharedPV, ABC):
             handler = handler | user_handlers
             handler.move_to_end("timestamp", last=True)  # Ensure timestamp is last
 
-        kws["handler"] = handler
+        kwargs["handler"] = handler
 
-        super().__init__(**kws)
+        super().__init__(**kwargs)
 
     @property
     def handler(self) -> CompositeHandler:

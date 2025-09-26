@@ -7,10 +7,10 @@ import logging
 from p4pillon.thread.sharednt import SharedNT
 
 
-def _build_mailbox(*kargs, **kws):
+def _build_mailbox(*kargs, **kwargs):
     """Simple set up of a post handler using a SharedNT"""
 
-    return SharedNT(*kargs, **kws)
+    return SharedNT(*kargs, **kwargs)
 
 
 # pylint: disable=wrong-import-position, wrong-import-order, unused-import

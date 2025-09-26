@@ -29,12 +29,12 @@ class CalcRule(BaseScalarRule):
                     dependent PV is updated.
     """
 
-    def __init__(self, **kws):
+    def __init__(self, **kwargs):
         super().__init__()
         self._variables = []
         self._calc_str: str = ""
-        if "calc" in kws:
-            self.set_calc(kws["calc"])
+        if "calc" in kwargs:
+            self.set_calc(kwargs["calc"])
 
     @property
     def _name(self) -> str:
@@ -50,7 +50,7 @@ class CalcRule(BaseScalarRule):
 
     class MonitorCB:
         """
-        Used to provide call back methods for subscribing to Context.monitor
+        The MonitorCB class is used to provide call back methods for subscribing to Context.monitor
         """
 
         def __init__(self, server, pv_name):
