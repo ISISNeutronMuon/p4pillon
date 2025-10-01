@@ -5,6 +5,7 @@ Server is used to create PVs and manage their lifetimes
 from __future__ import annotations
 
 import logging
+from abc import ABC
 
 from p4p.client.raw import Context
 from p4p.server import Server as _Server
@@ -16,10 +17,12 @@ from p4pillon.server.raw import SharedPV
 logger = logging.getLogger(__name__)
 
 
-class Server:
+class Server(ABC):
     """
     Creates PVs and manages their lifetimes
     """
+
+    _context = Context  # Shame we can't define an abstact class variable
 
     def __init__(self, prefix: str = "") -> None:
         """
@@ -36,7 +39,7 @@ class Server:
 
         self._running = False
 
-        self._ctxt = Context("pva")
+        self._ctxt = Server._context("pva")
 
     def start(self) -> None:
         """Start the Server"""
@@ -125,3 +128,23 @@ class Server:
         if not pv_name.startswith(self.prefix):
             pv_name = self.prefix + pv_name
         return self._pvs.get(pv_name)
+
+    def get_pv_value(self, pv_name: str):
+        """
+        Get the value of a PV using SharedPV.current() if the PV is on this server
+        or self._ctxt.get() if it is not.
+        """
+        shared_pv = self[pv_name]
+        if shared_pv:
+            logger.debug("Getting value using SharedPV for pv %s", pv_name)
+            return shared_pv.current()
+
+        logger.debug("Doing Context get for pv %s", pv_name)
+        return self._ctxt.get(pv_name)
+
+    def put_pv_value(self, pv_name: str, value):
+        """
+        Put the value to a PV using the server Context member self._ctxt
+        """
+        logger.debug("Trying putting value %r to pv %s", value, pv_name)
+        self._ctxt.put(pv_name, value)

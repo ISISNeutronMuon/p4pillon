@@ -3,13 +3,14 @@ Patch in p4p PR #172 - support for open(), post(), and close() handler functions
 """
 
 import logging
+from abc import ABC
 
 from p4p.server.raw import SharedPV as _SharedPV
 
 _log = logging.getLogger(__name__)
 
 
-class Handler:
+class Handler(ABC):
     """Skeleton of SharedPV Handler
 
     Use of this as a base class is optional.
@@ -82,7 +83,7 @@ class Handler:
         pass
 
 
-class SharedPV(_SharedPV):
+class SharedPV(_SharedPV, ABC):
     """Shared state Process Variable.  Callback based implementation.
 
     .. note:: if initial=None, the PV is initially **closed** and
@@ -129,7 +130,7 @@ class SharedPV(_SharedPV):
     See :ref:`unwrap`
     """
 
-    def open(self, value, nt=None, wrap=None, unwrap=None, **kws):
+    def open(self, value, nt=None, wrap=None, unwrap=None, **kwargs):
         """Mark the PV as opened an provide its initial value.
         This initial value is later updated with post().
 
@@ -145,9 +146,9 @@ class SharedPV(_SharedPV):
         self._unwrap = unwrap or (nt and nt.unwrap) or self._unwrap
 
         try:
-            V = self._wrap(value, **kws)
+            V = self._wrap(value, **kwargs)
         except Exception as exc:  # py3 will chain automatically, py2 won't
-            raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kws}") from exc
+            raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kwargs}") from exc
 
         # Guard goes here because we can have handlers that don't inherit from
         # the Handler base class
@@ -160,7 +161,7 @@ class SharedPV(_SharedPV):
 
         _SharedPV.open(self, V)
 
-    def post(self, value, **kws):
+    def post(self, value, **kwargs):
         """Provide an update to the Value of this PV.
 
         :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
@@ -171,9 +172,9 @@ class SharedPV(_SharedPV):
         Common arguments include: timestamp= , severity= , and message= .
         """
         try:
-            V = self._wrap(value, **kws)
+            V = self._wrap(value, **kwargs)
         except Exception as exc:  # py3 will chain automatically, py2 won't
-            raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kws}") from exc
+            raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kwargs}") from exc
 
         # Guard goes here because we can have handlers that don't inherit from
         # the Handler base class

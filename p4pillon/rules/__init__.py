@@ -4,6 +4,7 @@ Rules represent a specialisation of the Handler class to accomplish common workf
 
 from .alarm_ntenum_rule import AlarmNTEnumRule
 from .alarm_rule import AlarmRule
+from .calc_rule import CalcRule
 from .control_rule import ControlRule
 from .read_only_rule import ReadOnlyRule
 from .rules import BaseRule, RulesFlow, ScalarToArrayWrapperRule
@@ -14,6 +15,7 @@ __all__ = [
     "BaseRule",
     "AlarmRule",
     "AlarmNTEnumRule",
+    "CalcRule",
     "ControlRule",
     "ReadOnlyRule",
     "RulesFlow",

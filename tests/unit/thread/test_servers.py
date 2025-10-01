@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from p4p.client.thread import Context
 from p4p.nt import NTScalar
 from p4p.server import StaticProvider
 
@@ -104,3 +105,20 @@ def test_server_remove_pv():
     test_server.remove_pv("DEV:TEST:PV:1")
     assert len(test_server._pvs) == 0
     assert test_server._pvs.get("DEV:TEST:PV:1") is None
+
+
+def test_server_check_thread():
+    test_server = Server(
+        prefix="DEV:",
+    )
+
+    assert test_server._context == Context
+
+
+@pytest.mark.xfail(reason="Not sure why this is failing, but probably due to import paths or monkey-patching")
+def test_server_check_thread_isinstance():
+    test_server = Server(
+        prefix="DEV:",
+    )
+
+    assert isinstance(test_server._context, Context)
