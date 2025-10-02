@@ -116,7 +116,7 @@ def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
     else:
         pvrecipe = PVScalarRecipe(PVTypes[pvdetails["type"]], pvdetails["description"], initial)
 
-    supported_configs = [("read_only", bool), ("calc", dict)]
+    supported_configs = [("read_only", bool), ("calc", dict), ("hw_write", dict)]
     for config, config_type in supported_configs:
         # Process variables in the configuration that are attributes of the pvrecipe class
         temp_config = pvdetails.get(config)

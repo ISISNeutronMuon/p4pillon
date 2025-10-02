@@ -134,6 +134,8 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
         kwargs = {}
         if hasattr(self, "calc"):
             kwargs["calc"] = self.calc
+        if hasattr(self, "hw_write"):
+            kwargs["hw_write"] = self.hw_write
 
         logger.debug(debug_str)
 
