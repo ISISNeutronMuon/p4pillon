@@ -107,6 +107,8 @@ class CalcRule(BaseScalarRule):
             temp_monitor = self.MonitorCB(self._server, self._pv_name)
             self._subs.append(self._server._ctxt.monitor(pv, temp_monitor.cb))
 
+        return RulesFlow.CONTINUE
+
     def get_variables(self):
         """
         Return a list of the current values of the pvs in self._variables
