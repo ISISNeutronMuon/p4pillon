@@ -6,7 +6,15 @@ import pytest
 from p4p.nt import NTScalar
 
 from p4pillon.definitions import AlarmSeverity
-from p4pillon.rules import CalcRule, ControlRule, RulesFlow, ScalarToArrayWrapperRule, TimestampRule, ValueAlarmRule
+from p4pillon.rules import (
+    CalcRule,
+    ControlRule,
+    CPSWriteRule,
+    RulesFlow,
+    ScalarToArrayWrapperRule,
+    TimestampRule,
+    ValueAlarmRule,
+)
 from p4pillon.utils import overwrite_unmarked
 
 
@@ -521,3 +529,10 @@ class TestCalcRule:
         assert len(rule._variables) == 1 and rule._variables[0] == "a:pv:name"
         assert rule._server == "fakeServer"
         assert rule._pv_name == "this:pv:name"
+
+
+class TestCPSWriteRule:
+    def test_create_cps_write_rule(self):
+        rule = CPSWriteRule()
+
+        assert rule._name == "cps_write"

@@ -7,24 +7,21 @@ import logging
 import requests
 from p4p import Value
 
-from p4pillon.rules import BaseScalarRule, RulesFlow
+from .rules import BaseScalarRule, RulesFlow
 
 logger = logging.getLogger(__name__)
 
 
 class CPSWriteRule(BaseScalarRule):
     """
-    This class implements a rule to write 
+    This class implements a rule to write
     """
 
     def __init__(self, **kwargs):
         super().__init__()
         self._hw_write = {}
 
-        if ("hw_write" in kwargs 
-            and "hw" in kwargs["hw_write"]
-            and kwargs["hw_write"]["hw"] == "CPS"
-        ):
+        if "hw_write" in kwargs and "hw" in kwargs["hw_write"] and kwargs["hw_write"]["hw"] == "CPS":
             self.set_cps_write(kwargs["hw_write"])
 
     @property
@@ -51,9 +48,7 @@ class CPSWriteRule(BaseScalarRule):
         if "ip_addr" in hw_write and isinstance(hw_write["ip_addr"], str):
             self._hw_write["ip_addr"] = hw_write["ip_addr"]
 
-        if ("channel_name" in hw_write 
-            and isinstance(hw_write["channel_name"], str)
-        ):
+        if "channel_name" in hw_write and isinstance(hw_write["channel_name"], str):
             self._hw_write["channel_name"] = hw_write["channel_name"]
 
     def init_rule(self, value: Value, **kwargs):
@@ -88,8 +83,10 @@ class CPSWriteRule(BaseScalarRule):
 
         ret_val = RulesFlow.CONTINUE
 
-        xml_header = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-        xml_db = f"<database><channel name=\"{self._hw_write['channel_name']}\"><value>{value}</value></cahnnel></database>"
+        xml_header = '<?xml version="1.0" encoding="UTF-8"?>'
+        xml_db = (
+            f'<database><channel name="{self._hw_write["channel_name"]}"><value>{value}</value></cahnnel></database>'
+        )
         xml_string = xml_header + xml_db
 
         url = f"http://{self._hw_write['ip_addr']}/scripts/database.vi?function=10"
@@ -111,15 +108,13 @@ class CPSWriteRule(BaseScalarRule):
             ret_val = RulesFlow.TERMINATE
 
         return ret_val
-    
+
     def validate_hw_write(self) -> bool:
         """
         Check that the required parameters have been set in the self._hw_write dictinoary
         """
 
-        if ("ip_addr" not in self._hw_write
-            or "channel_name" not in self._hw_write
-        ):
+        if "ip_addr" not in self._hw_write or "channel_name" not in self._hw_write:
             logger.error(f"self._hw_write not set correctly self._hw_write={self._hw_write}")
             return False
 
