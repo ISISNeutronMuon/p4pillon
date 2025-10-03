@@ -5,7 +5,11 @@ import pytest
 
 from p4pillon.config_reader import parse_config
 from p4pillon.definitions import PVTypes
-from p4pillon.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
+from p4pillon.thread.pvrecipe import (
+    PVEnumRecipe,
+    PVScalarArrayRecipe,
+    PVScalarRecipe,
+)
 
 
 @pytest.mark.parametrize(
@@ -76,3 +80,35 @@ def test_parse_config_with_server_enum(name, config, pvtype):
     assert server.add_pv.call_args_list[0][0][1].initial_value == config["initial"]
     assert isinstance(server.add_pv.call_args_list[0][0][1], PVEnumRecipe)
     assert server.add_pv.call_args_list[0][0][0] == name
+
+
+@pytest.mark.parametrize(
+    "name, config",
+    [
+        (
+            "TEST:PV:DOUBLE",
+            {
+                "initial": 0.0,
+                "type": "DOUBLE",
+                "hw_write": {"hw": "CPS", "ip_addr": "123.456.78.90", "channel_name": "a:double:channel"},
+            },
+        ),
+        (
+            "TEST:PV:INTEGER",
+            {
+                "initial": 0,
+                "type": "INTEGER",
+                "hw_write": {"hw": "CPS", "ip_addr": "123.456.78.90", "channel_name": "an:int:channel"},
+            },
+        ),
+    ],
+)
+def test_parse_config_with_cps(name, config):
+    server = MagicMock()
+
+    config["description"] = "test"
+
+    recipes = parse_config({name: config}, server)
+
+    assert len(recipes) == 1
+    assert hasattr(recipes[name], "hw_write")
