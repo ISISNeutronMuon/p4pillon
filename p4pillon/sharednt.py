@@ -26,15 +26,82 @@ from p4pillon.server.raw import Handler, SharedPV
 
 logger = logging.getLogger(__name__)
 
+alarm_typespec = [
+    (
+        "alarm",
+        (
+            "S",
+            "alarm_t",
+            [
+                ("severity", "i"),
+                ("status", "i"),
+                ("message", "s"),
+            ],
+        ),
+    )
+]
 
-def isTypeSubset(fullset: Type, subset: Type) -> bool:
-    for k, v in subset.items():
-        if k not in fullset.keys():
-            return False
-            
-        if v not in fullset.values():
-            print(f"v: {v} {fullset.values()}")
-            return False
+valuealarm_typespec = [
+    (
+        "valueAlarm",
+        (
+            "S",
+            "valueAlarm_t",
+            [
+                ("active", "b"),
+                ("lowAlarmLimit", "d"),
+                ("lowWarningLimit", "d"),
+                ("highWarningLimit", "d"),
+                ("highAlarmLimit", "d"),
+                ("lowAlarmSeverity", "i"),
+                ("lowWarningSeverity", "i"),
+                ("highWarningSeverity", "i"),
+                ("highAlarmSeverity", "i"),
+                ("hysteresis", "d"),
+            ],
+        ),
+    )
+]
+
+control_typespec = [
+    (
+        "control",
+        (
+            "S",
+            "control_t",
+            [
+                ("limitLow", "d"),
+                ("limitHigh", "d"),
+                ("minStep", "d"),
+            ],
+        ),
+    )
+]
+
+timestamp_typespec = [
+    (
+        "timeStamp",
+        (
+            "S",
+            "time_t",
+            [
+                ("secondsPastEpoch", "l"),
+                ("nanoseconds", "i"),
+            ],
+        ),
+    )
+]
+
+
+def is_type_subset(fullset: Type, subset: Type) -> bool:
+    """Check if the subset is a part of the fullset."""
+
+    # For now we only support looking one level deep
+    test = all(x in fullset.keys() for x in subset.keys())
+    if test:
+        pass
+    else:
+        return False
 
     return True
 
@@ -47,6 +114,7 @@ class SharedNT(SharedPV, ABC):
 
     def __init__(
         self,
+        *,
         auth_handlers: OrderedDict[str, Handler] | None = None,
         user_handlers: OrderedDict[str, Handler] | None = None,
         handler_constructors: dict[str, Any] | None = None,
@@ -64,24 +132,13 @@ class SharedNT(SharedPV, ABC):
             handler = CompositeHandler()
 
         if "nt" in kwargs or "initial" in kwargs:
-            # Get string description of type
-            nttype_str: str = ""
-            if kwargs.get("nt", None):
-                try:
-                    nttype_str = kwargs["nt"].type.getID()
-                except AttributeError:
-                    nttype_str = f"{type(kwargs['nt'])}"
-            else:
-                if isinstance(kwargs["initial"], Value):
-                    nttype_str = kwargs["initial"].getID()
-
             # Get type information
             nttype: Type | None = None
             if kwargs.get("nt", None):
                 try:
                     nttype = kwargs["nt"].type
-                except AttributeError:
-                    raise NotImplementedError(f"SharedNT does not support type: {nttype_str}")
+                except AttributeError as exc:
+                    raise NotImplementedError("Unable to determine Type of SharedNT") from exc
             else:
                 if isinstance(kwargs["initial"], Value):
                     nttype = kwargs["initial"].type()
@@ -92,66 +149,42 @@ class SharedNT(SharedPV, ABC):
                 if "a" in nttype["value"]:
                     ntarray = True
 
+                # check for alarm
+                if is_type_subset(nttype, Type(alarm_typespec)):
+                    handler["alarm"] = ComposeableRulesHandler(AlarmRule())
+
+                # Check for control
+                if is_type_subset(nttype, Type(control_typespec)):
+                    if ntarray:
+                        handler["control"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ControlRule()))
+                    else:
+                        handler["control"] = ComposeableRulesHandler(ControlRule())
+
+                # alarmLimit for control
+                if is_type_subset(nttype, Type(alarm_typespec + valuealarm_typespec)):
+                    if ntarray:
+                        handler["alarm_limit"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ValueAlarmRule()))
+                    else:
+                        handler["alarm_limit"] = ComposeableRulesHandler(ValueAlarmRule())
+
+                # Special cases
+                if "calc" in kwargs:
+                    if ntarray:
+                        raise NotImplementedError("Arrays not yet supported for Calcs")
+                    else:
+                        handler["calc"] = ComposeableRulesHandler(CalcRule(**kwargs))
+                    kwargs.pop(
+                        "calc"
+                    )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
+
+                if handler_constructors and "alarmNTEnum" in handler_constructors:
+                    handler["alarmNTEnum"] = ComposeableRulesHandler(
+                        AlarmNTEnumRule(handler_constructors["alarmNTEnum"])
+                    )
+
                 # Check for timestamp
-                timestamp_found = isTypeSubset(
-                    nttype,
-                    Type(
-                        [
-                            (
-                                "timeStamp",
-                                (
-                                    "S",
-                                    "time_t",
-                                    [
-                                        ("secondsPastEpoch", "l"),
-                                        ("nanoseconds", "i"),
-                                    ],
-                                ),
-                            )
-                        ]
-                    ),
-                )
-
-                print(nttype.items(), ntarray, timestamp_found)
-
-                match nttype_str:
-                    case s if s.startswith("epics:nt/NTScalar"):
-                        if nttype_str.startswith("epics:nt/NTScalarArray"):
-                            if "calc" in kwargs:
-                                # handler["calc"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(CalcRule(**kwargs)))
-                                kwargs.pop(
-                                    "calc"
-                                )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
-                            handler["control"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ControlRule()))
-                            handler["alarm"] = ComposeableRulesHandler(
-                                AlarmRule()
-                            )  # ScalarToArrayWrapperRule unnecessary - no access to values
-                            handler["alarm_limit"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ValueAlarmRule()))
-                            handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
-                        elif nttype_str.startswith("epics:nt/NTScalar"):
-                            if "calc" in kwargs:
-                                handler["calc"] = ComposeableRulesHandler(CalcRule(**kwargs))
-                                kwargs.pop(
-                                    "calc"
-                                )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
-                            handler["control"] = ComposeableRulesHandler(ControlRule())
-                            handler["alarm"] = ComposeableRulesHandler(AlarmRule())
-                            handler["alarm_limit"] = ComposeableRulesHandler(ValueAlarmRule())
-                            handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
-                        else:
-                            raise TypeError(f"Unrecognised NT type: {nttype_str}")
-                    case s if s.startswith("epics:nt/NTEnum"):
-                        handler["alarm"] = ComposeableRulesHandler(AlarmRule())
-
-                        alarm_ntenum_constructor = None
-                        if handler_constructors:
-                            alarm_ntenum_constructor = handler_constructors.get("alarmNTEnum", None)
-                        handler["alarmNTEnum"] = ComposeableRulesHandler(AlarmNTEnumRule(alarm_ntenum_constructor))
-                        handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
-                    case _:
-                        if not nttype_str:
-                            nttype_str = "Unknown"
-                        raise NotImplementedError(f"SharedNT does not support type: {nttype_str}")
+                if is_type_subset(nttype, Type(timestamp_typespec)):
+                    handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
 
         if user_handlers:
             handler = handler | user_handlers

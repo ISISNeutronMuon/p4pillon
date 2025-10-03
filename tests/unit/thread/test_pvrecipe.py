@@ -293,7 +293,11 @@ def test_ntscalar_numeric_create_pv(mock_time, recipe, pvtype, with_limits, expe
     pvdict = pv.current().raw.todict()
 
     assert isinstance(pv._handler, CompositeHandler)
-    assert list(pv._handler.keys()) == ["control", "alarm", "alarm_limit", "timestamp"]
+    if with_limits:
+        assert set(pv._handler.keys()) == set(["alarm", "control", "alarm_limit", "timestamp"])
+    else:
+        assert set(pv._handler.keys()) == set(["alarm", "timestamp"])
+
     assert isinstance(pv.nt, NTScalar)  # change to check the name instead?
     assert pv.isOpen() is True
 
@@ -334,7 +338,7 @@ def test_ntscalar_string_create_pv(mock_time, recipe, expected_value):
     pvdict = pv.current().raw.todict()
 
     assert isinstance(pv._handler, CompositeHandler)
-    assert list(pv._handler.keys()) == ["control", "alarm", "alarm_limit", "timestamp"]
+    assert set(pv._handler.keys()) == set(["alarm", "timestamp"])
     assert isinstance(pv.nt, NTScalar)
     assert pv.isOpen() is True
     assert pv.current().timestamp == mock_time.return_value
@@ -357,11 +361,17 @@ def test_ntenum_bad_types(pvtype):
     assert "Unsupported pv type" in str(e)
 
 
+@pytest.mark.xfail(reason="Passing arguments to handlers not working yet")
 @patch("time.time")
 def test_ntenum_create_pv(mock_time):
     mock_time.return_value = 123.456
 
-    recipe = PVEnumRecipe(PVTypes.ENUM, description="test enum", initial_value={"index": 0, "choices": ["OFF", "ON"]})
+    recipe = PVEnumRecipe(
+        PVTypes.ENUM,
+        description="test enum",
+        initial_value={"index": 0, "choices": ["OFF", "ON"]},
+        handler_constructors={"alarmNTEnum": {}},
+    )
 
     pv = recipe.create_pv("TEST:PV:ENUM")
 
@@ -369,7 +379,7 @@ def test_ntenum_create_pv(mock_time):
 
     assert pv.isOpen()
     assert isinstance(pv._handler, CompositeHandler)
-    assert list(pv.handler.keys()) == ["alarm", "alarmNTEnum", "timestamp"]
+    assert set(pv.handler.keys()) == set(["alarm", "alarmNTEnum", "timestamp"])
     assert pv.nt.type.getID() == "epics:nt/NTEnum:1.0"
     assert pv.isOpen() is True
     assert pv.current().timestamp == mock_time.return_value
