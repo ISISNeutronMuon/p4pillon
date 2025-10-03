@@ -534,5 +534,19 @@ class TestCalcRule:
 class TestCPSWriteRule:
     def test_create_cps_write_rule(self):
         rule = CPSWriteRule()
-
         assert rule._name == "cps_write"
+
+    def test_set_cps_write(self):
+        hw_write = {"hw": "CPS", "ip_addr": "192.168.55.55", "channel_name": "a:chan:name"}
+        rule = CPSWriteRule(hw_write=hw_write)
+
+        assert rule._hw_write != {} and len(rule._hw_write) == 2
+        assert "ip_addr" in rule._hw_write and rule._hw_write["ip_addr"] == "192.168.55.55"
+        assert "channel_name" in rule._hw_write and rule._hw_write["channel_name"] == "a:chan:name"
+
+        hw_write = {"ip_addr": "192.168.25.25", "channel_name": "another:chan:name"}
+        rule.set_cps_write(hw_write)
+
+        assert rule._hw_write != {} and len(rule._hw_write) == 2
+        assert "ip_addr" in rule._hw_write and rule._hw_write["ip_addr"] == "192.168.25.25"
+        assert "channel_name" in rule._hw_write and rule._hw_write["channel_name"] == "another:chan:name"

@@ -18,6 +18,13 @@ class CPSWriteRule(BaseScalarRule):
     """
 
     def __init__(self, **kwargs):
+        """
+        initialisation parameters can be passed in kwargs:
+            kwargs["hw_write"] = {"hw": "CPS"  # this is required to identify these as parameters for CPS
+                "ip_addr": "123.456.78.90"  # the ip address of the CPS crate
+                "channel_name": "crate:channel:name"  # the name of the channel on the crate this PV represents
+            }
+        """
         super().__init__()
         self._hw_write = {}
 
@@ -36,7 +43,7 @@ class CPSWriteRule(BaseScalarRule):
         """
         return None
 
-    def set_cps_write(self, hw_write) -> None:
+    def set_cps_write(self, hw_write: dict) -> None:
         """
         Set the parameters needed to write the value back to the channel on the crate.
         hw_write is a dictionary of the parameters:
