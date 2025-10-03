@@ -18,6 +18,7 @@ from p4pillon.rules import (
     AlarmRule,
     CalcRule,
     ControlRule,
+    CPSWriteRule,
     ScalarToArrayWrapperRule,
     TimestampRule,
     ValueAlarmRule,
@@ -75,6 +76,12 @@ class SharedNT(SharedPV, ABC):
                             AlarmRule()
                         )  # ScalarToArrayWrapperRule unnecessary - no access to values
                         handler["alarm_limit"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ValueAlarmRule()))
+                        if "hw_write" in kwargs:
+                            if kwargs["hw_write"]["hw"] == "CPS":
+                                handler["hw_write"] = ComposeableRulesHandler(CPSWriteRule(**kwargs))
+                            kwargs.pop(
+                                "hw_write"
+                            )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
                         handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
                     elif nttype_str.startswith("epics:nt/NTScalar"):
                         if "calc" in kwargs:
@@ -85,6 +92,12 @@ class SharedNT(SharedPV, ABC):
                         handler["control"] = ComposeableRulesHandler(ControlRule())
                         handler["alarm"] = ComposeableRulesHandler(AlarmRule())
                         handler["alarm_limit"] = ComposeableRulesHandler(ValueAlarmRule())
+                        if "hw_write" in kwargs:
+                            if kwargs["hw_write"]["hw"] == "CPS":
+                                handler["hw_write"] = ComposeableRulesHandler(CPSWriteRule(**kwargs))
+                            kwargs.pop(
+                                "hw_write"
+                            )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
                         handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
                     else:
                         raise TypeError(f"Unrecognised NT type: {nttype_str}")
@@ -95,6 +108,12 @@ class SharedNT(SharedPV, ABC):
                     if handler_constructors:
                         alarm_ntenum_constructor = handler_constructors.get("alarmNTEnum", None)
                     handler["alarmNTEnum"] = ComposeableRulesHandler(AlarmNTEnumRule(alarm_ntenum_constructor))
+                    if "hw_write" in kwargs:
+                        if kwargs["hw_write"]["hw"] == "CPS":
+                            handler["hw_write"] = ComposeableRulesHandler(CPSWriteRule(**kwargs))
+                        kwargs.pop(
+                            "hw_write"
+                        )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
                     handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
                 case _:
                     if not nttype_str:

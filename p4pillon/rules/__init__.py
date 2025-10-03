@@ -6,6 +6,7 @@ from .alarm_ntenum_rule import AlarmNTEnumRule
 from .alarm_rule import AlarmRule
 from .calc_rule import CalcRule
 from .control_rule import ControlRule
+from .cps_write_rule import CPSWriteRule
 from .read_only_rule import ReadOnlyRule
 from .rules import BaseRule, RulesFlow, ScalarToArrayWrapperRule
 from .timestamp_rule import TimestampRule
@@ -17,6 +18,7 @@ __all__ = [
     "AlarmNTEnumRule",
     "CalcRule",
     "ControlRule",
+    "CPSWriteRule",
     "ReadOnlyRule",
     "RulesFlow",
     "ScalarToArrayWrapperRule",

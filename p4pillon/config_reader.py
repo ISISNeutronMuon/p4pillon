@@ -10,7 +10,11 @@ import yaml
 from p4pillon.definitions import PVTypes
 from p4pillon.pvrecipe import BasePVRecipe
 from p4pillon.server.server import Server
-from p4pillon.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
+from p4pillon.thread.pvrecipe import (
+    PVEnumRecipe,
+    PVScalarArrayRecipe,
+    PVScalarRecipe,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +120,7 @@ def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
     else:
         pvrecipe = PVScalarRecipe(PVTypes[pvdetails["type"]], pvdetails["description"], initial)
 
-    supported_configs = [("read_only", bool), ("calc", dict)]
+    supported_configs = [("read_only", bool), ("calc", dict), ("hw_write", dict)]
     for config, config_type in supported_configs:
         # Process variables in the configuration that are attributes of the pvrecipe class
         temp_config = pvdetails.get(config)

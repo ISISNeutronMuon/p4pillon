@@ -31,21 +31,21 @@
 #   initial: 17.5
 #   read_only: True
 
-# # DEV:RW:DOUBLE5:
-# #   description: "A double array"
-# #   type: "DOUBLE"
-# #   initial: [3,4,5,17.5,7,8]
-# #   control:
-# #     low: 1
-# #     high: 20
+DEV:RW:DOUBLE5:
+  description: "A double array"
+  type: "DOUBLE"
+  initial: [3,4,5,17.5,7,8]
+  control:
+    low: 1
+    high: 20
 
-# # DEV:RW:DOUBLEARR2:
-# #   description: "A double array using the default value 0 which is outside the control range"
-# #   type: "DOUBLE"
-# #   array_size: 6
-# #   control:
-# #     low: 1
-# #     high: 20
+DEV:RW:DOUBLEARR2:
+  description: "A double array using the default value 0 which is outside the control range"
+  type: "DOUBLE"
+  array_size: 6
+  control:
+    low: 1
+    high: 20
 
 # DEV:RW:DOUBLE6:
 #   description: "A PV with display limits configured but no precision etc"
@@ -94,9 +94,13 @@ DEV:RW:INT:
   initial: 3
 
 DEV:RW:INT1:
-  description: "An example integer PV"
+  description: "An example integer PV from a CPS crate"
   type: "INTEGER"
   initial: 2
+  hw_write:
+    hw: CPS
+    ip_addr: 123.456.78.90
+    channel_name: "a:crate:channel"
 
 # DEV:RO:INT:
 #   description: "An example int PV with limits"
