@@ -9,7 +9,7 @@ from abc import ABC
 from collections import OrderedDict
 from typing import Any
 
-from p4p import Value
+from p4p import Type, Value
 
 from p4pillon.composite_handler import CompositeHandler
 from p4pillon.nthandlers import ComposeableRulesHandler
@@ -25,6 +25,18 @@ from p4pillon.rules import (
 from p4pillon.server.raw import Handler, SharedPV
 
 logger = logging.getLogger(__name__)
+
+
+def isTypeSubset(fullset: Type, subset: Type) -> bool:
+    for k, v in subset.items():
+        if k not in fullset.keys():
+            return False
+            
+        if v not in fullset.values():
+            print(f"v: {v} {fullset.values()}")
+            return False
+
+    return True
 
 
 class SharedNT(SharedPV, ABC):
@@ -52,6 +64,7 @@ class SharedNT(SharedPV, ABC):
             handler = CompositeHandler()
 
         if "nt" in kwargs or "initial" in kwargs:
+            # Get string description of type
             nttype_str: str = ""
             if kwargs.get("nt", None):
                 try:
@@ -62,44 +75,83 @@ class SharedNT(SharedPV, ABC):
                 if isinstance(kwargs["initial"], Value):
                     nttype_str = kwargs["initial"].getID()
 
-            match nttype_str:
-                case s if s.startswith("epics:nt/NTScalar"):
-                    if nttype_str.startswith("epics:nt/NTScalarArray"):
-                        if "calc" in kwargs:
-                            # handler["calc"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(CalcRule(**kwargs)))
-                            kwargs.pop(
-                                "calc"
-                            )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
-                        handler["control"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ControlRule()))
-                        handler["alarm"] = ComposeableRulesHandler(
-                            AlarmRule()
-                        )  # ScalarToArrayWrapperRule unnecessary - no access to values
-                        handler["alarm_limit"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ValueAlarmRule()))
-                        handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
-                    elif nttype_str.startswith("epics:nt/NTScalar"):
-                        if "calc" in kwargs:
-                            handler["calc"] = ComposeableRulesHandler(CalcRule(**kwargs))
-                            kwargs.pop(
-                                "calc"
-                            )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
-                        handler["control"] = ComposeableRulesHandler(ControlRule())
-                        handler["alarm"] = ComposeableRulesHandler(AlarmRule())
-                        handler["alarm_limit"] = ComposeableRulesHandler(ValueAlarmRule())
-                        handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
-                    else:
-                        raise TypeError(f"Unrecognised NT type: {nttype_str}")
-                case s if s.startswith("epics:nt/NTEnum"):
-                    handler["alarm"] = ComposeableRulesHandler(AlarmRule())
-
-                    alarm_ntenum_constructor = None
-                    if handler_constructors:
-                        alarm_ntenum_constructor = handler_constructors.get("alarmNTEnum", None)
-                    handler["alarmNTEnum"] = ComposeableRulesHandler(AlarmNTEnumRule(alarm_ntenum_constructor))
-                    handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
-                case _:
-                    if not nttype_str:
-                        nttype_str = "Unknown"
+            # Get type information
+            nttype: Type | None = None
+            if kwargs.get("nt", None):
+                try:
+                    nttype = kwargs["nt"].type
+                except AttributeError:
                     raise NotImplementedError(f"SharedNT does not support type: {nttype_str}")
+            else:
+                if isinstance(kwargs["initial"], Value):
+                    nttype = kwargs["initial"].type()
+
+            if nttype:
+                # Check if array
+                ntarray = False
+                if "a" in nttype["value"]:
+                    ntarray = True
+
+                # Check for timestamp
+                timestamp_found = isTypeSubset(
+                    nttype,
+                    Type(
+                        [
+                            (
+                                "timeStamp",
+                                (
+                                    "S",
+                                    "time_t",
+                                    [
+                                        ("secondsPastEpoch", "l"),
+                                        ("nanoseconds", "i"),
+                                    ],
+                                ),
+                            )
+                        ]
+                    ),
+                )
+
+                print(nttype.items(), ntarray, timestamp_found)
+
+                match nttype_str:
+                    case s if s.startswith("epics:nt/NTScalar"):
+                        if nttype_str.startswith("epics:nt/NTScalarArray"):
+                            if "calc" in kwargs:
+                                # handler["calc"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(CalcRule(**kwargs)))
+                                kwargs.pop(
+                                    "calc"
+                                )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
+                            handler["control"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ControlRule()))
+                            handler["alarm"] = ComposeableRulesHandler(
+                                AlarmRule()
+                            )  # ScalarToArrayWrapperRule unnecessary - no access to values
+                            handler["alarm_limit"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ValueAlarmRule()))
+                            handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
+                        elif nttype_str.startswith("epics:nt/NTScalar"):
+                            if "calc" in kwargs:
+                                handler["calc"] = ComposeableRulesHandler(CalcRule(**kwargs))
+                                kwargs.pop(
+                                    "calc"
+                                )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
+                            handler["control"] = ComposeableRulesHandler(ControlRule())
+                            handler["alarm"] = ComposeableRulesHandler(AlarmRule())
+                            handler["alarm_limit"] = ComposeableRulesHandler(ValueAlarmRule())
+                            handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
+                        else:
+                            raise TypeError(f"Unrecognised NT type: {nttype_str}")
+                    case s if s.startswith("epics:nt/NTEnum"):
+                        handler["alarm"] = ComposeableRulesHandler(AlarmRule())
+
+                        alarm_ntenum_constructor = None
+                        if handler_constructors:
+                            alarm_ntenum_constructor = handler_constructors.get("alarmNTEnum", None)
+                        handler["alarmNTEnum"] = ComposeableRulesHandler(AlarmNTEnumRule(alarm_ntenum_constructor))
+                        handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
+                    case _:
+                        if not nttype_str:
+                            nttype_str = "Unknown"
+                        raise NotImplementedError(f"SharedNT does not support type: {nttype_str}")
 
         if user_handlers:
             handler = handler | user_handlers

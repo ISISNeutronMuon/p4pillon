@@ -108,7 +108,6 @@ def test_init_with_ntscalar():
     testpv = SharedNT(initial=NTScalar("d").wrap(13.4))
 
     assert len(testpv.handler) == 4
-    print(testpv.handler.keys())
     assert list(testpv.handler.keys()) == ["control", "alarm", "alarm_limit", "timestamp"]
 
 
