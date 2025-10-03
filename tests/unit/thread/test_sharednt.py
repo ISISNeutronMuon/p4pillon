@@ -1,4 +1,3 @@
-
 import pytest
 
 from p4pillon.nt import NTEnum, NTScalar

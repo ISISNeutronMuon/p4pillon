@@ -12,6 +12,7 @@ from typing import Any
 from p4p import Type, Value
 
 from p4pillon.composite_handler import CompositeHandler
+from p4pillon.nt.specs import alarm_typespec, control_typespec, timestamp_typespec, valuealarm_typespec
 from p4pillon.nthandlers import ComposeableRulesHandler
 from p4pillon.rules import (
     AlarmNTEnumRule,
@@ -25,72 +26,6 @@ from p4pillon.rules import (
 from p4pillon.server.raw import Handler, SharedPV
 
 logger = logging.getLogger(__name__)
-
-alarm_typespec = [
-    (
-        "alarm",
-        (
-            "S",
-            "alarm_t",
-            [
-                ("severity", "i"),
-                ("status", "i"),
-                ("message", "s"),
-            ],
-        ),
-    )
-]
-
-valuealarm_typespec = [
-    (
-        "valueAlarm",
-        (
-            "S",
-            "valueAlarm_t",
-            [
-                ("active", "b"),
-                ("lowAlarmLimit", "d"),
-                ("lowWarningLimit", "d"),
-                ("highWarningLimit", "d"),
-                ("highAlarmLimit", "d"),
-                ("lowAlarmSeverity", "i"),
-                ("lowWarningSeverity", "i"),
-                ("highWarningSeverity", "i"),
-                ("highAlarmSeverity", "i"),
-                ("hysteresis", "d"),
-            ],
-        ),
-    )
-]
-
-control_typespec = [
-    (
-        "control",
-        (
-            "S",
-            "control_t",
-            [
-                ("limitLow", "d"),
-                ("limitHigh", "d"),
-                ("minStep", "d"),
-            ],
-        ),
-    )
-]
-
-timestamp_typespec = [
-    (
-        "timeStamp",
-        (
-            "S",
-            "time_t",
-            [
-                ("secondsPastEpoch", "l"),
-                ("nanoseconds", "i"),
-            ],
-        ),
-    )
-]
 
 
 def is_type_subset(fullset: Type, subset: Type) -> bool:
