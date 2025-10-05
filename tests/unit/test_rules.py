@@ -26,7 +26,7 @@ class TestTimestamp:
     def test_timestamp(self, _, nttype, val):
         rule = TimestampRule()
 
-        assert rule._name == "timestamp"
+        assert rule.name == "timestamp"
 
         nt = NTScalar(nttype)
         old_state = nt.wrap(val)
@@ -57,7 +57,7 @@ class TestTimestamp:
     def test_timestamp_in_put(self, _, nttype, val):
         rule = TimestampRule()
 
-        assert rule._name == "timestamp"
+        assert rule.name == "timestamp"
 
         nt = NTScalar(nttype)
         old_state = nt.wrap(val)
@@ -90,7 +90,7 @@ class TestControl:
     def test_control_not_set(self, nttype, val, caplog):
         rule = ControlRule()
 
-        assert rule._name == "control"
+        assert rule.name == "control"
 
         # control not present
         nt = NTScalar(nttype)
@@ -508,7 +508,7 @@ class TestCalcRule:
     def test_create_calc_rule(self):
         rule = CalcRule()
 
-        assert rule._name == "calc"
+        assert rule.name == "calc"
 
     def test_initialise_calc_rule(self):
         rule = CalcRule()

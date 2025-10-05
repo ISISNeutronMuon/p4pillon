@@ -23,11 +23,11 @@ class ValueAlarmRule(BaseGatherableRule):
     """
 
     @property
-    def _name(self) -> str:
+    def name(self) -> str:
         return "valueAlarm"
 
     @property
-    def _fields(self) -> list[str]:
+    def fields(self) -> list[str]:
         return ["alarm", "valueAlarm"]
 
     @check_applicable_init
@@ -35,7 +35,7 @@ class ValueAlarmRule(BaseGatherableRule):
         """Evaluate alarm value limits"""
         # TODO: Apply the rule for hysteresis. Unfortunately I don't understand the
         # explanation in the Normative Types specification...
-        logger.debug("Evaluating %s.init_rule", self._name)
+        logger.debug("Evaluating %s.init_rule", self.name)
 
         # Check if valueAlarms are present and active!
         if not newpvstate["valueAlarm.active"]:

@@ -24,6 +24,17 @@ from p4pillon.utils import overwrite_marked
 logger = logging.getLogger(__name__)
 
 
+class SupportedNTTypes(IntEnum):
+    """Supported Normative Types."""
+
+    NTSCALAR = auto()
+    NTSCALARARRAY = auto()
+    NTENUM = auto()
+    NTTABLE = auto()  # basic support only
+    NTNDARRAY = auto()  # basic support only
+    ALL = auto()  # signal that this is essentially type independent
+
+
 class RulesFlow(IntEnum):
     """
     Used by the BaseRulesHandler to control whether to continue or stop
@@ -60,7 +71,7 @@ def check_applicable_init(func):
     @wraps(func)
     def wrapped_function(self: BaseRule, *args, **kwargs):
         if not self.is_applicable(args[0]):
-            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint: disable=protected-access
+            logger.debug("Rule %s.%s is not applicable", self.name, func.__name__)  # pylint: disable=protected-access
             return RulesFlow.CONTINUE
 
         return func(self, *args, **kwargs)
@@ -77,7 +88,7 @@ def check_applicable_post(func):
     @wraps(func)
     def wrapped_function(self: BaseRule, currentstate: Value, newpvstate: Value):
         if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint: disable=protected-access
+            logger.debug("Rule %s.%s is not applicable", self.name, func.__name__)  # pylint: disable=protected-access
             return RulesFlow.CONTINUE
 
         return func(self, currentstate, newpvstate)
@@ -94,7 +105,7 @@ def check_applicable_put(func):
     @wraps(func)
     def wrapped_function(self: BaseRule, *args, **kwargs):
         if not self.is_applicable(args[1]):
-            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint: disable=protected-access
+            logger.debug("Rule %s.%s is not applicable", self.name, func.__name__)  # pylint: disable=protected-access
             return RulesFlow.CONTINUE
 
         return func(self, *args, **kwargs)
@@ -129,7 +140,7 @@ def check_applicable(func):
 
         # Then check if applicable and if not return a CONTINUE to short-circuit this rule
         if not self.is_applicable(newpvstate):
-            logger.debug("Rule %s.%s is not applicable", self._name, func.__name__)  # pylint: disable=protected-access
+            logger.debug("Rule %s.%s is not applicable", self.name, func.__name__)  # pylint: disable=protected-access
             return RulesFlow.CONTINUE
 
         # Actually wrap the function we're decorating!
@@ -155,13 +166,15 @@ class BaseRule(ABC):
 
     @property
     @abstractmethod
-    def _name(self) -> str:
+    def name(self) -> str:
         raise NotImplementedError
 
     @property
     @abstractmethod
-    def _fields(self) -> list[str]:
+    def fields(self) -> list[str]:
         raise NotImplementedError
+
+    types: list[SupportedNTTypes] | None = None
 
     # Often we want to make the fields associated with a rule readonly for put
     # operations, e.g. a put operation should not be able to change the limits
@@ -175,16 +188,16 @@ class BaseRule(ABC):
         """Test whether the Rule should be applied."""
 
         # _fields is None indicates the rule always applies
-        if self._fields is None:
+        if self.fields is None:
             return True
 
         # Next check that all the fields required are present
-        if not set(self._fields).issubset(newpvstate.keys()):
+        if not set(self.fields).issubset(newpvstate.keys()):
             return False
 
         # Then check if any of the fields required are changed
         # If they aren't changed then the rule shouldn't have anything to do!
-        test_fields = deepcopy(self._fields)
+        test_fields = deepcopy(self.fields)
         if "value" not in test_fields:
             test_fields.append("value")
 
@@ -199,7 +212,7 @@ class BaseRule(ABC):
         Rule that only needs to consider the potential future state of a PV.
         Consider implementing if this rule could apply to a newly initialised PV.
         """
-        logger.debug("Evaluating %s.init_rule", self._name)
+        logger.debug("Evaluating %s.init_rule", self.name)
 
         return RulesFlow.CONTINUE
 
@@ -212,7 +225,7 @@ class BaseRule(ABC):
         like to apply. This rule is often also triggered in a similar manner by a
         put in which case the newpvstate derives from the ServerOperation.
         """
-        logger.debug("Evaluating %s.post_rule", self._name)
+        logger.debug("Evaluating %s.post_rule", self.name)
 
         return self.init_rule(newpvstate)
 
@@ -224,13 +237,13 @@ class BaseRule(ABC):
         operations
         """
 
-        logger.debug("Evaluating %s.put_rule", self._name)
+        logger.debug("Evaluating %s.put_rule", self.name)
 
         if self.read_only:
             # Mark all fields of the newpvstate (i.e. op) as unchanged.
             # This will effectively make the field read-only while allowing
             # subsequent rules to trigger and work as usual
-            for field in self._fields:
+            for field in self.fields:
                 # We need to rollback the changes by making the fields that shouldn't
                 # be changed equal their oldstate and marking them as unchanged.
                 # The first step stops issues with evaluating rules against the newstate.
@@ -281,11 +294,11 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
     """
 
     @property
-    def _name(self) -> str:
+    def name(self) -> str:
         return self._wrap_name
 
     @property
-    def _fields(self) -> list[str]:
+    def fields(self) -> list[str]:
         return self._wrap_fields
 
     def __init__(self, to_wrap: BaseScalarRule | BaseGatherableRule) -> None:
@@ -293,8 +306,8 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
 
         self._wrapped = to_wrap
 
-        self._wrap_name = to_wrap._name
-        self._wrap_fields = to_wrap._fields
+        self._wrap_name = to_wrap.name
+        self._wrap_fields = to_wrap.fields
 
     def _get_value_id(self, arrayval: Value) -> str:
         return arrayval.type().aspy()[1]  # id of the structure, probably "epics:nt/NTScalarArray:1.0"
@@ -360,8 +373,8 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
         return value
 
     def _apply_gather(self, array_value: Value, scalar_value):
-        if all(x in array_value.keys() for x in self._fields):
-            overwrite_marked(array_value, scalar_value, self._fields)
+        if all(x in array_value.keys() for x in self.fields):
+            overwrite_marked(array_value, scalar_value, self.fields)
 
     @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:

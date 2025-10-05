@@ -37,11 +37,11 @@ class CalcRule(BaseScalarRule):
             self.set_calc(kwargs["calc"])
 
     @property
-    def _name(self) -> str:
+    def name(self) -> str:
         return "calc"
 
     @property
-    def _fields(self) -> None:
+    def fields(self) -> None:
         """
         A return value of None means this rule is not dependent on any fields in the PV and
         will thus always be applicable.
@@ -133,7 +133,7 @@ class CalcRule(BaseScalarRule):
           The syntax for using pvs in the calc string is to use the pv array, e.g. 'pv[0]' to use the first variable
           in self._variables. This requires the variable below (i.e. pv = self.getVariables()) to have the same name.
         """
-        logger.debug("Evaluating %s.post_rule", self._name)
+        logger.debug("Evaluating %s.post_rule", self.name)
         logger.debug("Calculation is %s\nVariables are: %r", self._calc_str, self._variables)
 
         ret_val = RulesFlow.CONTINUE

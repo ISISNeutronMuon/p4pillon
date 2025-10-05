@@ -12,9 +12,9 @@ class AlarmRule(BaseRule):
     """
 
     @property
-    def _name(self) -> str:
+    def name(self) -> str:
         return "alarm"
 
     @property
-    def _fields(self) -> list[str]:
+    def fields(self) -> list[str]:
         return ["alarm"]

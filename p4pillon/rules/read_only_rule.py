@@ -13,11 +13,11 @@ class ReadOnlyRule(BaseRule):
     """A rule which rejects all attempts to put values"""
 
     @property
-    def _name(self) -> str:
+    def name(self) -> str:
         return "read_only"
 
     @property
-    def _fields(self) -> list[str]:
+    def fields(self) -> list[str]:
         return []
 
     def put_rule(self, pv: SharedPV, op: ServerOperation) -> RulesFlow:

@@ -20,11 +20,11 @@ class ControlRule(BaseScalarRule):
     """
 
     @property
-    def _name(self) -> str:
+    def name(self) -> str:
         return "control"
 
     @property
-    def _fields(self) -> list[str]:
+    def fields(self) -> list[str]:
         return ["control"]
 
     @check_applicable_init

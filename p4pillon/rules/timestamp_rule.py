@@ -9,7 +9,7 @@ from p4p import Value
 
 from p4pillon.utils import time_in_seconds_and_nanoseconds
 
-from .rules import BaseRule, RulesFlow, check_applicable_init
+from .rules import BaseRule, RulesFlow, SupportedNTTypes, check_applicable_init
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +18,14 @@ class TimestampRule(BaseRule):
     """Set current timestamp unless provided with an alternative value"""
 
     @property
-    def _name(self) -> str:
+    def name(self) -> str:
         return "timestamp"
 
     @property
-    def _fields(self) -> list[str]:
+    def fields(self) -> list[str]:
         return ["timeStamp"]
+
+    type = SupportedNTTypes.ALL
 
     def is_applicable(self, newpvstate: Value) -> bool:
         """
