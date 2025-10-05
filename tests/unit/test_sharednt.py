@@ -172,6 +172,24 @@ def test_init_with_value():
     assert list(testpv.handler.keys())[-1] == "timestamp"
 
 
+def test_init_with_value_noid():
+    type_for_test = Type(
+        [
+            ("value", "d"),
+            ("alarm", ("S", "alarm_t", [("severity", "i"), ("status", "i"), ("message", "s")])),
+            ("timeStamp", ("S", "time_t", [("secondsPastEpoch", "l"), ("nanoseconds", "i"), ("userTag", "i")])),
+        ],
+    )  # This is an NTScalar of type double with alarm and timeStamp
+
+    value_for_test = Value(type_for_test, {"value": 42})
+
+    testpv = SharedNT(initial=value_for_test)
+
+    assert set(testpv.handler.keys()) == set(["alarm", "timestamp"])
+    assert len(testpv.handler) == 2
+    assert list(testpv.handler.keys())[-1] == "timestamp"
+
+
 def test_value_only():
     """Test what happens when we have a bare value NTScalar"""
 
@@ -181,3 +199,32 @@ def test_value_only():
     testpv = SharedNT(initial=value_for_test)
 
     assert isinstance(testpv.handler, SharedPV._DummyHandler)  # pylint: disable=W0212
+
+
+class TestControl:
+    """Integration test case for validating control limit behaviour on a variety
+    of PV types"""
+
+    @pytest.mark.parametrize(
+        "pvtype, init_val, expected_val",
+        [
+            ("d", -10, -9.0),
+            ("d", 0, 0.0),
+            ("d", 10, 9.0),
+            ("i", -10, -9),
+            ("i", 0, 0),
+            ("i", 10, 9),
+            ("ad", [-10, 10, 0], [-9, 9, 0]),
+            ("ai", [-10, 10, 0], [-9, 9, 0]),
+        ],
+    )
+    def test_basic_control_logic(self, pvtype, init_val, expected_val):
+        sharednt = SharedNT(
+            nt=NTScalar(pvtype, control=True),
+            initial={"value": init_val, "control.limitHigh": 9, "control.limitLow": -9, "control.minStep": 1},
+        )
+
+        if not isinstance(init_val, list):
+            assert sharednt.current() == expected_val
+        else:
+            assert (sharednt.current() == expected_val).all()
