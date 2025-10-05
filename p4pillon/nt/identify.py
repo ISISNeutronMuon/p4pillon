@@ -43,6 +43,19 @@ class NTType(Enum):
 NTTypeIds = list[tuple[dict[str, re.Pattern[str]] | dict[str, dict[str, re.Pattern[str]]], NTType]]
 
 
+def is_scalararray(type_to_id: Type) -> bool:
+    """
+    Is the Type a scalar array?
+    Currently we only check that the value field has an 'a', so NTTables and NTNDArrays will return False.
+    """
+    if type_to_id.has("value"):
+        value = type_to_id["value"]
+        if isinstance(value, str) and "a" in value:
+            return True
+
+    return False
+
+
 def id_nttype_obj(type_to_id: NTBase) -> NTType:
     """
     Identify a Normative Type based on the instantiated class.
