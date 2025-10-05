@@ -12,17 +12,17 @@ from typing import Any
 from p4p import Type, Value
 
 from p4pillon.composite_handler import CompositeHandler
-from p4pillon.nt.specs import alarm_typespec, control_typespec, timestamp_typespec, valuealarm_typespec
+from p4pillon.nt.identify import is_scalararray
 from p4pillon.nthandlers import ComposeableRulesHandler
 from p4pillon.rules import (
     AlarmNTEnumRule,
     AlarmRule,
     CalcRule,
     ControlRule,
-    ScalarToArrayWrapperRule,
     TimestampRule,
     ValueAlarmRule,
 )
+from p4pillon.rules.rules import BaseRule, ScalarToArrayWrapperRule, SupportedNTTypes
 from p4pillon.server.raw import Handler, SharedPV
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,14 @@ class SharedNT(SharedPV, ABC):
     functionality to support Normative Type logic.
     """
 
+    registered_handlers: list[type[BaseRule]] = [
+        AlarmRule,
+        ControlRule,
+        ValueAlarmRule,
+        TimestampRule,
+        CalcRule,
+    ]
+
     def __init__(
         self,
         *,
@@ -55,79 +63,65 @@ class SharedNT(SharedPV, ABC):
         handler_constructors: dict[str, Any] | None = None,
         **kwargs,
     ):
-        # Check if there is a handler specified in the kwargs, and if not override it
-        # with an NT handler.
-
         # Create a CompositeHandler. If there is no user supplied handler, and this is not
-        # an NT type then it won't do anything. But it will still represent a stable interface
+        # an NT type then it won't do anything. Unfortunately, an empty CompositeHandler
+        # will be discarded and won't be passed to the super().__init__
+        handler = self._setup_auth_handlers(auth_handlers)
 
-        if auth_handlers:
-            handler = CompositeHandler(auth_handlers)
-        else:
-            handler = CompositeHandler()
-
+        # We need either `nt` or `initial` in order to determine the type of the
         if "nt" in kwargs or "initial" in kwargs:
             # Get type information
-            nttype: Type | None = None
-            if kwargs.get("nt", None):
-                try:
-                    nttype = kwargs["nt"].type
-                except AttributeError as exc:
-                    raise NotImplementedError("Unable to determine Type of SharedNT") from exc
-            else:
-                if isinstance(kwargs["initial"], Value):
-                    nttype = kwargs["initial"].type()
+            (nttype, _) = self.get_ntinfo(kwargs)
 
             if nttype:
-                # Check if array
-                ntarray = False
-                if "a" in nttype["value"]:
-                    ntarray = True
-
-                # check for alarm
-                if is_type_subset(nttype, Type(alarm_typespec)):
-                    handler["alarm"] = ComposeableRulesHandler(AlarmRule())
-
-                # Check for control
-                if is_type_subset(nttype, Type(control_typespec)):
-                    if ntarray:
-                        handler["control"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ControlRule()))
-                    else:
-                        handler["control"] = ComposeableRulesHandler(ControlRule())
-
-                # alarmLimit for control
-                if is_type_subset(nttype, Type(alarm_typespec + valuealarm_typespec)):
-                    if ntarray:
-                        handler["alarm_limit"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ValueAlarmRule()))
-                    else:
-                        handler["alarm_limit"] = ComposeableRulesHandler(ValueAlarmRule())
-
-                # Special cases
-                if "calc" in kwargs:
-                    if ntarray:
-                        raise NotImplementedError("Arrays not yet supported for Calcs")
-                    else:
-                        handler["calc"] = ComposeableRulesHandler(CalcRule(**kwargs))
-                    kwargs.pop(
-                        "calc"
-                    )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
+                for registered_handler in self.registered_handlers:
+                    name, component_handler = self.__setup_registered_rule(registered_handler, nttype, **kwargs)
+                    if name and component_handler:
+                        handler[name] = component_handler
 
                 if handler_constructors and "alarmNTEnum" in handler_constructors:
                     handler["alarmNTEnum"] = ComposeableRulesHandler(
                         AlarmNTEnumRule(handler_constructors["alarmNTEnum"])
                     )
 
-                # Check for timestamp
-                if is_type_subset(nttype, Type(timestamp_typespec)):
-                    handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
-
         if user_handlers:
             handler = handler | user_handlers
+
+        if "timestamp" in handler:
             handler.move_to_end("timestamp", last=True)  # Ensure timestamp is last
 
         kwargs["handler"] = handler
 
         super().__init__(**kwargs)
+
+    def get_ntinfo(self, kwargs) -> tuple[Type | None, str | None]:
+        """
+        Based on the arguments passed into __init__ determine the type of the Normative Type if possible.
+        Returns a tuple of the Type and ID (str).
+        """
+        nttype: Type | None = None
+        ntstr: str | None = None
+        if kwargs.get("nt", None):
+            try:
+                nttype = kwargs["nt"].type
+            except AttributeError as exc:
+                raise NotImplementedError("Unable to determine Type of SharedNT") from exc
+        else:
+            if isinstance(kwargs["initial"], Value):
+                nttype = kwargs["initial"].type()
+
+        if nttype:
+            ntstr = nttype.getID()
+
+        return nttype, ntstr
+
+    def _setup_auth_handlers(self, auth_handlers) -> CompositeHandler:
+        """If an auth_handler has been given then configure a CompositeHandler with it."""
+        if auth_handlers:
+            handler = CompositeHandler(auth_handlers)
+        else:
+            handler = CompositeHandler()
+        return handler
 
     @property
     def handler(self) -> CompositeHandler:
@@ -218,3 +212,47 @@ class SharedNT(SharedPV, ABC):
     #         return fn
 
     #     return decorate
+
+    def __setup_registered_rule(
+        self, class_to_instantiate: type[BaseRule], nttype, **kwargs
+    ) -> tuple[str | None, ComposeableRulesHandler | None]:
+        """The existence of a single function that does everything suggests this is the wrong approach!"""
+
+        # Examine the class member variables to determine how/whether to setup this Rule
+        name = class_to_instantiate.name
+        supported_nttypes = class_to_instantiate.nttypes
+        required_fields = class_to_instantiate.fields
+        wrap_for_array = class_to_instantiate.wrap_for_array
+        auto_add = class_to_instantiate.add_automatically
+
+        # If we're not relying on the rule to provide enough information to configure itself then
+        if not auto_add and name not in kwargs:
+            return (name, None)
+
+        # Perform tests on whether the rule is applicable to the nttype and/or the fields
+        if supported_nttypes:
+            if len(supported_nttypes) == 1 and supported_nttypes == [SupportedNTTypes.ALL]:
+                pass
+            else:
+                raise NotImplementedError("We're not yet testing for NT type!")
+
+        if required_fields:
+            for required_field in required_fields:
+                if required_field not in nttype:
+                    return (name, None)
+
+        # See if there's an attempt to pass arguments to the constructor of this Rule
+        args = {}
+        if name:
+            args = kwargs.pop(name, {})
+
+        # We're clear to instantiate the Rule - it's needed!
+        instance = class_to_instantiate(**args)
+
+        # Check if we need special handling for array data
+        if wrap_for_array and is_scalararray(nttype):
+            composed_instance = ComposeableRulesHandler(ScalarToArrayWrapperRule(instance))
+        else:
+            composed_instance = ComposeableRulesHandler(instance)
+
+        return (name, composed_instance)
