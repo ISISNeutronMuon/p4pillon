@@ -1,8 +1,57 @@
 """
-Specifications for various Normative Type fields
+Specifications for various Normative Type types and fields
 """
 
-alarm_typespec = [
+import re
+
+###
+# NTBase_required are used for identification.
+# The key:value pairs are required_field:regex
+ntscalar_required = {"value": re.compile("[?sbBhHiIlLfd]{1}")}
+
+ntscalararray_required = {"value": re.compile("a[?sbBhHiIlLfd]{1}")}
+
+ntenum_required = {
+    "value": {
+        "index": re.compile("i"),
+        "choices": re.compile("as"),
+    }
+}
+
+ntndarray_required = {
+    "value": {
+        "booleanValue": "a?",
+        "byteValue": "ab",
+        "shortValue": "ah",
+        "intValue": "ai",
+        "longValue": "al",
+        "ubyteValue": "aB",
+        "ushortValue": "aH",
+        "uintValue": "aI",
+        "ulongValue": "aL",
+        "floatValue": "af",
+        "doubleValue": "ad",
+    },
+    "codec": {"name": re.compile("s")},
+    "compressedSize": re.compile("l"),
+    "uncompressedSize": re.compile("l"),
+    "dimension": {
+        "size": "i",
+        "offset": "i",
+        "fullSize": "i",
+        "binning": "i",
+        "reverse": "?",
+    },
+    "uniqueId": re.compile("i"),
+    "dataTimeStamp": {"secondsPastEpoch": re.compile("l"), "nanoseconds": re.compile("i")},
+    "attribute": re.compile(".*"),
+}
+
+nttable_required = {"labels": re.compile("as"), "value": {}}
+
+###
+# Fieldspecs can be used to construct Types
+alarm_fieldspec = [
     (
         "alarm",
         (
@@ -17,7 +66,7 @@ alarm_typespec = [
     )
 ]
 
-valuealarm_typespec = [
+valuealarm_fieldspec = [
     (
         "valueAlarm",
         (
@@ -39,7 +88,7 @@ valuealarm_typespec = [
     )
 ]
 
-control_typespec = [
+control_fieldspec = [
     (
         "control",
         (
@@ -54,7 +103,7 @@ control_typespec = [
     )
 ]
 
-timestamp_typespec = [
+timestamp_fieldspec = [
     (
         "timeStamp",
         (
