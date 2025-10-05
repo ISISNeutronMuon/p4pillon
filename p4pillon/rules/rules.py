@@ -159,26 +159,45 @@ class BaseRule(ABC):
     who is making the request (for authorisation purposes). The may be done by the `put_rule()`
     """
 
-    # Two members must be implemented by derived classes:
-    # - name is a human-readable name for the rule used in error and debug messages
-    # - fields is a list of the fields within the PV structure that this rule manages
-    #           and at this time is used mainly by readonly rules
-
-    # @property
-    # @abstractmethod
-    # def name(self) -> str:
-    #     raise NotImplementedError
-
-    # @property
-    # @abstractmethod
-    # def fields(self) -> list[str]:
-    #     raise NotImplementedError
+    # These class variables are required to support introspection by NTScalar.
+    # The intention is that they will be overridden in derived classes.
 
     name: str | None = None
+    """ A string setting the name of the class. None is used to indicate it is unset. 
+        This name is used to access the Handler / Rule through the CompositeHandler. 
+        It also provides a human-readable name for the rule used in error and debug messages
+        This variable MUST be set appropriately in each derived class."""
+
     nttypes: list[SupportedNTTypes] | None = None
+    """ 
+    A list of SupportedNTTypes. This may be used to restict a Rule to only apply to the
+    specified NTTypes, e.g. NTScalar and NTScalarArray. In general use of fields should be
+    preferred. At this time an empty list signal thats the Rule may apply to all types; 
+    this may be revised in future. This may be made more explicit through the use of 
+    SupportedNTTypes.ALL.
+    """
+
     fields: list[str] | None = None
+    """
+    Fields required to be present for the Rule to apply. For example, a timestamp Rule
+    requires that there be a timeStamp field. Currently this is a list of strings, but
+    it may be replaced in future by a Type specification. Note, this is used by the
+    `check_applicable` decorators to verify that a Rule should trigger by checking for
+    the presence of the required fields but also checking if any members of the field
+    have been changed.
+    """
+
     wrap_for_array = False
+    """
+    Signals that a Rule needs to use the ScalarToArrayWrapperRule class to make it applicable
+    to an NTScalarArray.
+    """
+
     add_automatically = True
+    """
+    Signals that a Rule is able to fully automatically configure itself. Generally, if a
+    Rule requires constructor settings to function it must set this to False.
+    """
 
     # Often we want to make the fields associated with a rule readonly for put
     # operations, e.g. a put operation should not be able to change the limits
@@ -246,7 +265,7 @@ class BaseRule(ABC):
 
         logger.debug("Evaluating %s.put_rule", self.name)
 
-        if self.read_only:
+        if self.read_only and self.fields:
             # Mark all fields of the newpvstate (i.e. op) as unchanged.
             # This will effectively make the field read-only while allowing
             # subsequent rules to trigger and work as usual
@@ -301,12 +320,19 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
     """
 
     @property
-    def name(self) -> str:
+    def name(self) -> str | None:
+        """Return the wrapped Rule's name."""
         return self._wrap_name
 
     @property
-    def fields(self) -> list[str]:
+    def fields(self) -> list[str] | None:
+        """Return the wrapped Rule's fields."""
         return self._wrap_fields
+
+    @property
+    def nttypes(self) -> list[SupportedNTTypes] | None:
+        """Return the wrapped Rule's nttypes."""
+        return self._wrap_nttypes
 
     def __init__(self, to_wrap: BaseScalarRule | BaseGatherableRule) -> None:
         super().__init__()
@@ -315,6 +341,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
 
         self._wrap_name = to_wrap.name
         self._wrap_fields = to_wrap.fields
+        self._wrap_nttypes = to_wrap.nttypes
 
     def _get_value_id(self, arrayval: Value) -> str:
         return arrayval.type().aspy()[1]  # id of the structure, probably "epics:nt/NTScalarArray:1.0"
@@ -380,7 +407,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
         return value
 
     def _apply_gather(self, array_value: Value, scalar_value):
-        if all(x in array_value.keys() for x in self.fields):
+        if self.fields and all(x in array_value.keys() for x in self.fields):
             overwrite_marked(array_value, scalar_value, self.fields)
 
     @check_applicable_init

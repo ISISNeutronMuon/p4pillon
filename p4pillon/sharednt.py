@@ -22,7 +22,13 @@ from p4pillon.rules import (
     TimestampRule,
     ValueAlarmRule,
 )
-from p4pillon.rules.rules import BaseRule, ScalarToArrayWrapperRule, SupportedNTTypes
+from p4pillon.rules.rules import (
+    BaseGatherableRule,
+    BaseRule,
+    BaseScalarRule,
+    ScalarToArrayWrapperRule,
+    SupportedNTTypes,
+)
 from p4pillon.server.raw import Handler, SharedPV
 
 logger = logging.getLogger(__name__)
@@ -251,6 +257,7 @@ class SharedNT(SharedPV, ABC):
 
         # Check if we need special handling for array data
         if wrap_for_array and is_scalararray(nttype):
+            assert isinstance(instance, BaseScalarRule | BaseGatherableRule)
             composed_instance = ComposeableRulesHandler(ScalarToArrayWrapperRule(instance))
         else:
             composed_instance = ComposeableRulesHandler(instance)
