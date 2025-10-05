@@ -8,7 +8,7 @@ import math as m  # noqa: F401
 
 from p4p import Value
 
-from .rules import BaseScalarRule, RulesFlow
+from .rules import BaseScalarRule, RulesFlow, SupportedNTTypes
 
 logger = logging.getLogger(__name__)
 
@@ -36,17 +36,22 @@ class CalcRule(BaseScalarRule):
         if "calc" in kwargs:
             self.set_calc(kwargs["calc"])
 
-    @property
-    def name(self) -> str:
-        return "calc"
+    name = "calc"
+    nttypes = [SupportedNTTypes.ALL]
+    fields = []
+    add_automatically = False
 
-    @property
-    def fields(self) -> None:
-        """
-        A return value of None means this rule is not dependent on any fields in the PV and
-        will thus always be applicable.
-        """
-        return None
+    # @property
+    # def name(self) -> str:
+    #     return "calc"
+
+    # @property
+    # def fields(self) -> None:
+    #     """
+    #     A return value of None means this rule is not dependent on any fields in the PV and
+    #     will thus always be applicable.
+    #     """
+    #     return None
 
     class MonitorCB:
         """

@@ -17,13 +17,17 @@ logger = logging.getLogger(__name__)
 class TimestampRule(BaseRule):
     """Set current timestamp unless provided with an alternative value"""
 
-    @property
-    def name(self) -> str:
-        return "timestamp"
+    name = "timestamp"
+    nttype = [SupportedNTTypes.ALL]
+    fields = ["timeStamp"]
 
-    @property
-    def fields(self) -> list[str]:
-        return ["timeStamp"]
+    # @property
+    # def name(self) -> str:
+    #     return "timestamp"
+
+    # @property
+    # def fields(self) -> list[str]:
+    #     return ["timeStamp"]
 
     type = SupportedNTTypes.ALL
 

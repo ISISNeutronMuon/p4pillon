@@ -22,13 +22,17 @@ class ValueAlarmRule(BaseGatherableRule):
     TODO: Implement hysteresis
     """
 
-    @property
-    def name(self) -> str:
-        return "valueAlarm"
+    name = "alarm_limit"
+    fields = ["alarm", "valueAlarm"]
+    wrap_for_array = True
 
-    @property
-    def fields(self) -> list[str]:
-        return ["alarm", "valueAlarm"]
+    # @property
+    # def name(self) -> str:
+    #     return "valueAlarm"
+
+    # @property
+    # def fields(self) -> list[str]:
+    #     return ["alarm", "valueAlarm"]
 
     @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:

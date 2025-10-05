@@ -160,21 +160,25 @@ class BaseRule(ABC):
     """
 
     # Two members must be implemented by derived classes:
-    # - _name is a human-readable name for the rule used in error and debug messages
-    # - _fields is a list of the fields within the PV structure that this rule manages
+    # - name is a human-readable name for the rule used in error and debug messages
+    # - fields is a list of the fields within the PV structure that this rule manages
     #           and at this time is used mainly by readonly rules
 
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        raise NotImplementedError
+    # @property
+    # @abstractmethod
+    # def name(self) -> str:
+    #     raise NotImplementedError
 
-    @property
-    @abstractmethod
-    def fields(self) -> list[str]:
-        raise NotImplementedError
+    # @property
+    # @abstractmethod
+    # def fields(self) -> list[str]:
+    #     raise NotImplementedError
 
-    types: list[SupportedNTTypes] | None = None
+    name: str | None = None
+    nttypes: list[SupportedNTTypes] | None = None
+    fields: list[str] | None = None
+    wrap_for_array = False
+    add_automatically = True
 
     # Often we want to make the fields associated with a rule readonly for put
     # operations, e.g. a put operation should not be able to change the limits
@@ -182,6 +186,9 @@ class BaseRule(ABC):
     # rule and having a readonly flag allows this to be automatically handled by
     # this base class's put_rule()
     read_only: bool = False
+
+    def __init__(self, **kwargs):
+        pass
 
     # TODO: Consider using lru_cache but be aware of https://rednafi.com/python/lru_cache_on_methods/
     def is_applicable(self, newpvstate: Value) -> bool:

@@ -6,7 +6,7 @@ This rule is not part of the Normative Type specification. It provides an interf
 from p4p import Value
 
 from p4pillon.definitions import AlarmDict, AlarmSeverity, AlarmStatus
-from p4pillon.rules.rules import RulesFlow, check_applicable_init
+from p4pillon.rules.rules import RulesFlow, SupportedNTTypes, check_applicable_init
 
 from .alarm_rule import AlarmRule
 
@@ -15,6 +15,10 @@ class AlarmNTEnumRule(AlarmRule):
     """
     Uses a dictionary to map NTEnum values to severity, status, and message.
     """
+
+    name = "alarmntenum"
+    nttypes = [SupportedNTTypes.NTENUM]
+    fields = ["alarm"]
 
     def __init__(self, alarms: dict[str, AlarmDict] | None = None):
         super().__init__()
