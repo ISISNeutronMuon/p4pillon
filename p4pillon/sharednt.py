@@ -81,7 +81,7 @@ class SharedNT(SharedPV, ABC):
 
             if nttype:
                 for registered_handler in self.registered_handlers:
-                    name, component_handler = self.__setup_registered_rule(registered_handler, nttype, **kwargs)
+                    name, component_handler, kwargs = self.__setup_registered_rule(registered_handler, nttype, **kwargs)
                     if name and component_handler:
                         handler[name] = component_handler
 
@@ -221,7 +221,7 @@ class SharedNT(SharedPV, ABC):
 
     def __setup_registered_rule(
         self, class_to_instantiate: type[BaseRule], nttype, **kwargs
-    ) -> tuple[str | None, ComposeableRulesHandler | None]:
+    ) -> tuple[str | None, ComposeableRulesHandler | None, dict[str, Any]]:
         """The existence of a single function that does everything suggests this is the wrong approach!"""
 
         # Examine the class member variables to determine how/whether to setup this Rule
@@ -233,7 +233,7 @@ class SharedNT(SharedPV, ABC):
 
         # If we're not relying on the rule to provide enough information to configure itself then
         if not auto_add and name not in kwargs:
-            return (name, None)
+            return (name, None, kwargs)
 
         # Perform tests on whether the rule is applicable to the nttype and/or the fields
         if supported_nttypes:
@@ -245,7 +245,7 @@ class SharedNT(SharedPV, ABC):
         if required_fields:
             for required_field in required_fields:
                 if required_field not in nttype:
-                    return (name, None)
+                    return (name, None, kwargs)
 
         # See if there's an attempt to pass arguments to the constructor of this Rule
         args = {}
@@ -262,4 +262,4 @@ class SharedNT(SharedPV, ABC):
         else:
             composed_instance = ComposeableRulesHandler(instance)
 
-        return (name, composed_instance)
+        return (name, composed_instance, kwargs)
