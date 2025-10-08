@@ -7,7 +7,7 @@ from typing import SupportsFloat as Numeric
 
 from p4p import Value
 
-from .rules import BaseScalarRule, RulesFlow, check_applicable_init, check_applicable_post
+from .rules import BaseScalarRule, RulesFlow, SupportedNTTypes, check_applicable_init, check_applicable_post
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +19,18 @@ class ControlRule(BaseScalarRule):
     and lower limits for values (control.limitHigh and control.limitLow)
     """
 
-    @property
-    def _name(self) -> str:
-        return "control"
+    name = "control"
+    nttypes = [SupportedNTTypes.ALL]
+    fields = ["control"]
+    wrap_for_array = True
 
-    @property
-    def _fields(self) -> list[str]:
-        return ["control"]
+    # @property
+    # def name(self) -> str:
+    #     return "control"
+
+    # @property
+    # def fields(self) -> list[str]:
+    #     return ["control"]
 
     @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:

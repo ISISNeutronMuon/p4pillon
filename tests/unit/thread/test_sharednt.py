@@ -1,11 +1,12 @@
 import pytest
 
 from p4pillon.nt import NTEnum, NTScalar
-from p4pillon.server.thread import SharedPV
+from p4pillon.server.raw import (
+    SharedPV,  # Confusingly the monkey-patching means that this is the common base class of SharedPV and SharedNT
+)
 from p4pillon.thread.sharednt import SharedNT
 
 
-@pytest.mark.xfail(reason="Not sure? Maybe the monkey-patching?")
 @pytest.mark.parametrize(
     "pvtype, expected_handlername",
     [
@@ -17,17 +18,18 @@ from p4pillon.thread.sharednt import SharedNT
 )
 def testntscalar_thread_create(pvtype, expected_handlername):
     testpv = SharedNT(
-        nt=NTScalar(pvtype),
+        nt=NTScalar(pvtype, control=True, valueAlarm=True),
     )
 
-    assert len(testpv.handler) == 4
-    assert list(testpv.handler.keys()) == expected_handlername
+    assert set(testpv.handler.keys()) == set(expected_handlername)
+    assert len(testpv.handler) == len(expected_handlername)
     assert issubclass(SharedNT, SharedPV)
 
 
-@pytest.mark.xfail(reason="Not sure? Maybe the monkey-patching?")
 def testntenum_thread_create():
-    testpv = SharedNT(nt=NTEnum(), initial={"index": 0, "choices": ["OFF", "ON"]})
+    testpv = SharedNT(
+        nt=NTEnum(), initial={"index": 0, "choices": ["OFF", "ON"]}, handler_constructors={"alarmNTEnum": {}}
+    )
 
     assert len(testpv.handler) == 3
     assert list(testpv.handler.keys()) == ["alarm", "alarmNTEnum", "timestamp"]

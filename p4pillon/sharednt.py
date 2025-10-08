@@ -9,22 +9,42 @@ from abc import ABC
 from collections import OrderedDict
 from typing import Any
 
-from p4p import Value
+from p4p import Type, Value
 
 from p4pillon.composite_handler import CompositeHandler
+from p4pillon.nt.identify import is_scalararray
 from p4pillon.nthandlers import ComposeableRulesHandler
 from p4pillon.rules import (
     AlarmNTEnumRule,
     AlarmRule,
     CalcRule,
     ControlRule,
-    ScalarToArrayWrapperRule,
     TimestampRule,
     ValueAlarmRule,
+)
+from p4pillon.rules.rules import (
+    BaseGatherableRule,
+    BaseRule,
+    BaseScalarRule,
+    ScalarToArrayWrapperRule,
+    SupportedNTTypes,
 )
 from p4pillon.server.raw import Handler, SharedPV
 
 logger = logging.getLogger(__name__)
+
+
+def is_type_subset(fullset: Type, subset: Type) -> bool:
+    """Check if the subset is a part of the fullset."""
+
+    # For now we only support looking one level deep
+    test = all(x in fullset.keys() for x in subset.keys())
+    if test:
+        pass
+    else:
+        return False
+
+    return True
 
 
 class SharedNT(SharedPV, ABC):
@@ -33,81 +53,81 @@ class SharedNT(SharedPV, ABC):
     functionality to support Normative Type logic.
     """
 
+    registered_handlers: list[type[BaseRule]] = [
+        AlarmRule,
+        ControlRule,
+        ValueAlarmRule,
+        TimestampRule,
+        CalcRule,
+    ]
+
     def __init__(
         self,
+        *,
         auth_handlers: OrderedDict[str, Handler] | None = None,
         user_handlers: OrderedDict[str, Handler] | None = None,
         handler_constructors: dict[str, Any] | None = None,
         **kwargs,
     ):
-        # Check if there is a handler specified in the kwargs, and if not override it
-        # with an NT handler.
-
         # Create a CompositeHandler. If there is no user supplied handler, and this is not
-        # an NT type then it won't do anything. But it will still represent a stable interface
+        # an NT type then it won't do anything. Unfortunately, an empty CompositeHandler
+        # will be discarded and won't be passed to the super().__init__
+        handler = self._setup_auth_handlers(auth_handlers)
 
-        if auth_handlers:
-            handler = CompositeHandler(auth_handlers)
-        else:
-            handler = CompositeHandler()
-
+        # We need either `nt` or `initial` in order to determine the type of the
         if "nt" in kwargs or "initial" in kwargs:
-            nttype_str: str = ""
-            if kwargs.get("nt", None):
-                try:
-                    nttype_str = kwargs["nt"].type.getID()
-                except AttributeError:
-                    nttype_str = f"{type(kwargs['nt'])}"
-            else:
-                if isinstance(kwargs["initial"], Value):
-                    nttype_str = kwargs["initial"].getID()
+            # Get type information
+            (nttype, _) = self.get_ntinfo(kwargs)
 
-            match nttype_str:
-                case s if s.startswith("epics:nt/NTScalar"):
-                    if nttype_str.startswith("epics:nt/NTScalarArray"):
-                        if "calc" in kwargs:
-                            # handler["calc"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(CalcRule(**kwargs)))
-                            kwargs.pop(
-                                "calc"
-                            )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
-                        handler["control"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ControlRule()))
-                        handler["alarm"] = ComposeableRulesHandler(
-                            AlarmRule()
-                        )  # ScalarToArrayWrapperRule unnecessary - no access to values
-                        handler["alarm_limit"] = ComposeableRulesHandler(ScalarToArrayWrapperRule(ValueAlarmRule()))
-                        handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
-                    elif nttype_str.startswith("epics:nt/NTScalar"):
-                        if "calc" in kwargs:
-                            handler["calc"] = ComposeableRulesHandler(CalcRule(**kwargs))
-                            kwargs.pop(
-                                "calc"
-                            )  # Removing this from kwargs as it shouldn't be passed to super().__init__(**kwargs)
-                        handler["control"] = ComposeableRulesHandler(ControlRule())
-                        handler["alarm"] = ComposeableRulesHandler(AlarmRule())
-                        handler["alarm_limit"] = ComposeableRulesHandler(ValueAlarmRule())
-                        handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
-                    else:
-                        raise TypeError(f"Unrecognised NT type: {nttype_str}")
-                case s if s.startswith("epics:nt/NTEnum"):
-                    handler["alarm"] = ComposeableRulesHandler(AlarmRule())
+            if nttype:
+                for registered_handler in self.registered_handlers:
+                    name, component_handler = self.__setup_registered_rule(registered_handler, nttype, **kwargs)
+                    if name and component_handler:
+                        handler[name] = component_handler
 
-                    alarm_ntenum_constructor = None
-                    if handler_constructors:
-                        alarm_ntenum_constructor = handler_constructors.get("alarmNTEnum", None)
-                    handler["alarmNTEnum"] = ComposeableRulesHandler(AlarmNTEnumRule(alarm_ntenum_constructor))
-                    handler["timestamp"] = ComposeableRulesHandler(TimestampRule())
-                case _:
-                    if not nttype_str:
-                        nttype_str = "Unknown"
-                    raise NotImplementedError(f"SharedNT does not support type: {nttype_str}")
+                if handler_constructors and "alarmNTEnum" in handler_constructors:
+                    handler["alarmNTEnum"] = ComposeableRulesHandler(
+                        AlarmNTEnumRule(handler_constructors["alarmNTEnum"])
+                    )
 
         if user_handlers:
             handler = handler | user_handlers
+
+        if "timestamp" in handler:
             handler.move_to_end("timestamp", last=True)  # Ensure timestamp is last
 
         kwargs["handler"] = handler
 
         super().__init__(**kwargs)
+
+    def get_ntinfo(self, kwargs) -> tuple[Type | None, str | None]:
+        """
+        Based on the arguments passed into __init__ determine the type of the Normative Type if possible.
+        Returns a tuple of the Type and ID (str).
+        """
+        nttype: Type | None = None
+        ntstr: str | None = None
+        if kwargs.get("nt", None):
+            try:
+                nttype = kwargs["nt"].type
+            except AttributeError as exc:
+                raise NotImplementedError("Unable to determine Type of SharedNT") from exc
+        else:
+            if isinstance(kwargs["initial"], Value):
+                nttype = kwargs["initial"].type()
+
+        if nttype:
+            ntstr = nttype.getID()
+
+        return nttype, ntstr
+
+    def _setup_auth_handlers(self, auth_handlers) -> CompositeHandler:
+        """If an auth_handler has been given then configure a CompositeHandler with it."""
+        if auth_handlers:
+            handler = CompositeHandler(auth_handlers)
+        else:
+            handler = CompositeHandler()
+        return handler
 
     @property
     def handler(self) -> CompositeHandler:
@@ -198,3 +218,48 @@ class SharedNT(SharedPV, ABC):
     #         return fn
 
     #     return decorate
+
+    def __setup_registered_rule(
+        self, class_to_instantiate: type[BaseRule], nttype, **kwargs
+    ) -> tuple[str | None, ComposeableRulesHandler | None]:
+        """The existence of a single function that does everything suggests this is the wrong approach!"""
+
+        # Examine the class member variables to determine how/whether to setup this Rule
+        name = class_to_instantiate.name
+        supported_nttypes = class_to_instantiate.nttypes
+        required_fields = class_to_instantiate.fields
+        wrap_for_array = class_to_instantiate.wrap_for_array
+        auto_add = class_to_instantiate.add_automatically
+
+        # If we're not relying on the rule to provide enough information to configure itself then
+        if not auto_add and name not in kwargs:
+            return (name, None)
+
+        # Perform tests on whether the rule is applicable to the nttype and/or the fields
+        if supported_nttypes:
+            if len(supported_nttypes) == 1 and supported_nttypes == [SupportedNTTypes.ALL]:
+                pass
+            else:
+                raise NotImplementedError("We're not yet testing for NT type!")
+
+        if required_fields:
+            for required_field in required_fields:
+                if required_field not in nttype:
+                    return (name, None)
+
+        # See if there's an attempt to pass arguments to the constructor of this Rule
+        args = {}
+        if name:
+            args = kwargs.pop(name, {})
+
+        # We're clear to instantiate the Rule - it's needed!
+        instance = class_to_instantiate(**args)
+
+        # Check if we need special handling for array data
+        if wrap_for_array and is_scalararray(nttype):
+            assert isinstance(instance, BaseScalarRule | BaseGatherableRule)
+            composed_instance = ComposeableRulesHandler(ScalarToArrayWrapperRule(instance))
+        else:
+            composed_instance = ComposeableRulesHandler(instance)
+
+        return (name, composed_instance)

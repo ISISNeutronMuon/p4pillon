@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import unittest
 from asyncio import sleep
 
@@ -29,12 +30,21 @@ class testMixedConcurrency(unittest.IsolatedAsyncioTestCase):
                 await sleep(0.1)
 
     async def asyncSetUp(self):
-        asyncio.create_task(self.start_server())
-        await asyncio.sleep(0.1)
+        if sys.version_info >= (3, 11, 0):
+            async with asyncio.timeout(delay=2):
+                asyncio.create_task(self.start_server())
+                await asyncio.sleep(0.1)
+        else:
+            asyncio.create_task(self.start_server())
+            await asyncio.sleep(0.1)
 
     async def test_asyncio(self):
         context = AsyncioContext("pva")
-        value = await context.get("demo:a")
+        if sys.version_info >= (3, 11, 0):
+            async with asyncio.timeout(delay=2):
+                value = await context.get("demo:a")
+        else:
+            value = await context.get("demo:a")
 
         assert value == 5.5
 
@@ -42,7 +52,7 @@ class testMixedConcurrency(unittest.IsolatedAsyncioTestCase):
 
     def test_thread(self):
         context = ThreadContext("pva")
-        value = context.get("demo:b")
+        value = context.get("demo:b", timeout=1)
 
         assert value == 9.9
 

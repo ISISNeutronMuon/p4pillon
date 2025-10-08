@@ -11,10 +11,13 @@ class AlarmRule(BaseRule):
     message to be made read-only for put operations
     """
 
-    @property
-    def _name(self) -> str:
-        return "alarm"
+    # @property
+    # def name(self) -> str:
+    #     return "alarm"
 
-    @property
-    def _fields(self) -> list[str]:
-        return ["alarm"]
+    # @property
+    # def fields(self) -> list[str]:
+    #     return ["alarm"]
+
+    name = "alarm"
+    fields = ["alarm"]
