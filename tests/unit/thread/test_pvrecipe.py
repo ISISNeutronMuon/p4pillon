@@ -370,7 +370,7 @@ def test_ntenum_create_pv(mock_time):
         PVTypes.ENUM,
         description="test enum",
         initial_value={"index": 0, "choices": ["OFF", "ON"]},
-        handler_constructors={"alarmNTEnum": {}},
+        alarmNTEnum={},
     )
 
     pv = recipe.create_pv("TEST:PV:ENUM")

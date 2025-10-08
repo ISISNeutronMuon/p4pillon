@@ -12,7 +12,7 @@ from typing import Any
 from p4p import Type, Value
 
 from p4pillon.composite_handler import CompositeHandler
-from p4pillon.nt.identify import is_scalararray
+from p4pillon.nt.identify import id_nttype, is_scalararray
 from p4pillon.nthandlers import ComposeableRulesHandler
 from p4pillon.rules import (
     AlarmNTEnumRule,
@@ -56,6 +56,7 @@ class SharedNT(SharedPV, ABC):
     registered_handlers: list[type[BaseRule]] = [
         AlarmRule,
         ControlRule,
+        AlarmNTEnumRule,
         ValueAlarmRule,
         TimestampRule,
         CalcRule,
@@ -66,9 +67,12 @@ class SharedNT(SharedPV, ABC):
         *,
         auth_handlers: OrderedDict[str, Handler] | None = None,
         user_handlers: OrderedDict[str, Handler] | None = None,
-        handler_constructors: dict[str, Any] | None = None,
+        registered_handlers: list[type[BaseRule]] | None = None,
         **kwargs,
     ):
+        if registered_handlers:
+            self.registered_handlers = registered_handlers
+
         # Create a CompositeHandler. If there is no user supplied handler, and this is not
         # an NT type then it won't do anything. Unfortunately, an empty CompositeHandler
         # will be discarded and won't be passed to the super().__init__
@@ -84,11 +88,6 @@ class SharedNT(SharedPV, ABC):
                     name, component_handler, kwargs = self.__setup_registered_rule(registered_handler, nttype, **kwargs)
                     if name and component_handler:
                         handler[name] = component_handler
-
-                if handler_constructors and "alarmNTEnum" in handler_constructors:
-                    handler["alarmNTEnum"] = ComposeableRulesHandler(
-                        AlarmNTEnumRule(handler_constructors["alarmNTEnum"])
-                    )
 
         if user_handlers:
             handler = handler | user_handlers
@@ -240,7 +239,13 @@ class SharedNT(SharedPV, ABC):
             if len(supported_nttypes) == 1 and supported_nttypes == [SupportedNTTypes.ALL]:
                 pass
             else:
-                raise NotImplementedError("We're not yet testing for NT type!")
+                matchfound = False
+                type_id = id_nttype(nttype)
+                for supported_nttype in supported_nttypes:
+                    if supported_nttype == type_id:
+                        matchfound = True
+                if not matchfound:
+                    return (name, None, kwargs)
 
         if required_fields:
             for required_field in required_fields:

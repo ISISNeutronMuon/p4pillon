@@ -19,6 +19,7 @@ from p4p import Type, Value
 from p4p.server import ServerOperation
 from p4p.server.raw import ServOpWrap
 
+from p4pillon.nt.identify import NTType
 from p4pillon.utils import overwrite_marked
 
 logger = logging.getLogger(__name__)
@@ -27,11 +28,11 @@ logger = logging.getLogger(__name__)
 class SupportedNTTypes(IntEnum):
     """Supported Normative Types."""
 
-    NTSCALAR = auto()
-    NTSCALARARRAY = auto()
-    NTENUM = auto()
-    NTTABLE = auto()  # basic support only
-    NTNDARRAY = auto()  # basic support only
+    NTSCALAR = NTType.NTSCALAR
+    NTSCALARARRAY = NTType.NTSCALARARRAY
+    NTENUM = NTType.NTENUM
+    NTTABLE = NTType.NTTABLE  # basic support only
+    NTNDARRAY = NTType.NTNDARRAY  # basic support only
     ALL = auto()  # signal that this is essentially type independent
 
 

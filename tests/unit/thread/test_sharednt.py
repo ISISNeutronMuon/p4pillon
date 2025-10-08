@@ -27,9 +27,7 @@ def testntscalar_thread_create(pvtype, expected_handlername):
 
 
 def testntenum_thread_create():
-    testpv = SharedNT(
-        nt=NTEnum(), initial={"index": 0, "choices": ["OFF", "ON"]}, handler_constructors={"alarmNTEnum": {}}
-    )
+    testpv = SharedNT(nt=NTEnum(), initial={"index": 0, "choices": ["OFF", "ON"]}, alarmNTEnum={})
 
     assert len(testpv.handler) == 3
     assert list(testpv.handler.keys()) == ["alarm", "alarmNTEnum", "timestamp"]

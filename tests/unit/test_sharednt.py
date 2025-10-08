@@ -121,9 +121,7 @@ def testntscalar_create_with_handlers(pvtype, expected_handlername):
 
 
 def testntenum_create():
-    testpv = SharedNT(
-        nt=NTEnum(), initial={"index": 0, "choices": ["OFF", "ON"]}, handler_constructors={"alarmNTEnum": {}}
-    )
+    testpv = SharedNT(nt=NTEnum(), initial={"index": 0, "choices": ["OFF", "ON"]}, alarmNTEnum={})
 
     assert set(testpv.handler.keys()) == set(["alarm", "alarmNTEnum", "timestamp"])
     assert list(testpv.handler.keys())[-1] == "timestamp"
@@ -133,9 +131,9 @@ def testntenum_create_with_handlers():
     testpv = SharedNT(
         nt=NTEnum(),
         initial={"index": 0, "choices": ["OFF", "ON"]},
+        alarmNTEnum={},
         auth_handlers=OrderedDict({"pre1": Handler(), "pre2": Handler()}),
         user_handlers=OrderedDict({"post1": Handler(), "post2": Handler()}),
-        handler_constructors={"alarmNTEnum": {}},
     )
 
     assert list(testpv.handler.keys()) == ["pre1", "pre2", "alarm", "alarmNTEnum", "post1", "post2", "timestamp"]
