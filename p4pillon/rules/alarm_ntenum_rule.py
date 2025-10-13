@@ -16,7 +16,7 @@ class AlarmNTEnumRule(AlarmRule):
     Uses a dictionary to map NTEnum values to severity, status, and message.
     """
 
-    name = "alarmntenum"
+    name = "alarmNTEnum"
     nttypes = [SupportedNTTypes.NTENUM]
     fields = ["alarm"]
 

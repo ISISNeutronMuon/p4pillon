@@ -11,12 +11,8 @@ pv = SharedNT(
         "value.choices": ["STOP", "START", "STANDBY"],
         "display.description": "Pump on/off control word.",
     },
-    handler_constructors={
-        "alarmNTEnum": {
-            "STOP": AlarmDict(
-                severity=AlarmSeverity.MAJOR_ALARM, status=AlarmStatus.NO_STATUS, message="Shouldn't be off"
-            )
-        }
+    alarmNTEnum={
+        "STOP": AlarmDict(severity=AlarmSeverity.MAJOR_ALARM, status=AlarmStatus.NO_STATUS, message="Shouldn't be off")
     },
 )  # setting initial value also open()'s
 

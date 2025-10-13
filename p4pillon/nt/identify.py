@@ -3,7 +3,7 @@ Identify Normative Types based on their Type information
 """
 
 import re
-from enum import Enum, auto
+from enum import IntEnum, auto
 
 from p4p import Type, Value
 
@@ -17,7 +17,7 @@ from p4pillon.nt.specs import (
 )
 
 
-class NTType(Enum):
+class NTType(IntEnum):
     """
     Normative Types in the Specification Document, excluding those in Appendix A
     """
