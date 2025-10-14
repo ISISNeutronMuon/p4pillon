@@ -116,12 +116,18 @@ def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
     else:
         pvrecipe = PVScalarRecipe(PVTypes[pvdetails["type"]], pvdetails["description"], initial)
 
-    supported_configs = [("read_only", bool), ("calc", dict)]
-    for config, config_type in supported_configs:
-        # Process variables in the configuration that are attributes of the pvrecipe class
+    # Set read only
+    temp_config = pvdetails.get("read_only")
+    if temp_config is not None and isinstance(temp_config, bool):
+        pvrecipe.read_only = temp_config
+
+    # Process configuration in the yaml specific to a supported rule
+    # and add this to pvrecipe.rule_configs
+    rule_configs = [("calc", dict), ("cps_write", dict)]
+    for config, config_type in rule_configs:
         temp_config = pvdetails.get(config)
         if temp_config is not None and isinstance(temp_config, config_type):
-            setattr(pvrecipe, config, temp_config)
+            pvrecipe.rule_configs[config] = temp_config
 
     if "control" in pvdetails:
         pvrecipe.set_control_limits(**get_field_config(pvdetails, "control"))
