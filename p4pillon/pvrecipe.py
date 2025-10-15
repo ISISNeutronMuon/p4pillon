@@ -135,10 +135,8 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
         )
 
         kwargs = {}
-        for name,config in self.rule_configs.items():
+        for name, config in self.rule_configs.items():
             kwargs[name] = config
-        # if hasattr(self, "calc"):
-        #     kwargs["calc"] = self.calc
 
         logger.debug(debug_str)
 
