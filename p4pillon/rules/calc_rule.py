@@ -33,25 +33,12 @@ class CalcRule(BaseScalarRule):
         super().__init__()
         self._variables = []
         self._calc_str: str = ""
-        if "calc" in kwargs:
-            self.set_calc(kwargs["calc"])
+        self.set_calc(calc=kwargs)
 
     name = "calc"
     nttypes = [SupportedNTTypes.ALL]
     fields = []
     add_automatically = False
-
-    # @property
-    # def name(self) -> str:
-    #     return "calc"
-
-    # @property
-    # def fields(self) -> None:
-    #     """
-    #     A return value of None means this rule is not dependent on any fields in the PV and
-    #     will thus always be applicable.
-    #     """
-    #     return None
 
     class MonitorCB:
         """
@@ -71,7 +58,7 @@ class CalcRule(BaseScalarRule):
             See https://epics-base.github.io/p4p/client.html#monitor for further information."""
             self._server.put_pv_value(self._pv_name, {})
 
-    def set_calc(self, calc) -> None:
+    def set_calc(self, calc: dict) -> None:
         """
         Define the calculation to be performed.
         The required argument calc is a dictionary with the following keys:
