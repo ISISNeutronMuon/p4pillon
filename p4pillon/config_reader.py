@@ -18,8 +18,9 @@ logger = logging.getLogger(__name__)
 # The list contains tuples of a tag name (the string used to identify the parameters for this rule)
 # and the parameter type, e.g. dictionary, integer.
 # The tag in the YAML must have the same name as the rule for it to be processed
-# correctly by SharedNT.  
+# correctly by SharedNT.
 rule_configs = [("calc", dict)]
+
 
 def parse_config_file(filename: str, server: Server | None = None) -> dict[str, BasePVRecipe]:
     """
