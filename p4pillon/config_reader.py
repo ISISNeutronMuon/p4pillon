@@ -14,6 +14,12 @@ from p4pillon.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalar
 
 logger = logging.getLogger(__name__)
 
+# A list of rule/handler specific configs in the YAML to be passed to a non-standard rule/handler.
+# The list contains tuples of a tag name (the string used to identify the parameters for this rule)
+# and the parameter type, e.g. dictionary, integer.
+# The tag in the YAML must have the same name as the rule for it to be processed
+# correctly by SharedNT.  
+rule_configs = [("calc", dict)]
 
 def parse_config_file(filename: str, server: Server | None = None) -> dict[str, BasePVRecipe]:
     """
@@ -123,7 +129,6 @@ def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
 
     # Process configuration in the yaml specific to a supported rule
     # and add this to pvrecipe.rule_configs
-    rule_configs = [("calc", dict), ("cps_write", dict)]
     for config, config_type in rule_configs:
         temp_config = pvdetails.get(config)
         if temp_config is not None and isinstance(temp_config, config_type):
