@@ -102,6 +102,9 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
         self.construct_settings = {}
         self.config_settings = {}
 
+        # Rule specific configs to be passed to SharedNT
+        self.rule_configs = {}
+
         self.construct_settings["valtype"] = self.pvtype.value
         self.construct_settings["extra"] = [("descriptor", "s")]
         self.config_settings["descriptor"] = self.description
@@ -132,8 +135,8 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
         )
 
         kwargs = {}
-        if hasattr(self, "calc"):
-            kwargs["calc"] = self.calc
+        for name, config in self.rule_configs.items():
+            kwargs[name] = config
 
         logger.debug(debug_str)
 

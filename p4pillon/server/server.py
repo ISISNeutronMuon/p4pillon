@@ -146,5 +146,10 @@ class Server(ABC):
         """
         Put the value to a PV using the server Context member self._ctxt
         """
-        logger.debug("Trying putting value %r to pv %s", value, pv_name)
-        self._ctxt.put(pv_name, value)
+        shared_pv = self[pv_name]
+        if shared_pv:
+            logger.debug("Trying SharedNT post to pv %s with value %r ", pv_name, value)
+            shared_pv.post(value)
+        else:
+            logger.debug("Trying Context put to pv %s with value %r ", pv_name, value)
+            self._ctxt.put(pv_name, value)

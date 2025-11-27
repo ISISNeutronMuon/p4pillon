@@ -14,6 +14,13 @@ from p4pillon.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalar
 
 logger = logging.getLogger(__name__)
 
+# A list of rule/handler specific configs in the YAML to be passed to a non-standard rule/handler.
+# The list contains tuples of a tag name (the string used to identify the parameters for this rule)
+# and the parameter type, e.g. dictionary, integer.
+# The tag in the YAML must have the same name as the rule for it to be processed
+# correctly by SharedNT.
+rule_configs = [("calc", dict)]
+
 
 def parse_config_file(filename: str, server: Server | None = None) -> dict[str, BasePVRecipe]:
     """
@@ -53,9 +60,9 @@ def parse_config(yaml_obj: dict[str, dict[str, Any]], server: Server | None = No
         pvrecipes[name] = recipe
 
         if server is not None:
-            if hasattr(recipe, "calc"):
-                recipe.calc["server"] = server
-                recipe.calc["pv_name"] = name
+            if "calc" in recipe.rule_configs:
+                recipe.rule_configs["calc"]["server"] = server
+                recipe.rule_configs["calc"]["pv_name"] = name
             server.add_pv(name, recipe)
 
     return pvrecipes
@@ -116,12 +123,17 @@ def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
     else:
         pvrecipe = PVScalarRecipe(PVTypes[pvdetails["type"]], pvdetails["description"], initial)
 
-    supported_configs = [("read_only", bool), ("calc", dict)]
-    for config, config_type in supported_configs:
-        # Process variables in the configuration that are attributes of the pvrecipe class
+    # Set read only
+    temp_config = pvdetails.get("read_only")
+    if temp_config is not None and isinstance(temp_config, bool):
+        pvrecipe.read_only = temp_config
+
+    # Process configuration in the yaml specific to a supported rule
+    # and add this to pvrecipe.rule_configs
+    for config, config_type in rule_configs:
         temp_config = pvdetails.get(config)
         if temp_config is not None and isinstance(temp_config, config_type):
-            setattr(pvrecipe, config, temp_config)
+            pvrecipe.rule_configs[config] = temp_config
 
     if "control" in pvdetails:
         pvrecipe.set_control_limits(**get_field_config(pvdetails, "control"))
