@@ -30,7 +30,7 @@ class DummyHandler:
         self.calls.append(("onFirstConnect", pv))
 
     def onLastDisconnect(self, pv):
-        self.calls.append(("onFirstConnect", pv))
+        self.calls.append(("onLastDisconnect", pv))
 
     def close(self, pv):
         self.calls.append(("close", pv))
@@ -141,8 +141,8 @@ class TestCompositeHandler(unittest.TestCase):
 
     def test_on_last_disconnect_calls_all(self):
         self.comp.on_last_disconnect(self.pv)
-        self.assertEqual(self.h1.calls[0], ("onFirstConnect", self.pv))
-        self.assertEqual(self.h2.calls[0], ("onFirstConnect", self.pv))
+        self.assertEqual(self.h1.calls[0], ("onLastDisconnect", self.pv))
+        self.assertEqual(self.h2.calls[0], ("onLastDisconnect", self.pv))
 
     def test_on_last_disconnect_no_handlers(self):
         comp = CompositeHandler()
@@ -150,7 +150,7 @@ class TestCompositeHandler(unittest.TestCase):
 
     def test_onLastDisconnect_deprecated(self):
         self.comp.onLastDisconnect(self.pv)
-        self.assertEqual(self.h1.calls[0], ("onFirstConnect", self.pv))
+        self.assertEqual(self.h1.calls[0], ("onLastDisconnect", self.pv))
 
     def test_close_calls_all(self):
         self.comp.close(self.pv)
