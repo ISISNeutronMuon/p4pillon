@@ -708,7 +708,7 @@ test = [
 requires-dist = [
     { name = "build", marker = "extra == 'dist'", specifier = ">=1.2.2.post1" },
     { name = "coverage", marker = "extra == 'test'", specifier = ">7.9" },
-    { name = "p4p", specifier = ">=4.2.2" },
+    { name = "p4p", specifier = ">=4.2.1" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.4" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "ruff", marker = "extra == 'test'", specifier = ">=0.12" },
