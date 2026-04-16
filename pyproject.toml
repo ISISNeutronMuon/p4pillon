@@ -84,7 +84,4 @@ extend-select = [
   "I", # isort
 ]
 
-[tool.uv.sources]
-p4p = { git = "https://github.com/epics-base/p4p" }
-
 

@@ -86,13 +86,13 @@ class CompositeHandler(Handler, OrderedDict):
     def onFirstConnect(self, pv: Value):
         self.on_first_connect(pv)
 
-    def on_last_connect(self, pv: SharedPV):
+    def on_last_disconnect(self, pv: SharedPV):
         """Called when the last client channel is closed."""
         for handler in self.values():
-            handler.onFirstConnect(pv)
+            handler.onLastDisconnect(pv)
 
     def onLastDisconnect(self, pv: Value):
-        self.on_last_connect(pv)
+        self.on_last_disconnect(pv)
 
     def close(self, pv: SharedPV):
         for handler in self.values():
