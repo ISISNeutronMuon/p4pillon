@@ -29,6 +29,9 @@ class DummyHandler:
     def onFirstConnect(self, pv):
         self.calls.append(("onFirstConnect", pv))
 
+    def onLastDisconnect(self, pv):
+        self.calls.append(("onFirstConnect", pv))
+
     def close(self, pv):
         self.calls.append(("close", pv))
 
