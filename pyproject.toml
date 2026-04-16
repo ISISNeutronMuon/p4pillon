@@ -9,7 +9,7 @@ description = "Extensions to the p4p Server API, to aid in creation and managmen
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "p4p>=4.2.1",
+    "p4p>=4.2.2",
     "pyyaml>=6.0.2",
 ]
 classifiers = [
@@ -83,8 +83,5 @@ extend-select = [
   "UP",  # pyupgrade
   "I", # isort
 ]
-
-[tool.uv.sources]
-p4p = { git = "https://github.com/epics-base/p4p" }
 
 
