@@ -42,12 +42,9 @@ p4pillon so that field sub-PVs built without an explicit `pv_factory`/
 """
 
 import functools
-import logging
 
 from p4p.nt import NTEnum, NTScalar, defaultNT
 from p4p.server import StaticProvider
-
-_log = logging.getLogger(__name__)
 
 __all__ = (
     'MENU_SCAN',
@@ -231,7 +228,9 @@ def _build_one_field(fieldname, name, valtype, dtyp_choices, fields, pv=None):
 
     if fieldname == "RTYP":
         override = fields.get("RTYP")
-        if override is None:
+        if override is None and pv is not None:
+            # pv is None when called from DynamicRecordFields.makeChannel(),
+            # which has no live PV instance to check -- nothing to infer from.
             _check_rtyp_inferrable(pv)
         return _scalar_pv("s", infer_rtyp(valtype), override)
 
@@ -404,15 +403,13 @@ def _split_field_name(name):
 def _check_pv_factory_is_safe(pv_factory):
     # DynamicRecordFields.makeChannel()/testChannel() are always called by the
     # server's own internal I/O thread, never the thread (if any) running an
-    # asyncio event loop, so a pv_factory requiring one -- p4pillon.server.asyncio.SharedPV,
-    # or any subclass of it -- can never construct successfully there.  Caught here,
-    # at construction time, rather than leaving it to fail deep inside a server
-    # callback on first use.
-    try:
-        from p4pillon.server.asyncio import SharedPV as _AsyncSharedPV
-    except ImportError:
-        return
-    if isinstance(pv_factory, type) and issubclass(pv_factory, _AsyncSharedPV):
+    # asyncio event loop, so a pv_factory requiring one can never construct
+    # successfully there.  Detected via the `_requires_running_loop` trait
+    # (set on p4pillon.server.asyncio.SharedPV) rather than naming that class
+    # directly, so any future loop-requiring flavor is caught the same way.
+    # Caught here, at construction time, rather than leaving it to fail deep
+    # inside a server callback on first use.
+    if isinstance(pv_factory, type) and getattr(pv_factory, "_requires_running_loop", False):
         raise ValueError(
             f"pv_factory={pv_factory.__name__} is not safe for DynamicRecordFields: makeChannel() is "
             "always called by the server's own internal thread, never the thread "
@@ -421,12 +418,17 @@ def _check_pv_factory_is_safe(pv_factory):
             "instead.")
 
 
+@functools.cache
+def _default_pv_factory():
+    # Resolved lazily and cached: p4pillon.server.thread is the common
+    # default, but importing it at module scope would force a hard
+    # dependency on the threading server helper for anyone only using
+    # build_record_fields() directly, or always passing their own
+    # pv_factory.  Caching avoids repeating the import on every call --
+    # DynamicRecordFields.makeChannel() runs this once per channel connect.
+    from p4pillon.server.thread import SharedPV
+    return SharedPV
+
+
 def _field_shared_pv(value, pv_factory=None):
-    if pv_factory is None:
-        # Imported lazily: p4pillon.server.thread is the common default, but
-        # importing it at module scope would force a hard dependency on the
-        # threading server helper for anyone only using build_record_fields()
-        # directly, or passing their own pv_factory.
-        from p4pillon.server.thread import SharedPV
-        pv_factory = SharedPV
-    return pv_factory(initial=value)
+    return (pv_factory or _default_pv_factory())(initial=value)

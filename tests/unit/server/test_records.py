@@ -75,47 +75,44 @@ def _pv(valtype='d', initial=1.234):
 
 
 class TestRecordProvider:
+    def setup_method(self, _method):
+        self.P = RecordProvider("test")
+
     def test_add_creates_field_pvs(self):
-        P = RecordProvider("test")
-        P.add("PV:NAME", _pv(), valtype='d')
-        keys = set(P.keys())
+        self.P.add("PV:NAME", _pv(), valtype='d')
+        keys = set(self.P.keys())
         assert "PV:NAME" in keys
         for field in FIELD_NAMES:
             assert f"PV:NAME.{field}" in keys
 
     def test_record_fields_false_opts_out(self):
-        P = RecordProvider("test")
-        P.add("PV:NAME", _pv(), record_fields=False)
-        assert list(P.keys()) == ["PV:NAME"]
+        self.P.add("PV:NAME", _pv(), record_fields=False)
+        assert list(self.P.keys()) == ["PV:NAME"]
 
     def test_remove_cleans_up_fields(self):
-        P = RecordProvider("test")
-        P.add("PV:NAME", _pv(), valtype='d')
-        assert len(P.keys()) > 1
-        P.remove("PV:NAME")
-        assert list(P.keys()) == []
+        self.P.add("PV:NAME", _pv(), valtype='d')
+        assert len(self.P.keys()) > 1
+        self.P.remove("PV:NAME")
+        assert list(self.P.keys()) == []
 
     def test_remove_without_fields_is_safe(self):
-        P = RecordProvider("test")
-        P.add("PV:NAME", _pv(), record_fields=False)
-        P.remove("PV:NAME")  # must not raise
-        assert list(P.keys()) == []
+        self.P.add("PV:NAME", _pv(), record_fields=False)
+        self.P.remove("PV:NAME")  # must not raise
+        assert list(self.P.keys()) == []
 
-    def _check_rtyp_required_for(self, name, img_pv, tbl_pv, img_pv2, tbl_pv2):
+    def _check_rtyp_required_for(self, name, make_img, make_tbl):
         # infer_rtyp() has no plausible guess for a structural PV.  Rejected
         # without an explicit RTYP override, accepted with one.
-        P = RecordProvider("test")
-
         with pytest.raises(ValueError):
-            P.add(f"EXAMPLE:{name}_IMG", img_pv, valtype='d')
+            self.P.add(f"EXAMPLE:{name}_IMG", make_img(), valtype='d')
         with pytest.raises(ValueError):
-            P.add(f"EXAMPLE:{name}_TBL", tbl_pv, valtype='d')
+            self.P.add(f"EXAMPLE:{name}_TBL", make_tbl(), valtype='d')
 
-        P.add(f"EXAMPLE:{name}_IMG2", img_pv2, valtype='d', fields={"RTYP": "waveform"})
-        assert f"EXAMPLE:{name}_IMG2.RTYP" in P.keys()
+        self.P.add(f"EXAMPLE:{name}_IMG2", make_img(), valtype='d', fields={"RTYP": "waveform"})
+        assert f"EXAMPLE:{name}_IMG2.RTYP" in self.P.keys()
 
-        P.add(f"EXAMPLE:{name}_TBL2", tbl_pv2, valtype='d', fields={"RTYP": "waveform"})
-        assert f"EXAMPLE:{name}_TBL2.RTYP" in P.keys()
+        self.P.add(f"EXAMPLE:{name}_TBL2", make_tbl(), valtype='d', fields={"RTYP": "waveform"})
+        assert f"EXAMPLE:{name}_TBL2.RTYP" in self.P.keys()
 
     @pytest.mark.xfail(
         reason="p4pillon.server.raw.SharedPV.open() double-wraps its 'initial' value "
@@ -134,7 +131,7 @@ class TestRecordProvider:
         def tbl():
             return SharedPV(nt=NTTable(columns=[('A', 'd')]), initial=[{'A': 1.0}])
 
-        self._check_rtyp_required_for("NT", img(), tbl(), img(), tbl())
+        self._check_rtyp_required_for("NT", img, tbl)
 
     def test_rtyp_required_for_hand_built_non_scalar_value(self):
         # Same as test_rtyp_required_for_non_scalar_nt, but for a PV built
@@ -146,8 +143,8 @@ class TestRecordProvider:
 
         self._check_rtyp_required_for(
             "HAND",
-            SharedPV(initial=img_value), SharedPV(initial=table_value),
-            SharedPV(initial=img_value), SharedPV(initial=table_value))
+            lambda: SharedPV(initial=img_value),
+            lambda: SharedPV(initial=table_value))
 
     @pytest.mark.xfail(
         reason="p4pillon.server.raw.SharedPV.open() double-wraps its 'initial' value "
@@ -168,25 +165,22 @@ class TestRecordProvider:
                 self.current_calls += 1
                 return super().current()
 
-        P = RecordProvider("test")
-
         scalar_pv = _CountingCurrentPV(nt=NTScalar('d'), initial=1.234)
-        P.add("EXAMPLE:FASTSCALAR", scalar_pv, valtype='d')
+        self.P.add("EXAMPLE:FASTSCALAR", scalar_pv, valtype='d')
         assert scalar_pv.current_calls == 0
 
         ndarray_pv = _CountingCurrentPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))
         with pytest.raises(ValueError):
-            P.add("EXAMPLE:FASTIMG", ndarray_pv, valtype='d')
+            self.P.add("EXAMPLE:FASTIMG", ndarray_pv, valtype='d')
         assert ndarray_pv.current_calls == 0
 
     def test_live_get(self):
-        P = RecordProvider("test")
-        P.add("EXAMPLE:PV", _pv(),
-              valtype='d',
-              dtyp_choices=["Soft Channel", "Raw Soft Channel"],
-              fields={"DESC": "An example ai-like record", "SCAN": "1 second"})
+        self.P.add("EXAMPLE:PV", _pv(),
+                    valtype='d',
+                    dtyp_choices=["Soft Channel", "Raw Soft Channel"],
+                    fields={"DESC": "An example ai-like record", "SCAN": "1 second"})
 
-        with Server(providers=[P], isolate=True) as S:
+        with Server(providers=[self.P], isolate=True) as S:
             with Context('pva', conf=S.conf(), useenv=False) as C:
                 assert C.get("EXAMPLE:PV") == 1.234
                 assert C.get("EXAMPLE:PV.NAME") == "EXAMPLE:PV"
