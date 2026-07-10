@@ -40,6 +40,7 @@ test = [
   "ruff>=0.12",
   "coverage>7.9",
   "pytest>=8.4",
+  "pytest-asyncio>=0.24",
 ]
 dist = [
     "build>=1.2.2.post1",
@@ -64,6 +65,9 @@ source = "vcs"
 version_scheme = "no-guess-dev"
 
 ## Testing configuration
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
 [tool.coverage.run]
 source = ["."]
 
