@@ -47,10 +47,16 @@ def is_type_subset(fullset: Type, subset: Type) -> bool:
     return True
 
 
-class SharedNT(SharedPV, ABC):
+class SharedNTMixin(ABC):
     """
-    SharedNT is a wrapper around SharedPV that automatically adds handler
-    functionality to support Normative Type logic.
+    SharedNTMixin adds handler functionality to support Normative Type logic
+    on top of a SharedPV.
+
+    A mixin rather than a concrete SharedPV subclass: each concurrency
+    flavour (thread/asyncio) needs to combine this logic with its own real
+    SharedPV base, e.g. ``class SharedNT(SharedNTMixin, _SharedPV): pass`` —
+    patching an attribute onto one shared class after the fact doesn't
+    change its base, so the base has to be chosen via inheritance instead.
     """
 
     registered_handlers: list[type[BaseRule]] = [
@@ -268,3 +274,7 @@ class SharedNT(SharedPV, ABC):
             composed_instance = ComposeableRulesHandler(instance)
 
         return (name, composed_instance, kwargs)
+
+
+class SharedNT(SharedNTMixin, SharedPV):
+    """Default (non-flavoured) SharedNT, backed by p4pillon's raw SharedPV."""

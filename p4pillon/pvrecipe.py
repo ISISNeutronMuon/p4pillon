@@ -8,7 +8,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import ClassVar, Generic, TypeVar
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
 
 from p4pillon.definitions import (
@@ -81,6 +81,9 @@ class AlarmLimit(Generic[NumericTypeT]):
 @dataclass
 class BasePVRecipe(Generic[SharedPvT], ABC):
     """A description of how to build a PV"""
+
+    # Overridden by thread/asyncio subclasses so build_pv() constructs the matching SharedNT.
+    _sharednt_cls: ClassVar[type] = SharedNT
 
     pvtype: PVTypes
     description: str
@@ -155,7 +158,7 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
 
         self._config_timestamp()
 
-        pvobj = SharedNT(nt=nt, initial={"value": self.initial_value, **self.config_settings}, **kwargs)
+        pvobj = self._sharednt_cls(nt=nt, initial={"value": self.initial_value, **self.config_settings}, **kwargs)
 
         if self.read_only:
             pvobj.handler.read_only = True
