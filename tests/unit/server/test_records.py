@@ -10,6 +10,7 @@ from p4p.server import DynamicProvider, Server
 from p4pillon.server.asyncio import SharedPV as AsyncSharedPV
 from p4pillon.server.records import (
     FIELD_NAMES,
+    STRING_FIELDS,
     DynamicRecordFields,
     RecordProvider,
     build_record_fields,
@@ -69,6 +70,47 @@ class TestBuildRecordFields:
         built = build_record_fields("PV:NAME", 'd', fields={"DESC": "hello"})
         assert built["DESC"]['value'] == "hello"
 
+    def test_adel_mdel_included_for_numeric_valtype_and_matches_it(self):
+        built = build_record_fields("PV:NAME", 'd')
+        assert built["ADEL"]['value'] == 0.0
+        assert built["MDEL"]['value'] == 0.0
+
+        built = build_record_fields("PV:NAME", 'l', fields={"ADEL": 5, "MDEL": 1})
+        assert built["ADEL"]['value'] == 5
+        assert built["MDEL"]['value'] == 1
+
+    def test_adel_mdel_omitted_for_non_numeric_valtype(self):
+        built = build_record_fields("PV:NAME", 's')
+        assert "ADEL" not in built
+        assert "MDEL" not in built
+        assert set(built) == FIELD_NAMES - {"ADEL", "MDEL"}
+
+        built = build_record_fields("PV:NAME", '?')
+        assert "ADEL" not in built
+        assert "MDEL" not in built
+
+        built = build_record_fields("PV:NAME", 'ad', fields={"RTYP": "waveform"})
+        assert "ADEL" not in built
+        assert "MDEL" not in built
+
+    def test_string_field_dollar_alias_mirrors_value(self):
+        assert STRING_FIELDS == {"DESC", "ASG", "EVNT", "TSEL", "SDIS", "AMSG",
+                                  "NAMSG", "FLNK", "NAME", "RTYP"}
+
+        built = build_record_fields("PV:NAME", 'd', fields={"DESC": "hello", "RTYP": "waveform"})
+        for fieldname in STRING_FIELDS:
+            assert built[f"{fieldname}$"]['value'] == built[fieldname]['value']
+        assert built["DESC$"]['value'] == "hello"
+        assert built["RTYP$"]['value'] == "waveform"
+        assert built["NAME$"]['value'] == "PV:NAME"
+
+    def test_non_string_field_has_no_dollar_alias(self):
+        built = build_record_fields("PV:NAME", 'd')
+        for fieldname in set(FIELD_NAMES) - STRING_FIELDS - {"ADEL", "MDEL"}:
+            if fieldname.endswith("$"):
+                continue
+            assert f"{fieldname}$" not in built
+
 
 def _pv(valtype='d', initial=1.234):
     return SharedPV(nt=NTScalar(valtype), initial=initial)
@@ -98,6 +140,17 @@ class TestRecordProvider:
     def test_remove_without_fields_is_safe(self):
         self.P.add("PV:NAME", _pv(), record_fields=False)
         self.P.remove("PV:NAME")  # must not raise
+        assert list(self.P.keys()) == []
+
+    def test_adel_mdel_omitted_for_non_numeric_pv_and_remove_still_clean(self):
+        self.P.add("PV:NAME", _pv('s', "hello"), valtype='s')
+        keys = set(self.P.keys())
+        assert "PV:NAME.ADEL" not in keys
+        assert "PV:NAME.MDEL" not in keys
+        for field in FIELD_NAMES - {"ADEL", "MDEL"}:
+            assert f"PV:NAME.{field}" in keys
+
+        self.P.remove("PV:NAME")  # must not raise despite ADEL/MDEL never having been added
         assert list(self.P.keys()) == []
 
     def _check_rtyp_required_for(self, name, make_img, make_tbl):
@@ -178,7 +231,8 @@ class TestRecordProvider:
         self.P.add("EXAMPLE:PV", _pv(),
                     valtype='d',
                     dtyp_choices=["Soft Channel", "Raw Soft Channel"],
-                    fields={"DESC": "An example ai-like record", "SCAN": "1 second"})
+                    fields={"DESC": "An example ai-like record", "SCAN": "1 second",
+                            "ADEL": 0.5, "MDEL": 0.1})
 
         with Server(providers=[self.P], isolate=True) as S:
             with Context('pva', conf=S.conf(), useenv=False) as C:
@@ -186,6 +240,12 @@ class TestRecordProvider:
                 assert C.get("EXAMPLE:PV.NAME") == "EXAMPLE:PV"
                 assert C.get("EXAMPLE:PV.RTYP") == "ai"
                 assert C.get("EXAMPLE:PV.DESC") == "An example ai-like record"
+                assert C.get("EXAMPLE:PV.ADEL") == 0.5
+                assert C.get("EXAMPLE:PV.MDEL") == 0.1
+
+                assert C.get("EXAMPLE:PV.DESC$") == "An example ai-like record"
+                assert C.get("EXAMPLE:PV.NAME$") == "EXAMPLE:PV"
+                assert C.get("EXAMPLE:PV.RTYP$") == "ai"
 
                 dtyp = C.get("EXAMPLE:PV.DTYP")
                 assert dtyp.choice == "Soft Channel"
@@ -199,6 +259,17 @@ class TestRecordProvider:
                 with pytest.raises(TimeoutError):
                     C.get("EXAMPLE:PV.NOSUCHFIELD", timeout=0.2)
 
+    def test_adel_mdel_unreachable_for_non_numeric_pv(self):
+        self.P.add("EXAMPLE:STR", _pv('s', "hello"), valtype='s')
+
+        with Server(providers=[self.P], isolate=True) as S:
+            with Context('pva', conf=S.conf(), useenv=False) as C:
+                assert C.get("EXAMPLE:STR") == "hello"
+                with pytest.raises(TimeoutError):
+                    C.get("EXAMPLE:STR.ADEL", timeout=0.2)
+                with pytest.raises(TimeoutError):
+                    C.get("EXAMPLE:STR.MDEL", timeout=0.2)
+
 
 class TestDynamicRecordFields:
     def test_live_get(self):
@@ -211,12 +282,30 @@ class TestDynamicRecordFields:
                 assert C.get("EXAMPLE:PV3") == "hello"
                 assert C.get("EXAMPLE:PV3.NAME") == "EXAMPLE:PV3"
                 assert C.get("EXAMPLE:PV3.RTYP") == "stringin"
+                assert C.get("EXAMPLE:PV3.NAME$") == "EXAMPLE:PV3"
+                assert C.get("EXAMPLE:PV3.RTYP$") == "stringin"
 
                 with pytest.raises(TimeoutError):
                     C.get("EXAMPLE:PV3.NOSUCHFIELD", timeout=0.2)
 
                 with pytest.raises(TimeoutError):
                     C.get("NOSUCHBASE.DESC", timeout=0.2)
+
+                # 's' is a non-numeric valtype -- ADEL/MDEL don't apply, same
+                # as RecordProvider (see TestRecordProvider.
+                # test_adel_mdel_unreachable_for_non_numeric_pv).
+                with pytest.raises(TimeoutError):
+                    C.get("EXAMPLE:PV3.ADEL", timeout=0.2)
+
+    def test_adel_mdel_reachable_for_numeric_valtype(self):
+        base = {"EXAMPLE:PV4": SharedPV(nt=NTScalar('l'), initial=42)}
+        registry = {"EXAMPLE:PV4": {"valtype": 'l', "fields": {"ADEL": 3, "MDEL": 1}}}
+        field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
+
+        with Server(providers=[base, field_provider], isolate=True) as S:
+            with Context('pva', conf=S.conf(), useenv=False) as C:
+                assert C.get("EXAMPLE:PV4.ADEL") == 3
+                assert C.get("EXAMPLE:PV4.MDEL") == 1
 
 
 def _async_pv(valtype='d', initial=1.234):

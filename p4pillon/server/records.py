@@ -25,9 +25,26 @@ Field defaults are taken from EPICS Base wherever it defines one:
    device supports were built for that record type), so unlike the other
    menu fields there is no global default list -- callers supply their own
    'dtyp_choices'.
+ - ADEL/MDEL (archive/monitor deadband) are not declared in dbCommon.dbd
+   either -- only record types whose VAL is a plain numeric scalar (ai, ao,
+   calc, calcout, dfanout, longin, longout, int64in, int64out, sel, sub;
+   *not* bi/bo/mbbi/mbbo/stringin/stringout/waveform/...) declare them, and
+   always with the same DBF type as VAL itself. So unlike DTYP/RTYP/NAME,
+   they are not unconditionally part of `FIELD_NAMES`' output: whether
+   `build_record_fields` includes them is inferred straight from `valtype`
+   (see `_field_applies`), defaulting to 0, same DBF/valtype as the base PV.
 Any of these can be overridden via the 'fields' dict accepted by
 `build_record_fields`/`RecordProvider.add`, e.g.
 {"DESC": "...", "SCAN": "1 second", "RTYP": "ai"}.
+
+Every string-valued field (DESC, ASG, EVNT, TSEL, SDIS, AMSG, NAMSG, FLNK,
+NAME, RTYP) is additionally servable as "<name>.<FIELD>$", returning exactly
+the same value as "<name>.<FIELD>" itself -- mirroring the "RECORD.FIELD$"
+convention real IOCs support via dbChannelCreate() (see pvxs' ioc/channel.cpp)
+to fetch a DBF_STRING field as a long string/char array, working around
+Channel Access's 40-character MAX_STRING_SIZE scalar-string limit. p4p/pvAccess
+has no such limit, so here "$" is simply an identical-valued alias rather than
+a different wire representation (see `STRING_FIELDS`, `_build_one_field`).
 
 Fields with no independent external representation on a real IOC -- the
 DBF_NOACCESS internals (MLOK, MLIS, BKLNK, ASP, PPN, PPNR, SPVT, RSET,
@@ -43,8 +60,9 @@ p4pillon so that field sub-PVs built without an explicit `pv_factory`/
 
 import functools
 
-from p4p.nt import NTEnum, NTScalar, defaultNT
 from p4p.server import StaticProvider
+
+from p4pillon.nt import NTEnum, NTScalar, defaultNT
 
 __all__ = (
     'MENU_SCAN',
@@ -54,6 +72,7 @@ __all__ = (
     'MENU_ALARM_SEVR',
     'MENU_YES_NO',
     'COMMON_FIELDS',
+    'STRING_FIELDS',
     'FIELD_NAMES',
     'infer_rtyp',
     'build_record_fields',
@@ -126,8 +145,39 @@ COMMON_FIELDS = {
     "FLNK":  {"valtype": "s", "default": ""},
 }
 
+# String-valued field names -- each gets a "<FIELD>$" long-string alias (see
+# the module docstring and _build_one_field).  DTYP is deliberately excluded:
+# it's a menu/choice field (NTEnum), not a string, despite dbCommon.dbd
+# storing its choice as DBF_MENU rather than DBF_STRING either.
+STRING_FIELDS = frozenset(
+    fieldname for fieldname, spec in COMMON_FIELDS.items() if spec.get("valtype") == "s"
+) | {"NAME", "RTYP"}
+
 # Every field name servable through build_record_fields()/RecordProvider.
-FIELD_NAMES = frozenset(COMMON_FIELDS) | {"DTYP", "RTYP", "NAME"}
+# ADEL/MDEL are only actually included for a given PV when _field_applies()
+# says so (see below) -- unlike every other name here, they are not part of
+# every record type.
+FIELD_NAMES = (frozenset(COMMON_FIELDS) | {"DTYP", "RTYP", "NAME", "ADEL", "MDEL"}
+               | {f"{fieldname}$" for fieldname in STRING_FIELDS})
+
+# NTScalar type codes ADEL/MDEL are meaningful for: a plain numeric scalar,
+# same set of codes real record types declare them with (DBF_DOUBLE,
+# DBF_LONG, DBF_INT64, ...) -- see documentation/values.rst for the code
+# table.  Excludes 's' (string), '?' (bool), and array codes ('a' + one of
+# these) -- no real record type of those kinds has ADEL/MDEL.
+_ADEL_MDEL_VALTYPES = frozenset("bBhHiIlLfd")
+
+
+def _field_applies(fieldname, valtype):
+    """Whether `fieldname` is meaningful for a base PV of the given `valtype`.
+
+    True for every field name except ADEL/MDEL, which are only meaningful for
+    a plain numeric scalar `valtype` (see `_ADEL_MDEL_VALTYPES`) -- e.g. an
+    NTEnum- or NTTable-shaped or string-valued PV has neither on a real IOC.
+    """
+    if fieldname in ("ADEL", "MDEL"):
+        return valtype in _ADEL_MDEL_VALTYPES
+    return True
 
 
 def infer_rtyp(valtype):
@@ -221,23 +271,39 @@ def _check_rtyp_inferrable(pv):
         _raise_rtyp_not_inferrable(f"a {struct_id}-shaped PV")
 
 
-def _build_one_field(fieldname, name, valtype, dtyp_choices, fields, pv=None):
+def _build_one_field(fieldname, name, valtype, dtyp_choices, fields):
+    if fieldname.endswith("$"):
+        # '<FIELD>$' is a long-string alias for '<FIELD>' (see the module
+        # docstring) -- always exactly the value '<FIELD>' itself would
+        # build, override included, so simply delegate.  Only ever reached
+        # for names in STRING_FIELDS (FIELD_NAMES only has a "$" entry for
+        # those), so the stripped name is always a real string-kind field.
+        return _build_one_field(fieldname[:-1], name, valtype, dtyp_choices, fields)
+
     if fieldname == "DTYP":
         choices = list(dtyp_choices) if dtyp_choices else ["Soft Channel"]
         return _menu_pv(choices, choices[0], fields.get("DTYP"))
 
     if fieldname == "RTYP":
-        override = fields.get("RTYP")
-        if override is None and pv is not None:
-            # pv is None when called from DynamicRecordFields.makeChannel(),
-            # which has no live PV instance to check -- nothing to infer from.
-            _check_rtyp_inferrable(pv)
-        return _scalar_pv("s", infer_rtyp(valtype), override)
+        # RTYP-inferrability (when there's a live `pv` to check) is validated
+        # once by the caller (`build_record_fields`), not here -- this can be
+        # reached twice per `add()` call (once for "RTYP", once for its "RTYP$"
+        # alias), and pv.current() isn't free.
+        return _scalar_pv("s", infer_rtyp(valtype), fields.get("RTYP"))
 
     if fieldname == "NAME":
         # NAME always mirrors the record's own PV name -- not overridable,
         # same as dbCommon.dbd's special(SPC_NOMOD) on this field.
         return _scalar_nt("s").wrap(name)
+
+    if fieldname in ("ADEL", "MDEL"):
+        # Same DBF/valtype as the base PV's own VAL -- real record types
+        # declare these two with whatever numeric type VAL itself is (see
+        # the module docstring).  Caller is responsible for only requesting
+        # this when _field_applies() agrees (checked by build_record_fields
+        # and DynamicRecordFields, not here, since callers of
+        # _build_one_field always already know).
+        return _scalar_pv(valtype, 0, fields.get(fieldname))
 
     spec = COMMON_FIELDS[fieldname]
     override = fields.get(fieldname)
@@ -247,8 +313,10 @@ def _build_one_field(fieldname, name, valtype, dtyp_choices, fields, pv=None):
 
 
 def build_record_fields(name, valtype, dtyp_choices=None, fields=None, pv=None):
-    """Build the "<name>.<FIELD>" values for every field in `FIELD_NAMES`
-    (DTYP, RTYP, NAME, and the fields common to every EPICS record).
+    """Build the "<name>.<FIELD>" values for every applicable field in
+    `FIELD_NAMES` (DTYP, RTYP, NAME, the fields common to every EPICS record,
+    ADEL/MDEL where `valtype` supports them, and a "<FIELD>$" long-string
+    alias -- identical value to "<FIELD>" -- for each name in `STRING_FIELDS`).
 
     :param str name: The base PV name (used verbatim as the NAME field's value).
     :param str valtype: NTScalar value type code of the base PV, used to infer a
@@ -260,23 +328,32 @@ def build_record_fields(name, valtype, dtyp_choices=None, fields=None, pv=None):
     :param pv: The base PV, if available -- used to check whether RTYP can
               plausibly be inferred (see `_check_rtyp_inferrable`); raises
               `ValueError` if not, unless `fields` gives ``"RTYP"`` explicitly.
-    :returns: dict mapping field name to an initial `~p4p.Value`.
+    :returns: dict mapping field name to an initial `~p4p.Value`.  Only includes
+             "ADEL"/"MDEL" when `valtype` is a plain numeric scalar code (see
+             `_field_applies`) -- omitted entirely otherwise, same as the
+             DBF_NOACCESS fields never appear (see the module docstring).
 
     Values are plain `~p4p.Value` (as built by `~p4p.nt.NTScalar.wrap`/
     `~p4p.nt.NTEnum.wrap`), suitable to pass directly as a `~p4p.server.thread.SharedPV`'s
     ``initial=``.
     """
     fields = fields or {}
-    return {fieldname: _build_one_field(fieldname, name, valtype, dtyp_choices, fields, pv)
-            for fieldname in FIELD_NAMES}
+    if pv is not None and fields.get("RTYP") is None:
+        # pv is None when called from DynamicRecordFields.makeChannel(), which
+        # has no live PV instance to check -- nothing to infer from.  Checked
+        # once here rather than per-field, since "RTYP" and its "RTYP$" alias
+        # would otherwise each independently re-read pv.current().
+        _check_rtyp_inferrable(pv)
+    return {fieldname: _build_one_field(fieldname, name, valtype, dtyp_choices, fields)
+            for fieldname in FIELD_NAMES if _field_applies(fieldname, valtype)}
 
 
 class RecordProvider(StaticProvider):
     """A `~p4p.server.StaticProvider` which, in addition to serving each added PV
     under its own name, also serves "<name>.<FIELD>" as independent read-only
-    channels for DTYP, RTYP, NAME, and the fields common to every EPICS record
-    (dbCommon.dbd) -- without adding any of those fields to the PV's own NTScalar
-    or NTEnum structure. ::
+    channels for DTYP, RTYP, NAME, the fields common to every EPICS record
+    (dbCommon.dbd), and ADEL/MDEL where `valtype` supports them -- without adding
+    any of those fields to the PV's own NTScalar or NTEnum structure. ::
 
         from p4p.nt import NTScalar
         from p4p.server import Server
@@ -303,7 +380,11 @@ class RecordProvider(StaticProvider):
 
     def __init__(self, name=None):
         super().__init__(name)
-        self._recorded = set()
+        # name -> the field names actually added for it (not always
+        # FIELD_NAMES in full -- e.g. ADEL/MDEL are omitted for a non-numeric
+        # valtype, see build_record_fields), so remove() only ever removes
+        # sub-PVs that were actually added.
+        self._recorded = {}
 
     def add(self, name, pv, valtype='d', dtyp_choices=None, fields=None, record_fields=True):
         """Add a PV, and (unless `record_fields` is False) its "<name>.<FIELD>"
@@ -326,13 +407,13 @@ class RecordProvider(StaticProvider):
         for fieldname, value in built.items():
             super().add(f"{name}.{fieldname}",
                                              _field_shared_pv(value, type(pv)))
-        self._recorded.add(name)
+        self._recorded[name] = frozenset(built)
 
     def remove(self, name):
         """Remove a PV, and any "<name>.<FIELD>" sub-PVs previously added for it."""
-        if name in self._recorded:
-            self._recorded.discard(name)
-            for fieldname in FIELD_NAMES:
+        fieldnames = self._recorded.pop(name, None)
+        if fieldnames is not None:
+            for fieldname in fieldnames:
                 super().remove(f"{name}.{fieldname}")
         super().remove(name)
 
@@ -379,12 +460,15 @@ class DynamicRecordFields:
         basename, field = _split_field_name(name)
         if field is None:
             return False
-        return basename in self._registry
+        entry = self._registry.get(basename)
+        if entry is None:
+            return False
+        return _field_applies(field, entry["valtype"])
 
     def makeChannel(self, name, peer):
         basename, field = _split_field_name(name)
         entry = self._registry.get(basename)
-        if entry is None:
+        if entry is None or not _field_applies(field, entry["valtype"]):
             return None
         value = _build_one_field(field, basename, entry["valtype"],
                                   entry.get("dtyp_choices"), entry.get("fields") or {})
