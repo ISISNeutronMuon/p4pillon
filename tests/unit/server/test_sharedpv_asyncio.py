@@ -1,5 +1,6 @@
+import numpy
 import pytest_asyncio
-from p4p.nt import NTScalar
+from p4p.nt import NTNDArray, NTScalar
 
 from p4pillon.server.asyncio import Handler, SharedPV
 
@@ -55,3 +56,26 @@ class TestAsyncioHandler:
         self.pv.open(5)
         await self.pv.close(sync=True)
         assert self.handler.last_op == "close"
+
+
+class TestNoDoubleWrapOfInitialValue:
+    """Regression tests for `SharedPV.open()`/`.post()` each wrapping `value`
+    via `nt.wrap()` themselves before delegating to p4p's own (already
+    wrapping) `SharedPV.open()`/`.post()`, which wraps a second time. Harmless
+    for `NTScalar`, whose `wrap()` tolerates being fed an already-wrapped
+    `Value` -- but `NTNDArray.wrap()` assumes a raw `numpy.ndarray` and raises
+    when handed a `Value` on the second pass.
+
+    SharedPV construction requires a running event loop, so these are async tests.
+    """
+
+    async def test_open_with_ntndarray_does_not_double_wrap(self):
+        pv = SharedPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))
+        assert numpy.array_equal(numpy.asarray(pv.current()).flatten(), numpy.zeros(16))
+        pv.close()
+
+    async def test_post_with_ntndarray_does_not_double_wrap(self):
+        pv = SharedPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))
+        pv.post(numpy.ones((4, 4)))
+        assert numpy.array_equal(numpy.asarray(pv.current()).flatten(), numpy.ones(16))
+        pv.close()

@@ -1,4 +1,5 @@
-from p4p.nt import NTScalar
+import numpy
+from p4p.nt import NTNDArray, NTScalar
 
 from p4pillon.server.thread import Handler, SharedPV
 
@@ -51,3 +52,22 @@ class TestThreadHandler:
         self.pv.close()
         del self.handler
         del self.pv
+
+
+class TestNoDoubleWrapOfInitialValue:
+    """Regression tests for `SharedPV.open()`/`.post()` each wrapping `value`
+    via `nt.wrap()` themselves before delegating to p4p's own (already
+    wrapping) `SharedPV.open()`/`.post()`, which wraps a second time. Harmless
+    for `NTScalar`, whose `wrap()` tolerates being fed an already-wrapped
+    `Value` -- but `NTNDArray.wrap()` assumes a raw `numpy.ndarray` and raises
+    when handed a `Value` on the second pass.
+    """
+
+    def test_open_with_ntndarray_does_not_double_wrap(self):
+        pv = SharedPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))
+        assert numpy.array_equal(numpy.asarray(pv.current()).flatten(), numpy.zeros(16))
+
+    def test_post_with_ntndarray_does_not_double_wrap(self):
+        pv = SharedPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))
+        pv.post(numpy.ones((4, 4)))
+        assert numpy.array_equal(numpy.asarray(pv.current()).flatten(), numpy.ones(16))

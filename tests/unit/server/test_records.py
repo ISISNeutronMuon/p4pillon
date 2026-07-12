@@ -242,13 +242,6 @@ class TestIOCChannelProvider:
         self.P.add(f"EXAMPLE:{name}_TBL2", make_tbl(), valtype="d", fields={"RTYP": "waveform"})
         assert f"EXAMPLE:{name}_TBL2.RTYP" in self.P.keys()
 
-    @pytest.mark.xfail(
-        reason="p4pillon.server.raw.SharedPV.open() double-wraps its 'initial' value "
-        "(wraps once itself, then again inside the original p4p open() it calls) "
-        "-- harmless/idempotent for NTScalar but crashes for NTNDArray/NTTable. "
-        "Pre-existing bug, unrelated to IOCChannelProvider; needs its own fix.",
-        raises=ValueError,
-    )
     def test_rtyp_required_for_non_scalar_nt(self):
         # Detected via pv.nt (set by SharedPV(nt=...)) rather than the
         # 'valtype' string, which can't distinguish an NTNDArray/NTTable-backed
@@ -273,11 +266,6 @@ class TestIOCChannelProvider:
             "HAND", lambda: SharedPV(initial=img_value), lambda: SharedPV(initial=table_value)
         )
 
-    @pytest.mark.xfail(
-        reason="p4pillon.server.raw.SharedPV.open() double-wraps its 'initial' value "
-        "-- see test_rtyp_required_for_non_scalar_nt.",
-        raises=ValueError,
-    )
     def test_rtyp_check_skips_pv_current_when_nt_declared(self):
         # The nt=NTScalar(...)/nt=NTNDArray()/etc. path is the hot path (the
         # common, documented way to build a SharedPV -- see nt.rst): it must
