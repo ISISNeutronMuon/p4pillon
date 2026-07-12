@@ -18,6 +18,13 @@ from .fields import RegistryEntry, _resolve_valtype_and_description
 __all__ = ("IOCRecordServer",)
 
 
+def _with_order(item: Any, order: int | None) -> Any:
+    # p4p.server.Server's providers= entries are either a bare provider or a
+    # (provider, order) tuple -- reattach whichever `order` this entry came
+    # in with (or none) to each provider it expands to.
+    return (item, order) if order is not None else item
+
+
 def _dynamic_fields_provider(provider: Any) -> _DynamicProvider | None:
     # Builds the *additional* DynamicRecordFields-backed provider for a
     # plain-dict entry's "<name>.<FIELD>" sub-PVs (see the class docstring
@@ -66,13 +73,22 @@ class IOCRecordServer(_Server):
     `StaticRecordProvider`'s `~p4p.server.StaticProvider` -- maintains no
     enumerable list of the names it can serve.
 
+    An `IOCRecordProvider` instance can also be passed directly, same as a
+    plain dict or a `StaticRecordProvider` -- unlike `~p4p.server.Server`
+    itself, which has no concept of a single `providers=` entry backed by two
+    providers underneath (see `IOCRecordProvider`'s docstring for why it
+    isn't itself a `~p4p.server.StaticProvider`/`~p4p.server.DynamicProvider`),
+    `IOCRecordServer` unpacks it into its `.providers` pair automatically, so
+    ``providers=[base, pvs]`` works the same as
+    ``providers=[*base.providers, pvs]``.
+
     For DESC updates after add(), per-PV overrides, matching sub-PV flavor to
     an asyncio base PV, or `pvlist` visibility, build a `StaticRecordProvider`
     explicitly (see its own docstring) and pass that instead of a dict;
-    entries that aren't a plain dict (a provider name string, or an
-    already-constructed provider instance, including a `StaticRecordProvider`)
-    are passed through to `~p4p.server.Server` unchanged, with no extra
-    "<name>.<FIELD>" handling added.
+    entries that aren't a plain dict or an `IOCRecordProvider` (a provider
+    name string, or an already-constructed provider instance, including a
+    `StaticRecordProvider`) are passed through to `~p4p.server.Server`
+    unchanged, with no extra "<name>.<FIELD>" handling added.
     """
 
     def __init__(self, providers: list[Any], isolate: bool = False, **kws: Any) -> None:
@@ -86,9 +102,17 @@ class IOCRecordServer(_Server):
         wrapped: list[Any] = []
         for entry in providers:
             provider, order = entry if isinstance(entry, tuple) else (entry, None)
-            wrapped.append((provider, order) if order is not None else provider)
+            sub_providers = getattr(provider, "providers", None)
+            if isinstance(sub_providers, tuple):
+                # Already backed by its own provider pair (e.g.
+                # IOCRecordProvider's static + DynamicRecordFields pair) --
+                # unpack rather than treating it as a single provider (it
+                # isn't one) or a dict (it has no .items()).
+                wrapped.extend(_with_order(sub_provider, order) for sub_provider in sub_providers)
+                continue
+            wrapped.append(_with_order(provider, order))
             fields_provider = _dynamic_fields_provider(provider)
             if fields_provider is not None:
                 self._field_providers.append(fields_provider)
-                wrapped.append((fields_provider, order) if order is not None else fields_provider)
+                wrapped.append(_with_order(fields_provider, order))
         super().__init__(wrapped, isolate=isolate, **kws)

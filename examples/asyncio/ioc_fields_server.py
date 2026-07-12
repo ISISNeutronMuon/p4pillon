@@ -5,8 +5,9 @@ module's docstring for the full rationale.
 Uses `IOCRecordServer`, which builds "<name>.<FIELD>" sub-PVs for free for
 any base PV in a providers=[] entry -- either an explicit `IOCRecordProvider`
 (needed for per-PV overrides, as for EXAMPLE:PV's dtyp_choices/fields below;
-note it isn't itself a single provider, so it's spread via `*base.providers`
-below), or, for the common case needing no overrides, a plain {name: pv} dict,
+passed directly below, same as any other provider -- `IOCRecordServer`
+unpacks it internally even though it isn't itself a single provider), or,
+for the common case needing no overrides, a plain {name: pv} dict,
 same as any ordinary p4p server (see EXAMPLE:PV2 below). Every sub-PV is built
 lazily, on first client connection, as a plain thread-flavored SharedPV --
 regardless of the base PV's own flavor (the asyncio `SharedPV` imported below,
@@ -47,7 +48,7 @@ async def main():
     )
     pvs = {"EXAMPLE:PV2": SharedPV(nt=NTScalar("i"), initial=0)}
 
-    with IOCRecordServer(providers=[*base.providers, pvs]):
+    with IOCRecordServer(providers=[base, pvs]):
         print("Serving:", list(base.providers[0].keys()) + list(pvs.keys()))
         print("Also serving <PV>.<FIELD> for FIELD in:", ", ".join(sorted(FIELD_NAMES)))
         try:

@@ -431,6 +431,22 @@ class TestIOCRecordServer:
                 assert C.get("EXAMPLE:PV.RTYP") == "ai"
                 assert C.get("EXPLICIT:PV.RTYP") == "ai"
 
+    def test_ioc_record_provider_passed_directly(self):
+        # An IOCRecordProvider isn't itself a single provider (it holds a
+        # StaticProvider + DynamicProvider pair, see its own docstring) --
+        # IOCRecordServer should unpack it automatically, so passing it bare
+        # works the same as spreading it via *base.providers.
+        base = IOCRecordProvider("base")
+        base.add("EXAMPLE:PV", _pv(), dtyp_choices=["Soft Channel", "Raw Soft Channel"])
+        pvs = {"EXAMPLE:PV2": _pv()}
+
+        with IOCRecordServer(providers=[base, pvs], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("EXAMPLE:PV") == 1.234
+                assert C.get("EXAMPLE:PV.RTYP") == "ai"
+                assert C.get("EXAMPLE:PV.DTYP").raw["value.choices"] == ["Soft Channel", "Raw Soft Channel"]
+                assert C.get("EXAMPLE:PV2.RTYP") == "ai"
+
 
 class TestDynamicRecordFields:
     def test_unknown_fields_key_warns_eagerly_at_construction(self):
