@@ -28,12 +28,6 @@ class SharedPV(_AsyncioSharedPV):
     # shared p4p class would leak into anyone else holding a reference to it.
     _requires_running_loop = True
 
-# SharedPV.__init__ requires a running event loop on the calling thread (see
-# p4p.server.asyncio.SharedPV.__init__'s get_running_loop() call) -- flagged
-# here so callers needing to detect that (e.g. p4pillon.server.records) can
-# check the trait instead of importing and naming this class directly.
-SharedPV._requires_running_loop = True
-
 #####
 # Monkey patching the Handler is a simpler operation as it's a straight
 # substitution with our new version.
