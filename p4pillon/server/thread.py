@@ -13,7 +13,15 @@ from p4pillon.server.raw import SharedPV as _SharedPV
 p4p.server.raw.SharedPV = _SharedPV
 
 # pylint: disable=unused-import, wrong-import-order, wrong-import-position
-from p4p.server.thread import Handler, SharedPV  # noqa: E402, F401,
+from p4p.server.thread import Handler  # noqa: E402, F401,
+from p4p.server.thread import SharedPV as _ThreadSharedPV  # noqa: E402
+
+
+class SharedPV(_ThreadSharedPV):
+    # A real subclass rather than a bare re-export of p4p.server.thread.SharedPV,
+    # matching p4pillon.server.asyncio.SharedPV -- see that module's comment
+    # for why patching an attribute onto the shared p4p class isn't used instead.
+    pass
 
 #####
 # Monkey patching the Handler is a simpler operation as it's a straight

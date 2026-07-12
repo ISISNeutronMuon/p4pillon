@@ -13,7 +13,20 @@ from p4pillon.server.raw import SharedPV as _SharedPV
 p4p.server.raw.SharedPV = _SharedPV
 
 # pylint: disable=unused-import, wrong-import-order, wrong-import-position
-from p4p.server.asyncio import Handler, SharedPV  # noqa: E402, F401,
+from p4p.server.asyncio import Handler  # noqa: E402, F401,
+from p4p.server.asyncio import SharedPV as _AsyncioSharedPV  # noqa: E402
+
+
+class SharedPV(_AsyncioSharedPV):
+    # __init__ requires a running event loop on the calling thread (see
+    # p4p.server.asyncio.SharedPV.__init__'s get_running_loop() call) --
+    # flagged via this class attribute so callers needing to detect that
+    # (e.g. p4pillon.server.records) can check the trait instead of naming
+    # this class directly.  A real subclass rather than mutating
+    # p4p.server.asyncio.SharedPV in place, same reasoning as
+    # p4pillon.asyncio.sharednt.SharedNT: patching an attribute onto the
+    # shared p4p class would leak into anyone else holding a reference to it.
+    _requires_running_loop = True
 
 #####
 # Monkey patching the Handler is a simpler operation as it's a straight
