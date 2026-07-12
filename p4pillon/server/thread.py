@@ -23,6 +23,7 @@ class SharedPV(_ThreadSharedPV):
     # for why patching an attribute onto the shared p4p class isn't used instead.
     pass
 
+
 #####
 # Monkey patching the Handler is a simpler operation as it's a straight
 # substitution with our new version.
