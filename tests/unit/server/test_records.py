@@ -13,7 +13,8 @@ from p4pillon.server.records import (
     FIELD_NAMES,
     STRING_FIELDS,
     DynamicRecordFields,
-    IOCChannelProvider,
+    IOCRecordProvider,
+    IOCRecordServer,
     RecordFieldOverrides,
     _supports_handler_hooks,
     build_record_fields,
@@ -158,9 +159,9 @@ def _pv_with_description(description=None, valtype="d", initial=1.234):
     return SharedPV(nt=NTScalar(valtype, display=True), initial=value)
 
 
-class TestIOCChannelProvider:
+class TestIOCRecordProvider:
     def setup_method(self, _method):
-        self.P = IOCChannelProvider("test")
+        self.P = IOCRecordProvider("test")
 
     def test_add_creates_field_pvs(self):
         self.P.add("PV:NAME", _pv(), valtype="d")
@@ -376,7 +377,7 @@ class TestIOCChannelProvider:
     def test_desc_sync_opt_in_via_constructor(self):
         # sync_description=True at the constructor applies to every add()
         # that doesn't override it itself.
-        provider = IOCChannelProvider("test", sync_description=True)
+        provider = IOCRecordProvider("test", sync_description=True)
         pv = _pv_with_description("initial description")
         provider.add("EXAMPLE:PV", pv, valtype="d")
 
@@ -386,7 +387,7 @@ class TestIOCChannelProvider:
                 assert C.get("EXAMPLE:PV.DESC") == "updated description"
 
     def test_desc_sync_per_add_overrides_constructor_default(self):
-        provider = IOCChannelProvider("test", sync_description=True)
+        provider = IOCRecordProvider("test", sync_description=True)
         off_pv = _pv_with_description("off")
         provider.add("EXAMPLE:OFF", off_pv, valtype="d", sync_description=False)
         assert "EXAMPLE:OFF" not in provider._description_sync
@@ -424,7 +425,7 @@ class TestIOCChannelProvider:
         assert pv._handler is original_handler
 
     def test_supports_handler_hooks_detects_p4pillon_flavor(self):
-        # Unit-level check of the isinstance test IOCChannelProvider.add() uses
+        # Unit-level check of the isinstance test IOCRecordProvider.add() uses
         # to decide whether live DESC tracking is even possible (see
         # _DescriptionSyncHandler/_supports_handler_hooks) -- deliberately
         # not exercised against a real p4p.server.thread.SharedPV/
@@ -460,9 +461,45 @@ class TestIOCChannelProvider:
                     C.get("EXAMPLE:STR.MDEL", timeout=0.2)
 
 
+class TestIOCRecordServer:
+    def test_dict_provider_gets_field_pvs(self):
+        # Plain p4p.server.Server treats a bare dict as shorthand for a plain
+        # StaticProvider (base PV only, no "<name>.<FIELD>" sub-PVs) --
+        # IOCRecordServer should instead treat it as shorthand for an
+        # IOCRecordProvider (sub-PVs included), with no other code changes.
+        pvs = {"EXAMPLE:PV": _pv()}
+
+        with IOCRecordServer(providers=[pvs], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("EXAMPLE:PV") == 1.234
+                assert C.get("EXAMPLE:PV.RTYP") == "ai"
+                assert C.get("EXAMPLE:PV.SCAN").choice == "Passive"
+
+    def test_non_dict_providers_pass_through_unchanged(self):
+        # A provider name string and an already-constructed provider instance
+        # (including an explicit IOCRecordProvider) aren't dicts -- must be
+        # forwarded to p4p.server.Server as-is, not touched by _iocify.
+        explicit = IOCRecordProvider("explicit")
+        explicit.add("EXPLICIT:PV", _pv())
+
+        with IOCRecordServer(providers=[explicit], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("EXPLICIT:PV.RTYP") == "ai"
+
+    def test_mixed_dict_and_provider_entries(self):
+        pvs = {"EXAMPLE:PV": _pv()}
+        explicit = IOCRecordProvider("explicit")
+        explicit.add("EXPLICIT:PV", _pv())
+
+        with IOCRecordServer(providers=[pvs, explicit], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("EXAMPLE:PV.RTYP") == "ai"
+                assert C.get("EXPLICIT:PV.RTYP") == "ai"
+
+
 class TestDynamicRecordFields:
     def test_unknown_fields_key_warns_eagerly_at_construction(self):
-        # Unlike IOCChannelProvider.add(), this registry's 'fields' is never
+        # Unlike IOCRecordProvider.add(), this registry's 'fields' is never
         # otherwise inspected until (if ever) a client connects to that
         # specific record's fields -- validated eagerly here instead so the
         # typo is caught regardless of whether a client ever asks.
@@ -496,7 +533,7 @@ class TestDynamicRecordFields:
                     C.get("NOSUCHBASE.DESC", timeout=0.2)
 
                 # 's' is a non-numeric valtype -- ADEL/MDEL don't apply, same
-                # as IOCChannelProvider (see TestIOCChannelProvider.
+                # as IOCRecordProvider (see TestIOCRecordProvider.
                 # test_adel_mdel_unreachable_for_non_numeric_pv).
                 with pytest.raises(TimeoutError):
                     C.get("EXAMPLE:PV3.ADEL", timeout=0.2)
@@ -515,7 +552,7 @@ class TestDynamicRecordFields:
         # No live PV reference here (see RegistryEntry's docstring) -- DESC
         # comes from the registry's 'description' entry, a one-time snapshot
         # re-read per makeChannel() call; 'fields'={"DESC": ...} is ignored,
-        # same as IOCChannelProvider.
+        # same as IOCRecordProvider.
         base = {"EXAMPLE:PV5": SharedPV(nt=NTScalar("d"), initial=1.0)}
         registry = {
             "EXAMPLE:PV5": {"valtype": "d", "description": "snapshot description", "fields": {"DESC": "ignored"}}
@@ -558,13 +595,13 @@ def _async_pv(valtype="d", initial=1.234):
     return AsyncSharedPV(nt=NTScalar(valtype), initial=initial)
 
 
-class TestIOCChannelProviderAsyncio:
+class TestIOCRecordProviderAsyncio:
     async def test_live_get(self):
         # Field-value semantics (defaults, overrides, RTYP inference, etc)
-        # are covered by TestIOCChannelProvider.test_live_get; this only
-        # confirms the same IOCChannelProvider works against an
+        # are covered by TestIOCRecordProvider.test_live_get; this only
+        # confirms the same IOCRecordProvider works against an
         # asyncio-flavored PV/Context.
-        P = IOCChannelProvider("test")
+        P = IOCRecordProvider("test")
         P.add("EXAMPLE:PV", _async_pv(), valtype="d")
 
         with Server(providers=[P], isolate=True) as S:
@@ -577,7 +614,7 @@ class TestIOCChannelProviderAsyncio:
                     await asyncio.wait_for(C.get("EXAMPLE:PV.NOSUCHFIELD"), timeout=0.2)
 
     async def test_mixed_pv_flavors(self):
-        # A single IOCChannelProvider can mix thread- and asyncio-flavored base
+        # A single IOCRecordProvider can mix thread- and asyncio-flavored base
         # PVs; each record's own "<name>.<FIELD>" sub-PVs are built using
         # that same PV's class (type(pv)), so they automatically use the
         # same concurrency model rather than a single flavor for the whole
@@ -595,7 +632,7 @@ class TestIOCChannelProviderAsyncio:
                 super().__init__(**kw)
                 async_instances.append(self)
 
-        P = IOCChannelProvider("test")
+        P = IOCRecordProvider("test")
         P.add("EXAMPLE:THREAD", TrackedThreadPV(nt=NTScalar("d"), initial=1.234), valtype="d")
         P.add("EXAMPLE:ASYNC", TrackedAsyncPV(nt=NTScalar("d"), initial=2.345), valtype="d")
 

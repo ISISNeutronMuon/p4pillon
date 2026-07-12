@@ -2,10 +2,13 @@
 DTYP, RTYP, NAME, and the fields common to every EPICS record -- see that
 module's docstring for the full rationale.
 
-Uses `IOCChannelProvider`, the primary/recommended way to use this: every
-"<name>.<FIELD>" sub-PV is built and registered up front, when `add()` is
-called, automatically matching the flavor of the base PV passed to it --
-the asyncio `SharedPV` imported below, in this example.
+Uses `IOCRecordServer`, which builds "<name>.<FIELD>" sub-PVs for free for
+any base PV in a providers=[] entry -- either an explicit `IOCRecordProvider`
+(needed for per-PV overrides, as for EXAMPLE:PV's dtyp_choices/fields below),
+or, for the common case needing no overrides, a plain {name: pv} dict, same
+as any ordinary p4p server (see EXAMPLE:PV2 below). Each sub-PV automatically
+matches the flavor of its base PV -- the asyncio `SharedPV` imported below,
+in this example.
 
 in another terminal use
  `python -m p4p.client.cli get EXAMPLE:PV`
@@ -14,19 +17,20 @@ in another terminal use
  `python -m p4p.client.cli get EXAMPLE:PV.NAME`
  `python -m p4p.client.cli get EXAMPLE:PV.SCAN`
  `python -m p4p.client.cli get EXAMPLE:PV.DESC`
+ `python -m p4p.client.cli get EXAMPLE:PV2`
+ `python -m p4p.client.cli get EXAMPLE:PV2.RTYP`
 """
 
 import asyncio
 
 from p4p.nt import NTScalar
-from p4p.server import Server
 
 from p4pillon.server.asyncio import SharedPV
-from p4pillon.server.records import FIELD_NAMES, IOCChannelProvider
+from p4pillon.server.records import FIELD_NAMES, IOCRecordProvider, IOCRecordServer
 
 
 async def main():
-    base = IOCChannelProvider("base")
+    base = IOCRecordProvider("base")
     base.add(
         "EXAMPLE:PV",
         SharedPV(
@@ -36,10 +40,10 @@ async def main():
         dtyp_choices=["Soft Channel", "Raw Soft Channel"],
         fields={"SCAN": "1 second"},
     )
-    base.add("EXAMPLE:PV2", SharedPV(nt=NTScalar("i"), initial=0))
+    pvs = {"EXAMPLE:PV2": SharedPV(nt=NTScalar("i"), initial=0)}
 
-    with Server(providers=[base]):
-        print("Serving:", list(base.keys()))
+    with IOCRecordServer(providers=[base, pvs]):
+        print("Serving:", list(base.keys()) + list(pvs.keys()))
         print("Also serving <PV>.<FIELD> for FIELD in:", ", ".join(sorted(FIELD_NAMES)))
         try:
             while True:

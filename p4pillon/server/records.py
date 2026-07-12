@@ -4,7 +4,7 @@ convention where "RECORD.FIELD" resolves as its own channel independent of
 the record's own value type (e.g. NTScalar for "RECORD" itself).
 
 Unlike an IOC, a plain p4p server has no database or dbChannel layer to
-parse a "RECORD.FIELD" name automatically. `IOCChannelProvider` (a
+parse a "RECORD.FIELD" name automatically. `IOCRecordProvider` (a
 `~p4p.server.StaticProvider` subclass) and `DynamicRecordFields` (a
 `~p4p.server.DynamicProvider` handler) both provide this, without adding
 any of these fields to the base record's own NTScalar/NTEnum structure.
@@ -18,7 +18,7 @@ Field defaults are taken from EPICS Base wherever it defines one:
    EPICS record type), so it is *inferred* from the base PV's NTScalar
    value type code via `infer_rtyp` (e.g. valtype='d' suggests "ai").
    Non-scalar PVs (`~p4p.nt.NTTable`, `~p4p.nt.NTNDArray`, ...) have no
-   plausible guess; `IOCChannelProvider.add` rejects these unless 'fields'
+   plausible guess; `IOCRecordProvider.add` rejects these unless 'fields'
    gives 'RTYP' explicitly.
  - DTYP's choices are inherently per-record-type (they mirror whichever
    device supports were built for it), so unlike the other menu fields
@@ -35,13 +35,13 @@ Field defaults are taken from EPICS Base wherever it defines one:
    (present only when built with e.g. ``NTScalar(..., display=True)``),
    the same way an IOC's dbChannel layer resolves "RECORD.DESC" from the
    record's own DESC member rather than a separately-settable value --
-   like NAME, DESC isn't settable via 'fields'. `IOCChannelProvider.add`
+   like NAME, DESC isn't settable via 'fields'. `IOCRecordProvider.add`
    keeps DESC live as display.description changes (p4pillon-flavored base
    PVs only -- see `_DescriptionSyncHandler`); `DynamicRecordFields` only
    snapshots the registry's 'description' entry per connection. Absent a
    display.description field entirely, DESC is always "".
 Any of these can be overridden via the 'fields' dict accepted by
-`build_record_fields`/`IOCChannelProvider.add`, e.g.
+`build_record_fields`/`IOCRecordProvider.add`, e.g.
 {"SCAN": "1 second", "RTYP": "ai"}.
 
 Every string-valued field (DESC, ASG, EVNT, TSEL, SDIS, AMSG, NAMSG, FLNK,
@@ -69,6 +69,7 @@ import warnings
 from typing import Any, NoReturn, TypedDict
 
 from p4p import Value
+from p4p.server import Server as _Server
 from p4p.server import StaticProvider
 from p4p.server.raw import SharedPV as _SharedPVBase
 
@@ -88,7 +89,8 @@ __all__ = (
     "RegistryEntry",
     "infer_rtyp",
     "build_record_fields",
-    "IOCChannelProvider",
+    "IOCRecordProvider",
+    "IOCRecordServer",
     "DynamicRecordFields",
 )
 
@@ -192,7 +194,7 @@ STRING_FIELDS: frozenset[str] = frozenset(
     fieldname for fieldname, spec in COMMON_FIELDS.items() if spec.get("valtype") == "s"
 ) | {"NAME", "RTYP", "DESC"}
 
-# Every field name servable through build_record_fields()/IOCChannelProvider.
+# Every field name servable through build_record_fields()/IOCRecordProvider.
 # ADEL/MDEL are only included when _field_applies() says so (see below).
 FIELD_NAMES: frozenset[str] = (
     frozenset(COMMON_FIELDS)
@@ -277,7 +279,7 @@ class RegistryEntry(_RegistryEntryRequired, total=False):
     are optional, same as the corresponding `build_record_fields` parameters.
     'description' is a snapshot only -- re-read once per `makeChannel()` call
     (i.e. once per client connect to that record's fields), not tracked live
-    the way `IOCChannelProvider.add()` tracks a base PV's display.description,
+    the way `IOCRecordProvider.add()` tracks a base PV's display.description,
     since this registry holds no live PV reference to observe.
     """
 
@@ -529,7 +531,7 @@ def _description_of_pv(pv: _SharedPVBase) -> tuple[str, bool]:
     # Returns (description, has_description_field). has_description_field is
     # False whenever the PV's structure has no display.description at all
     # (the common case) -- DESC is then permanently "" and
-    # IOCChannelProvider.add() need not install _DescriptionSyncHandler.
+    # IOCRecordProvider.add() need not install _DescriptionSyncHandler.
 
     # Fast path: pv.nt tells us whether display.description is even
     # structurally possible with no further access (same rationale as
@@ -573,14 +575,14 @@ def _supports_handler_hooks(pv: _SharedPVBase) -> bool:
 
 
 class _DescriptionSyncHandler:
-    """Wraps a base PV's handler (see `IOCChannelProvider.add`) so every
+    """Wraps a base PV's handler (see `IOCRecordProvider.add`) so every
     open()/post() also mirrors display.description onto its ".DESC"/".DESC$"
     sub-PVs, matching pvxs' dbChannel behaviour where RECORD.DESC and
     display.description are the same field (see `_build_one_field`'s DESC
     case). Delegates every other hook to the original handler unchanged.
     Only installed when the base PV has display.description
     (`_description_of_pv`) and supports these hooks (`_supports_handler_hooks`);
-    `IOCChannelProvider.remove` restores the original handler afterward.
+    `IOCRecordProvider.remove` restores the original handler afterward.
     """
 
     def __init__(self, real: Any, desc_pv: _SharedPVBase, desc_dollar_pv: _SharedPVBase):
@@ -624,7 +626,7 @@ class _DescriptionSyncHandler:
         self._delegate("close", pv)
 
 
-class IOCChannelProvider(StaticProvider):
+class IOCRecordProvider(StaticProvider):
     """A `~p4p.server.StaticProvider` which, in addition to serving each added PV
     under its own name, also serves "<name>.<FIELD>" as independent read-only
     channels for DTYP, RTYP, NAME, the fields common to every EPICS record
@@ -634,9 +636,9 @@ class IOCChannelProvider(StaticProvider):
         from p4p.nt import NTScalar
         from p4p.server import Server
         from p4pillon.server.thread import SharedPV
-        from p4pillon.server.records import IOCChannelProvider
+        from p4pillon.server.records import IOCRecordProvider
 
-        provider = IOCChannelProvider("example")
+        provider = IOCRecordProvider("example")
         provider.add("EXAMPLE:PV",
                      SharedPV(nt=NTScalar("d", display=True),
                               initial={"value": 1.234,
@@ -755,7 +757,7 @@ class IOCChannelProvider(StaticProvider):
                         "p4pillon-flavored SharedPV, so its .DESC/.DESC$ will not track "
                         "display.description changes made after add() -- only "
                         "p4pillon.server.thread.SharedPV and p4pillon.server.asyncio.SharedPV "
-                        "support this (see IOCChannelProvider's docstring).",
+                        "support this (see IOCRecordProvider's docstring).",
                         stacklevel=2,
                     )
 
@@ -772,10 +774,74 @@ class IOCChannelProvider(StaticProvider):
         super().remove(name)
 
 
+def _iocify(provider: Any) -> Any:
+    # p4p.server.Server.__init__ treats any providers=[] entry with an
+    # .items() method (a plain dict) as shorthand for a StaticProvider,
+    # populated via plain StaticProvider.add() -- so "<name>.<FIELD>" sub-PVs
+    # are never built for it (see IOCRecordServer's docstring). Pre-convert
+    # such entries to an IOCRecordProvider (populated via *its* add(), which
+    # builds the sub-PVs by default) before p4p.server.Server ever sees them.
+    # Anything else (a provider instance, or a provider name string) is
+    # returned unchanged.
+    if not hasattr(provider, "items"):
+        return provider
+    ioc_provider = IOCRecordProvider()
+    for name, pv in provider.items():
+        ioc_provider.add(name, pv)
+    return ioc_provider
+
+
+class IOCRecordServer(_Server):
+    """A `~p4p.server.Server` for which a plain ``{name: pv}`` dict in
+    `providers=` gets the same "<name>.<FIELD>" sub-PV treatment as an
+    explicit `IOCRecordProvider`, instead of plain p4p's
+    `~p4p.server.StaticProvider` (base PVs only, no sub-PVs). ::
+
+        from p4p.nt import NTScalar
+        from p4pillon.server.thread import SharedPV
+        from p4pillon.server.records import IOCRecordServer
+
+        names = [f"DEV:PV{i:02d}" for i in range(12)]
+        pvs = {name: SharedPV(nt=NTScalar('d'), initial=0.0) for name in names}
+
+        with IOCRecordServer(providers=[pvs]):
+            ...  # "DEV:PV00.RTYP", "DEV:PV00.SCAN", etc. are now servable too
+
+    Every dict entry is added with `IOCRecordProvider.add`'s defaults (no
+    `valtype`/`dtyp_choices`/`fields` overrides, ``record_fields=True``) --
+    for anything more specific, build an `IOCRecordProvider` explicitly (see
+    its own docstring) and pass that instead of a dict; entries that aren't a
+    plain dict (a provider name string, or an already-constructed provider
+    instance, including an `IOCRecordProvider`) are passed through to
+    `~p4p.server.Server` unchanged.
+
+    Building each sub-PV happens synchronously inside `__init__` -- if a
+    dict's PVs are `~p4pillon.server.asyncio.SharedPV`, construct this
+    `IOCRecordServer` itself from within a running event loop, same as
+    constructing those PVs in the first place required.
+    """
+
+    def __init__(self, providers: list[Any], isolate: bool = False, **kws: Any) -> None:
+        # Referenced only to keep each IOCRecordProvider built here alive
+        # for the Server's lifetime -- p4p.server.Server itself only does
+        # this for the plain StaticProviders *it* builds from a bare dict,
+        # not for provider instances (which is what _iocify's output is,
+        # from p4p.server.Server's point of view).
+        self._iocified: list[IOCRecordProvider] = []
+        wrapped = []
+        for entry in providers:
+            provider, order = entry if isinstance(entry, tuple) else (entry, None)
+            ioc_provider = _iocify(provider)
+            if ioc_provider is not provider:
+                self._iocified.append(ioc_provider)
+            wrapped.append((ioc_provider, order) if order is not None else ioc_provider)
+        super().__init__(wrapped, isolate=isolate, **kws)
+
+
 class DynamicRecordFields:
     """A `~p4p.server.DynamicProvider` handler serving "<name>.<FIELD>" for base PV
     names known to a `registry`, building each field PV lazily on demand rather than
-    eagerly for every record up front (unlike `IOCChannelProvider`). ::
+    eagerly for every record up front (unlike `IOCRecordProvider`). ::
 
         from p4p.server import DynamicProvider
         from p4pillon.server.records import DynamicRecordFields
@@ -796,7 +862,7 @@ class DynamicRecordFields:
                      otherwise builds each field PV lazily, on demand).
                      'description' (DESC/DESC$'s value) is a snapshot only,
                      re-read from the registry once per `makeChannel()` call --
-                     unlike `IOCChannelProvider`, this class has no live PV
+                     unlike `IOCRecordProvider`, this class has no live PV
                      reference to track display.description changes with (see
                      `RegistryEntry`).
     :param pv_factory: Callable used to construct each "<name>.<FIELD>" sub-PV,
@@ -810,7 +876,7 @@ class DynamicRecordFields:
                        asyncio event loop, and `asyncio.SharedPV.__init__` requires a
                        running loop *on the calling thread* -- it would raise
                        ``RuntimeError: no running event loop`` on every channel
-                       creation.  (`IOCChannelProvider` does not have this restriction,
+                       creation.  (`IOCRecordProvider` does not have this restriction,
                        since its ``add()`` is called directly by user code, which for
                        asyncio users naturally runs inside a coroutine.)
     """
