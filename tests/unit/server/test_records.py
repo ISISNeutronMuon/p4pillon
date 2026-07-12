@@ -348,9 +348,26 @@ class TestIOCChannelProvider:
             with Context("pva", conf=S.conf(), useenv=False) as C:
                 assert C.get("EXAMPLE:PV.DESC") == "real description"
 
-    def test_desc_tracks_display_description_live_after_add(self):
+    def test_desc_snapshot_only_by_default(self):
+        # Live tracking is opt-in (sync_description) -- by default add() only
+        # takes a one-time snapshot of display.description, same as for a
+        # non-p4pillon-flavored PV.
         pv = _pv_with_description("initial description")
         self.P.add("EXAMPLE:PV", pv, valtype="d")
+        assert pv._handler is not None
+        assert "EXAMPLE:PV" not in self.P._description_sync
+
+        with Server(providers=[self.P], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("EXAMPLE:PV.DESC") == "initial description"
+
+                pv.post({"display": {"description": "updated description"}})
+
+                assert C.get("EXAMPLE:PV.DESC") == "initial description"
+
+    def test_desc_tracks_display_description_live_after_add(self):
+        pv = _pv_with_description("initial description")
+        self.P.add("EXAMPLE:PV", pv, valtype="d", sync_description=True)
 
         with Server(providers=[self.P], isolate=True) as S:
             with Context("pva", conf=S.conf(), useenv=False) as C:
@@ -368,6 +385,28 @@ class TestIOCChannelProvider:
                 assert C.get("EXAMPLE:PV") == 2.5
                 assert C.get("EXAMPLE:PV.DESC") == "updated description"
 
+    def test_desc_sync_opt_in_via_constructor(self):
+        # sync_description=True at the constructor applies to every add()
+        # that doesn't override it itself.
+        provider = IOCChannelProvider("test", sync_description=True)
+        pv = _pv_with_description("initial description")
+        provider.add("EXAMPLE:PV", pv, valtype="d")
+
+        with Server(providers=[provider], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                pv.post({"display": {"description": "updated description"}})
+                assert C.get("EXAMPLE:PV.DESC") == "updated description"
+
+    def test_desc_sync_per_add_overrides_constructor_default(self):
+        provider = IOCChannelProvider("test", sync_description=True)
+        off_pv = _pv_with_description("off")
+        provider.add("EXAMPLE:OFF", off_pv, valtype="d", sync_description=False)
+        assert "EXAMPLE:OFF" not in provider._description_sync
+
+        on_pv = _pv_with_description("on")
+        self.P.add("EXAMPLE:ON", on_pv, valtype="d", sync_description=True)
+        assert "EXAMPLE:ON" in self.P._description_sync
+
     def test_desc_sync_handler_delegates_to_original_handler(self):
         put_calls = []
 
@@ -379,7 +418,7 @@ class TestIOCChannelProvider:
         pv = SharedPV(
             handler=_Handler(), nt=NTScalar("d", display=True), initial={"value": 1.0, "display": {"description": "x"}}
         )
-        self.P.add("EXAMPLE:PV", pv, valtype="d")
+        self.P.add("EXAMPLE:PV", pv, valtype="d", sync_description=True)
 
         with Server(providers=[self.P], isolate=True) as S:
             with Context("pva", conf=S.conf(), useenv=False) as C:
@@ -390,7 +429,7 @@ class TestIOCChannelProvider:
     def test_desc_sync_handler_restored_on_remove(self):
         pv = _pv_with_description("desc")
         original_handler = pv._handler
-        self.P.add("EXAMPLE:PV", pv, valtype="d")
+        self.P.add("EXAMPLE:PV", pv, valtype="d", sync_description=True)
         assert pv._handler is not original_handler
 
         self.P.remove("EXAMPLE:PV")

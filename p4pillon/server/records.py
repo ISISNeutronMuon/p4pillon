@@ -567,8 +567,8 @@ def _patched_shared_pv_cls() -> type:
 def _supports_handler_hooks(pv: _SharedPVBase) -> bool:
     # Only p4pillon's raw.SharedPV (thread/asyncio flavors) calls
     # self._handler.open()/post() (a p4p PR #172 patch) -- a plain p4p
-    # SharedPV (e.g. p4p.server.cothread.SharedPV) has no hook to observe
-    # post()s on at all.
+    # SharedPV (e.g. p4p.server.thread.SharedPV, unpatched) has no hook to
+    # observe post()s on at all.
     return isinstance(pv, _patched_shared_pv_cls())
 
 
@@ -652,21 +652,32 @@ class IOCChannelProvider(StaticProvider):
     and `fields`.
 
     Each "<name>.<FIELD>" sub-PV is built using ``type(pv)`` -- the same
-    `~p4pillon.server.thread.SharedPV`, `~p4pillon.server.asyncio.SharedPV`, or
-    `~p4p.server.cothread.SharedPV` class as the base PV passed to `add` --
-    so it automatically uses the same concurrency model.
+    `~p4pillon.server.thread.SharedPV` or `~p4pillon.server.asyncio.SharedPV`
+    class as the base PV passed to `add` -- so it automatically uses the same
+    concurrency model.
 
-    DESC/DESC$ mirror the base PV's own ``display.description`` and stay live
-    as it changes via ``pv.post(...)`` -- but only for a p4pillon-flavored
-    base PV (`~p4pillon.server.thread.SharedPV`/`~p4pillon.server.asyncio.SharedPV`);
-    a plain `~p4p.server.cothread.SharedPV` (or any other non-p4pillon flavor)
-    has no hook to observe post()s on at all, so DESC is a one-time snapshot
-    taken at `add()` for those (a `UserWarning` is emitted when this applies
-    and the base PV actually has a display.description to miss).  See
+    DESC/DESC$ are seeded from the base PV's ``display.description`` at
+    `add()` time -- a one-time snapshot by default.  Ongoing live tracking
+    (mirroring later ``pv.post(...)`` changes onto DESC/DESC$) is opt-in via
+    `sync_description`, either as this constructor's default for every `add()`
+    call or overridden per-PV in `add()` itself, and is only possible at all
+    for a p4pillon-flavored base PV (`~p4pillon.server.thread.SharedPV`/
+    `~p4pillon.server.asyncio.SharedPV`); a plain, non-p4pillon flavor (e.g.
+    `~p4p.server.thread.SharedPV`, unpatched) has no hook to observe post()s
+    on at all, so it stays a snapshot regardless (a `UserWarning` is emitted
+    when live tracking was requested but isn't possible).  See
     `_DescriptionSyncHandler`.
     """
 
-    def __init__(self, name: str | None = None):
+    def __init__(self, name: str | None = None, sync_description: bool = False):
+        """
+        :param sync_description: Default for `add`'s `sync_description` when
+                                 not overridden there -- whether DESC/DESC$
+                                 should keep tracking the base PV's
+                                 display.description live after `add()`, vs.
+                                 just a one-time snapshot taken at `add()`
+                                 time.  Off by default.
+        """
         super().__init__(name)
         # name -> the field names actually added for it (not always
         # FIELD_NAMES in full -- e.g. ADEL/MDEL are omitted for a non-numeric
@@ -678,6 +689,7 @@ class IOCChannelProvider(StaticProvider):
         # the original handler rather than leaving pv wrapped (and the DESC/
         # DESC$ sub-PVs it references unreachably retained) forever.
         self._description_sync: dict[str, tuple[_SharedPVBase, Any]] = {}
+        self._sync_description_default = sync_description
 
     def add(
         self,
@@ -687,6 +699,7 @@ class IOCChannelProvider(StaticProvider):
         dtyp_choices: list[str] | None = None,
         fields: RecordFieldOverrides | None = None,
         record_fields: bool = True,
+        sync_description: bool | None = None,
     ) -> None:
         """Add a PV, and (unless `record_fields` is False) its "<name>.<FIELD>"
         sub-PVs.
@@ -702,6 +715,11 @@ class IOCChannelProvider(StaticProvider):
                             back to ``'d'`` (matching `~p4p.nt.NTScalar`'s own
                             default) only when it can't be, e.g. a hand-built `pv`
                             using `wrap=`/`unwrap=` instead of `nt=`.
+        :param sync_description: Whether DESC/DESC$ should keep tracking `pv`'s
+                                 display.description live after this call, vs.
+                                 just a one-time snapshot taken now.  Left as
+                                 `None` (the default), the constructor's
+                                 `sync_description` applies instead.
 
         See `build_record_fields` for `dtyp_choices`, `fields`, and how RTYP
         inference is rejected for a non-scalar `pv`.
@@ -725,19 +743,21 @@ class IOCChannelProvider(StaticProvider):
         self._recorded[name] = frozenset(built)
 
         if has_description:
-            if _supports_handler_hooks(pv):
-                original_handler = pv._handler
-                pv._handler = _DescriptionSyncHandler(original_handler, field_pvs["DESC"], field_pvs["DESC$"])
-                self._description_sync[name] = (pv, original_handler)
-            else:
-                warnings.warn(
-                    f"{name!r}'s base PV has a display.description but is not a "
-                    "p4pillon-flavored SharedPV, so its .DESC/.DESC$ will not track "
-                    "display.description changes made after add() -- only "
-                    "p4pillon.server.thread.SharedPV and p4pillon.server.asyncio.SharedPV "
-                    "support this (see IOCChannelProvider's docstring).",
-                    stacklevel=2,
-                )
+            want_sync = self._sync_description_default if sync_description is None else sync_description
+            if want_sync:
+                if _supports_handler_hooks(pv):
+                    original_handler = pv._handler
+                    pv._handler = _DescriptionSyncHandler(original_handler, field_pvs["DESC"], field_pvs["DESC$"])
+                    self._description_sync[name] = (pv, original_handler)
+                else:
+                    warnings.warn(
+                        f"{name!r}'s base PV has a display.description but is not a "
+                        "p4pillon-flavored SharedPV, so its .DESC/.DESC$ will not track "
+                        "display.description changes made after add() -- only "
+                        "p4pillon.server.thread.SharedPV and p4pillon.server.asyncio.SharedPV "
+                        "support this (see IOCChannelProvider's docstring).",
+                        stacklevel=2,
+                    )
 
     def remove(self, name: str) -> None:
         """Remove a PV, and any "<name>.<FIELD>" sub-PVs previously added for it."""
@@ -781,8 +801,8 @@ class DynamicRecordFields:
                      `RegistryEntry`).
     :param pv_factory: Callable used to construct each "<name>.<FIELD>" sub-PV,
                        called as ``pv_factory(initial=value)``.  Defaults to
-                       `~p4pillon.server.thread.SharedPV`.  `~p4p.server.cothread.SharedPV`
-                       is also safe here.
+                       `~p4pillon.server.thread.SharedPV`.  A plain, unpatched
+                       `~p4p.server.thread.SharedPV` is also safe here.
 
                        `~p4pillon.server.asyncio.SharedPV` is rejected at construction time
                        (raises `ValueError`): `makeChannel` is called by the server's
@@ -854,8 +874,7 @@ def _check_pv_factory_is_safe(pv_factory: type[_SharedPVBase]) -> None:
             f"pv_factory={pv_factory.__name__} is not safe for DynamicRecordFields: makeChannel() is "
             "always called by the server's own internal thread, never the thread "
             "running an asyncio event loop, so it can never construct one. Use "
-            "p4pillon.server.thread.SharedPV (the default) or p4p.server.cothread.SharedPV "
-            "instead."
+            "p4pillon.server.thread.SharedPV (the default) instead."
         )
 
 
