@@ -42,28 +42,15 @@ class DynamicRecordFields:
     :param registry: A mapping of base PV name to a dict with keys 'valtype'
                      (required), 'dtyp_choices', 'fields', and 'description'
                      (all optional).  See `~p4pillon.server.records.build_record_fields`.
-                     Each entry's 'fields' is validated against `FIELD_NAMES` eagerly here, at
-                     construction time -- same `UserWarning` on an
-                     unrecognized key as `build_record_fields`, but emitted
-                     immediately rather than only when/if a client happens to
-                     connect to that particular record's fields (this class
-                     otherwise builds each field PV lazily, on demand).
-                     See `RegistryEntry` for why 'description' is a snapshot
-                     only, unlike `StaticRecordProvider`.
+                     Each entry's 'fields' is validated against `FIELD_NAMES`
+                     eagerly here, at construction time, rather than only
+                     when/if a client connects to that record's fields.
+                     See `RegistryEntry` for why 'description' is a snapshot only.
     :param pv_factory: Callable used to construct each "<name>.<FIELD>" sub-PV,
                        called as ``pv_factory(initial=value)``.  Defaults to
-                       `~p4pillon.server.thread.SharedPV`.  A plain, unpatched
-                       `~p4p.server.thread.SharedPV` is also safe here.
-
-                       `~p4pillon.server.asyncio.SharedPV` is rejected at construction time
-                       (raises `ValueError`): `makeChannel` is called by the server's
-                       own internal I/O thread, never the thread actually running the
-                       asyncio event loop, and `asyncio.SharedPV.__init__` requires a
-                       running loop *on the calling thread* -- it would raise
-                       ``RuntimeError: no running event loop`` on every channel
-                       creation.  (`StaticRecordProvider` does not have this restriction,
-                       since its ``add()`` is called directly by user code, which for
-                       asyncio users naturally runs inside a coroutine.)
+                       `~p4pillon.server.thread.SharedPV`.  A
+                       `~p4pillon.server.asyncio.SharedPV` is rejected at
+                       construction time -- see `_check_pv_factory_is_safe`.
     """
 
     def __init__(
@@ -112,51 +99,41 @@ class IOCRecordProvider:
     eagerly building every "<name>.<FIELD>" sub-PV up front. ::
 
         from p4p.nt import NTScalar
-        from p4p.server import Server
         from p4pillon.server.thread import SharedPV
-        from p4pillon.server.records import IOCRecordProvider
+        from p4pillon.server.records import IOCRecordProvider, IOCRecordServer
 
         provider = IOCRecordProvider("example")
         provider.add("EXAMPLE:PV", SharedPV(nt=NTScalar("d"), initial=1.234))
 
-        with Server(providers=[*provider.providers]):
+        with IOCRecordServer(providers=[provider]):
             ...
 
     Unlike `StaticRecordProvider`, this class is not itself a single
     `~p4p.server.StaticProvider`/`~p4p.server.DynamicProvider` -- it holds
     one of each internally (a `StaticProvider` for the base PVs added via
     `add()`, and a `DynamicProvider` wrapping the `DynamicRecordFields`
-    registry `add()`/`remove()` maintain for their "<name>.<FIELD>"
-    sub-PVs), exposed together as `providers`. `~p4p.server.Server` has no
-    concept of a single provider that is itself made of two others, so pass
-    ``*provider.providers`` to its `providers=` list, not `provider` itself.
+    registry `add()`/`remove()` maintain), exposed together as `providers`.
+    `IOCRecordServer` unpacks that pair automatically, as above. Passing
+    `provider` to plain `~p4p.server.Server` instead needs unpacking it
+    yourself: ``Server(providers=[*provider.providers])``.
 
     `add`/`remove` mirror `StaticRecordProvider.add`/`.remove`'s signature and
-    behaviour everywhere the lazy path can support it -- `valtype` inferred
-    the same way, RTYP inferrability checked eagerly at `add()` time same as
-    `~p4pillon.server.records.build_record_fields`, 'fields' validated the
-    same way, and `set_description` is available on both -- but, by
-    construction of the lazy path itself, a few things `StaticRecordProvider`
-    supports work differently or not at all here:
+    behaviour everywhere the lazy path can support it, but a few things
+    `StaticRecordProvider` supports work differently or not at all here:
 
      - `set_description` only updates the snapshot new connections see --
-       `DynamicRecordFields` keeps no live PV reference, and this class opens
-       no channel of its own, so there's nothing to `post()` an update to for
-       a connection that's already open, unlike
-       `StaticRecordProvider.set_description`.
+       there's no live channel here to `post()` an update to an
+       already-open connection.
      - Every sub-PV is built lazily on first client connection, using
-       whichever `pv_factory` this was constructed with (a plain
-       `~p4pillon.server.thread.SharedPV` by default) -- never matched to
+       whichever `pv_factory` this was constructed with -- never matched to
        the base PV's own flavor the way `StaticRecordProvider` matches
-       ``type(pv)``; a `~p4pillon.server.asyncio.SharedPV` `pv_factory` is
-       rejected outright (see `DynamicRecordFields`).
+       ``type(pv)``, and a `~p4pillon.server.asyncio.SharedPV` `pv_factory`
+       is rejected outright (see `DynamicRecordFields`).
      - Sub-PVs don't appear in a plain channel-list query (e.g. the
-       `pvlist` tool) -- `DynamicProvider` maintains no enumerable name
-       list, unlike `StaticRecordProvider`'s `StaticProvider`.
+       `pvlist` tool) -- `DynamicProvider` maintains no enumerable name list.
 
     `remove()` likewise can't retract a sub-PV channel a client has already
-    connected to -- there's no live channel here for it to close, only a
-    registry entry it can stop offering to *new* connections.
+    connected to -- only a registry entry it can stop offering to *new* ones.
     """
 
     def __init__(
@@ -166,11 +143,9 @@ class IOCRecordProvider:
     ) -> None:
         self._static = _StaticProvider(name)
         self._registry: dict[str, RegistryEntry] = {}
-        # DynamicRecordFields stores this same dict by reference (not a
-        # copy), so add()/remove() mutating self._registry below is exactly
-        # what testChannel()/makeChannel() see on the next client connection
-        # -- no separate sync step needed. See RegistryEntry's docstring for
-        # why 'description' is only ever a snapshot even so.
+        # DynamicRecordFields stores this dict by reference, so add()/remove()
+        # mutating self._registry is exactly what testChannel()/makeChannel()
+        # see on the next client connection -- no separate sync step needed.
         self._dynamic = _anonymous_dynamic_provider(DynamicRecordFields(self._registry, pv_factory))
 
     @property
@@ -215,9 +190,7 @@ class IOCRecordProvider:
 
     def set_description(self, name: str, description: str) -> None:
         """Update the DESC/DESC$ snapshot for `name`, picked up by any *new*
-        connection from this point on. Unlike `StaticRecordProvider`, there
-        is no live channel here to `post()` an update to an already-open
-        connection with (see the class docstring).
+        connection from this point on (see the class docstring).
 
         :raises KeyError: if `name` was never added, or was added with
                           `record_fields=False`.
@@ -226,9 +199,7 @@ class IOCRecordProvider:
 
     def remove(self, name: str) -> None:
         """Remove a PV, and stop offering its "<name>.<FIELD>" sub-PVs to
-        *new* connections (see the class docstring -- a sub-PV channel a
-        client already connected to stays open; there's no live channel
-        here for this class to close)."""
+        *new* connections (see the class docstring)."""
         self._registry.pop(name, None)
         self._static.remove(name)
 
@@ -251,11 +222,12 @@ def _split_field_name(name: str) -> tuple[str, str | None]:
 
 
 def _check_pv_factory_is_safe(pv_factory: type[_SharedPVBase]) -> None:
-    # See DynamicRecordFields' docstring for why a loop-requiring pv_factory
-    # can never work here. Detected via the `_requires_running_loop` trait
-    # (set on p4pillon.server.asyncio.SharedPV) so any future loop-requiring
-    # flavor is caught the same way, at construction time rather than deep
-    # inside a server callback.
+    # makeChannel() always runs on the server's own I/O thread, never the
+    # thread running an asyncio event loop, so a pv_factory requiring a
+    # running loop on the calling thread (e.g. asyncio.SharedPV) can never
+    # work here. Detected via the `_requires_running_loop` trait rather than
+    # naming asyncio.SharedPV directly, so any future loop-requiring flavor
+    # is caught the same way.
     if isinstance(pv_factory, type) and getattr(pv_factory, "_requires_running_loop", False):
         raise ValueError(
             f"pv_factory={pv_factory.__name__} is not safe for DynamicRecordFields: makeChannel() is "

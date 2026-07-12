@@ -46,24 +46,19 @@ class StaticRecordProvider(StaticProvider):
     field's default, and `~p4pillon.server.records.build_record_fields` for the meaning
     of `dtyp_choices` and `fields`.
 
-    Each "<name>.<FIELD>" sub-PV is built using ``type(pv)`` -- the same
-    `~p4pillon.server.thread.SharedPV` or `~p4pillon.server.asyncio.SharedPV`
-    class as the base PV passed to `add` -- so it automatically uses the same
-    concurrency model.
+    Each "<name>.<FIELD>" sub-PV is built using ``type(pv)``, so it
+    automatically matches the base PV's own concurrency model.
 
     DESC/DESC$ are seeded from the base PV's ``display.description`` at
-    `add()` time -- a one-time snapshot, same as `IOCRecordProvider.add`.
-    Later ``pv.post(...)`` changes to display.description are not tracked
-    automatically; call `set_description` to push an update to DESC/DESC$
-    explicitly, whenever one's needed.
+    `add()` time and not tracked afterward; call `set_description` to push
+    an update.
     """
 
     def __init__(self, name: str | None = None):
         super().__init__(name)
-        # name -> {fieldname: field pv}, for the sub-PVs actually added
-        # (may be fewer than FIELD_NAMES, e.g. ADEL/MDEL omitted for a
-        # non-numeric valtype) -- lets remove() remove only what exists, and
-        # set_description() find the DESC/DESC$ pv objects to post() to.
+        # name -> {fieldname: field pv}, for the sub-PVs actually added (may
+        # be fewer than FIELD_NAMES, e.g. ADEL/MDEL omitted for a
+        # non-numeric valtype) -- lets remove()/set_description() find them.
         self._field_pvs: dict[str, dict[str, _SharedPVBase]] = {}
 
     def add(
@@ -78,17 +73,12 @@ class StaticRecordProvider(StaticProvider):
         """Add a PV, and (unless `record_fields` is False) its "<name>.<FIELD>"
         sub-PVs.
 
-        :param str valtype: NTScalar value type code matching whatever `pv` was
-                            itself constructed with (e.g. ``NTScalar('d')`` ->
-                            ``valtype='d'``).  Only used to infer a default RTYP;
-                            does not need to be exact if RTYP is overridden via
-                            `fields` or `record_fields=False`.  Left as `None`
-                            (the default), it's inferred from `pv.nt` when that's
-                            an NTScalar (see `_infer_valtype_of_pv`) -- the common
-                            case, since that's how `pv` was actually built; falls
-                            back to ``'d'`` (matching `~p4p.nt.NTScalar`'s own
-                            default) only when it can't be, e.g. a hand-built `pv`
-                            using `wrap=`/`unwrap=` instead of `nt=`.
+        :param str valtype: NTScalar value type code matching `pv` (e.g.
+                            ``NTScalar('d')`` -> ``valtype='d'``); only used to
+                            infer a default RTYP, so it needn't be exact if RTYP
+                            is overridden.  Left as `None`, it's inferred from
+                            `pv.nt` when that's an NTScalar, else falls back to
+                            ``'d'``.
 
         See `~p4pillon.server.records.build_record_fields` for `dtyp_choices`,
         `fields`, and how RTYP inference is rejected for a non-scalar `pv`.
@@ -110,10 +100,7 @@ class StaticRecordProvider(StaticProvider):
 
     def set_description(self, name: str, description: str) -> None:
         """Update "<name>.DESC"/"<name>.DESC$" to `description`, pushed live
-        to any already-open connection via `post()`.  There is no automatic
-        way to keep this current with a base PV's own display.description
-        (see the class docstring) -- call this explicitly whenever the
-        description changes.
+        to any already-open connection via `post()`.
 
         :raises KeyError: if `name` was never added, or was added with
                           `record_fields=False`.

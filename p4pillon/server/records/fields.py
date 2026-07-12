@@ -124,11 +124,9 @@ COMMON_FIELDS: dict[str, dict[str, Any]] = {
 }
 
 # String-valued field names -- each gets a "<FIELD>$" long-string alias (see
-# the package docstring and _build_one_field).  DTYP is deliberately excluded:
-# it's a menu/choice field (NTEnum), not a string, despite dbCommon.dbd
-# storing its choice as DBF_MENU rather than DBF_STRING either.  DESC is
-# excluded from COMMON_FIELDS itself (see _build_one_field's DESC special
-# case) but is still string-valued, so it's added here explicitly.
+# the package docstring). DTYP is deliberately excluded: it's a menu/choice
+# field (NTEnum), not a string. DESC isn't in COMMON_FIELDS (see
+# _build_one_field's DESC case) but is still string-valued, so it's added here.
 STRING_FIELDS: frozenset[str] = frozenset(
     fieldname for fieldname, spec in COMMON_FIELDS.items() if spec.get("valtype") == "s"
 ) | {"NAME", "RTYP", "DESC"}
@@ -141,16 +139,11 @@ FIELD_NAMES: frozenset[str] = (
     | {f"{fieldname}$" for fieldname in STRING_FIELDS}
 )
 
-# Static-typing counterpart to the runtime FIELD_NAMES check
-# (_validate_fields): lets mypy/pyright flag a typo'd key in a
-# `fields={...}` literal before the code ever runs. TypedDict's functional
-# form requires a literal dict (pyright rejects a dict comprehension:
-# "Expected simple dictionary entry"), so this must be kept in sync with
-# FIELD_NAMES by hand -- guarded by
-# TestRecordFieldOverridesTyping.test_matches_field_names, which fails if
-# they drift apart. Every value is `Any`: this only catches unknown *keys*,
-# not value-type mismatches (a menu-kind field's override is a choice name
-# while a scalar-kind field's is a raw value, so no single type fits all).
+# Static-typing counterpart to FIELD_NAMES, checked at runtime by
+# _validate_fields. Must be kept in sync with FIELD_NAMES by hand -- pyright
+# rejects a dict comprehension here, so this can't be generated -- guarded
+# by TestRecordFieldOverridesTyping.test_matches_field_names. Every value is
+# `Any` since an override's shape differs (choice name vs raw value).
 RecordFieldOverrides = TypedDict(
     "RecordFieldOverrides",
     {
@@ -214,11 +207,8 @@ class RegistryEntry(_RegistryEntryRequired, total=False):
     """Shape of each value in the `registry` dict passed to `DynamicRecordFields`.
     Only 'valtype' is required; 'dtyp_choices', 'fields', and 'description'
     are optional, same as the corresponding `build_record_fields` parameters.
-    'description' is a snapshot only -- re-read once per `makeChannel()` call
-    (i.e. once per client connect to that record's fields). Update it via
-    `~p4pillon.server.records.IOCRecordProvider.set_description` if this
-    registry is one it manages; a hand-built registry can just mutate this
-    key directly, same effect.
+    'description' is re-read on every `makeChannel()` call, so a hand-built
+    registry can update it in place; see the package docstring's DESC note.
     """
 
     dtyp_choices: list[str] | None
@@ -244,12 +234,8 @@ def _field_applies(fieldname: str, valtype: str) -> bool:
 
 
 def infer_rtyp(valtype: str) -> str:
-    """Guess a plausible RTYP from an NTScalar value type code. Only used
-    when 'fields' doesn't set 'RTYP' explicitly and the base PV is
-    NTScalar-shaped -- enforced by `_check_rtyp_inferrable`, since e.g.
-    `~p4p.nt.NTTable`/`~p4p.nt.NTNDArray` have no plausible guess (real
-    IOCs have no "table" record type either).
-    """
+    """Guess a plausible RTYP from an NTScalar value type code. See the
+    package docstring's RTYP note for when this is used."""
     if valtype[:1] == "a":
         return "waveform"
     if valtype == "s":
@@ -263,25 +249,17 @@ def infer_rtyp(valtype: str) -> str:
 
 def _infer_valtype_of_pv(pv: _SharedPVBase) -> str | None:
     """The NTScalar value type code `pv` was built with, or `None` if it
-    can't be determined without guessing.
-
-    Only checks `pv.nt` (set by `SharedPV(nt=...)`) -- authoritative when
-    present. `None` (never a guessed ``'d'``) when `pv.nt` is unset (a
-    hand-built PV using `wrap=`/`unwrap=`) or isn't an NTScalar; callers
-    are then expected to pass `valtype` explicitly, same as for
-    `fields={'RTYP': ...}` (see `_check_rtyp_inferrable`).
-    """
+    can't be determined without guessing (`pv.nt` unset or not an NTScalar)
+    -- callers should then require an explicit `valtype`."""
     nt = getattr(pv, "nt", None)
     if isinstance(nt, NTScalar):
         return nt.type["value"]
     return None
 
 
-# Every menu-kind field shares the same NTEnum schema (only 'choices', a data
-# value not a type parameter, differs between them), and every scalar-kind
-# field reuses one of a handful of NTScalar valtypes -- so a single instance
-# per schema is built lazily and reused, rather than reparsing the same
-# pvxs structure definition on every field/PV/connection.
+# Every menu-kind field shares one NTEnum schema ('choices' is a data value,
+# not a type parameter); scalar-kind fields reuse a handful of NTScalar
+# valtypes. Cached rather than rebuilt per field/PV/connection.
 _menu_nt = NTEnum()
 
 
@@ -299,10 +277,9 @@ def _scalar_pv(valtype: str, default: Any, override: Any) -> Value:
 
 
 # infer_rtyp() has no plausible guess for anything but a scalar or scalar
-# array -- checked only on the _check_rtyp_inferrable() slow path, via
-# p4pillon.nt.identify's structural NT classifier (the same mechanism used
-# everywhere else in the codebase to tell NT flavors apart) rather than a
-# second, hand-maintained ID-to-NT-flavor mapping.
+# array. Classified via p4pillon.nt.identify's structural NT classifier
+# (used elsewhere in the codebase too) rather than a second, hand-maintained
+# ID-to-NT-flavor mapping.
 _SCALAR_LIKE_NT_TYPES: frozenset[NTType] = frozenset((NTType.NTSCALAR, NTType.NTSCALARARRAY, NTType.UNKNOWN))
 
 
@@ -311,11 +288,9 @@ def _raise_rtyp_not_inferrable(desc: str) -> NoReturn:
 
 
 def _raw_current_or_none(pv: _SharedPVBase) -> Any | None:
-    # Best-effort raw Value of pv's live current(), for when pv.nt is None (a
-    # hand-built PV using a plain Value, or wrap=/unwrap() were used instead).
-    # None means "unknown" (not open()'d yet, or pv.current() itself failed)
-    # -- shared by _check_rtyp_inferrable and _description_of_pv's slow path,
-    # both of which need the same "fetch current(), unwrap .raw" step.
+    # Best-effort raw Value of pv's live current(), for when pv.nt is None.
+    # None means "unknown" (not open()'d yet, or current() itself failed).
+    # Shared by _check_rtyp_inferrable and _description_of_pv.
     try:
         current = pv.current()
     except Exception:
@@ -324,10 +299,7 @@ def _raw_current_or_none(pv: _SharedPVBase) -> Any | None:
 
 
 def _description_of_pv(pv: _SharedPVBase) -> str:
-    # One-time snapshot of pv's display.description, or "" if absent. Shared
-    # by StaticRecordProvider.add, IOCRecordProvider.add, and the
-    # DynamicProvider built for IOCRecordServer's dict shorthand, so it
-    # lives here rather than in any one of those.
+    # Snapshot of pv's display.description, or "" if absent.
     nt = getattr(pv, "nt", None)
     if nt is not None and "display.description" not in nt.type:
         return ""
@@ -353,10 +325,8 @@ def _check_rtyp_inferrable(pv: _SharedPVBase) -> None:
             _raise_rtyp_not_inferrable(f"a {type(nt).__name__}-backed PV")
         return
 
-    # pv.nt is None (hand-built with a plain Value, or wrap=/unwrap= was
-    # used) -- fall back to classifying the live Value's own structure.
-    # `None` (pv.current() unavailable) is treated as NTType.UNKNOWN, i.e.
-    # never rejected.
+    # pv.nt is None -- fall back to classifying the live Value's structure.
+    # Unavailable current() is treated as NTType.UNKNOWN, i.e. never rejected.
     raw = _raw_current_or_none(pv)
     # id_nttype_type (not id_nttype) deliberately: id_nttype's Value-dispatch
     # branch reads `value.type` as a property, but p4p.wrapper.Value.type is
@@ -368,10 +338,8 @@ def _check_rtyp_inferrable(pv: _SharedPVBase) -> None:
 
 
 def _validate_fields(fields: RecordFieldOverrides, name: str) -> None:
-    # Shared by build_record_fields (per add()/call) and
-    # DynamicRecordFields.__init__ (once per registry entry, eagerly at
-    # construction time rather than lazily on first client connect) so a
-    # typo'd key is warned about the same way regardless of entry point.
+    # Shared by build_record_fields and DynamicRecordFields.__init__ so a
+    # typo'd key warns the same way regardless of entry point.
     unknown = fields.keys() - FIELD_NAMES
     if unknown:
         warnings.warn(
@@ -390,11 +358,7 @@ def _build_one_field(
     description: str,
 ) -> Value:
     if fieldname.endswith("$"):
-        # '<FIELD>$' is a long-string alias for '<FIELD>' (see the module
-        # docstring) -- delegate to build the same value, override included.
-        # Only reached from DynamicRecordFields.makeChannel(), which builds
-        # one field at a time on demand; build_record_fields's eager path
-        # builds every "$" alias itself as a separate, non-recursive step.
+        # '<FIELD>$' is a long-string alias -- same value as '<FIELD>'.
         return _build_one_field(fieldname[:-1], name, valtype, dtyp_choices, fields, description)
 
     if fieldname == "DTYP":
@@ -402,24 +366,21 @@ def _build_one_field(
         return _menu_pv(choices, choices[0], fields.get("DTYP"))
 
     if fieldname == "RTYP":
-        # Inferrability is validated once by build_record_fields, not here --
-        # this runs twice per add() (RTYP and RTYP$), and pv.current() isn't free.
+        # Inferrability is validated once by build_record_fields, not here.
         return _scalar_pv("s", infer_rtyp(valtype), fields.get("RTYP"))
 
     if fieldname == "NAME":
-        # NAME always mirrors the record's own PV name -- not overridable,
-        # same as dbCommon.dbd's special(SPC_NOMOD) on this field.
+        # Mirrors the record's own PV name -- not overridable, same as
+        # dbCommon.dbd's special(SPC_NOMOD) on this field.
         return _scalar_nt("s").wrap(name)
 
     if fieldname == "DESC":
-        # Mirrors the base PV's display.description -- not overridable via
-        # `fields`, same as NAME. See the package docstring's DESC bullet.
+        # Mirrors display.description -- not overridable, same as NAME.
         return _scalar_nt("s").wrap(description)
 
     if fieldname in ("ADEL", "MDEL"):
-        # Same DBF/valtype as VAL itself (see the package docstring).
-        # Callers are responsible for only requesting this when
-        # _field_applies() agrees.
+        # Same DBF/valtype as VAL itself. Caller must have already checked
+        # _field_applies() before requesting this.
         return _scalar_pv(valtype, 0, fields.get(fieldname))
 
     spec = COMMON_FIELDS[fieldname]
@@ -438,10 +399,8 @@ def build_record_fields(
     description: str = "",
 ) -> dict[str, Value]:
     """Build the "<name>.<FIELD>" values for every applicable field in
-    `FIELD_NAMES` (DTYP, RTYP, NAME, DESC, the fields common to every EPICS
-    record, ADEL/MDEL where `valtype` supports them, and a "<FIELD>$"
-    long-string alias -- identical value to "<FIELD>" -- for each name in
-    `STRING_FIELDS`).
+    `FIELD_NAMES`. See the package docstring for which fields those are and
+    how each default is chosen.
 
     :param str name: The base PV name (used verbatim as the NAME field's value).
     :param str valtype: NTScalar value type code of the base PV, used to infer a
@@ -449,30 +408,20 @@ def build_record_fields(
     :param list dtyp_choices: Menu choices for DTYP.  Defaults to ``["Soft Channel"]``.
     :param dict fields: Per-field overrides.  A raw value for scalar-kind fields,
                         or a choice name (str) for menu-kind fields including DTYP
-                        and RTYP.  A key not in `FIELD_NAMES` is ignored (never
-                        applies to any built field) and emits a `UserWarning`.
+                        and RTYP.  An unknown key is ignored and emits a `UserWarning`.
     :param pv: The base PV, if available -- used to check whether RTYP can
-              plausibly be inferred (see `_check_rtyp_inferrable`); raises
-              `ValueError` if not, unless `fields` gives ``"RTYP"`` explicitly.
-    :param str description: The value for DESC/DESC$ -- typically the base PV's
-                        own ``display.description``, if it has one (see the
-                        package docstring's DESC bullet).  Not settable via
-                        `fields` (same as NAME).  Defaults to ``""``.
-    :returns: dict mapping field name to an initial `~p4p.Value`.  Only includes
-             "ADEL"/"MDEL" when `valtype` is a plain numeric scalar code (see
-             `_field_applies`) -- omitted entirely otherwise, same as the
-             DBF_NOACCESS fields never appear (see the package docstring).
-
-    Values are plain `~p4p.Value` (as built by `~p4p.nt.NTScalar.wrap`/
-    `~p4p.nt.NTEnum.wrap`), suitable to pass directly as a `~p4p.server.thread.SharedPV`'s
-    ``initial=``.
+              plausibly be inferred; raises `ValueError` if not, unless
+              `fields` gives ``"RTYP"`` explicitly.
+    :param str description: The value for DESC/DESC$.  Not settable via `fields`
+                        (same as NAME).  Defaults to ``""``.
+    :returns: dict mapping field name to an initial `~p4p.Value`, suitable to pass
+             directly as a `~p4p.server.thread.SharedPV`'s ``initial=``.
     """
     fields = fields or {}
     _validate_fields(fields, name)
     if pv is not None and fields.get("RTYP") is None:
-        # pv is None when called from DynamicRecordFields.makeChannel() (no
-        # live PV to check). Checked once here, not per-field, since RTYP
-        # and RTYP$ would otherwise each re-read pv.current().
+        # pv is None from DynamicRecordFields.makeChannel() (no live PV to
+        # check). Checked once here, not per-field -- pv.current() isn't free.
         _check_rtyp_inferrable(pv)
     return {
         fieldname: _build_one_field(fieldname, name, valtype, dtyp_choices, fields, description)
@@ -496,12 +445,10 @@ def _field_shared_pv(value: Value, pv_factory: type[_SharedPVBase] | None = None
 
 
 def _resolve_valtype_and_description(pv: _SharedPVBase, valtype: str | None) -> tuple[str, str]:
-    """(valtype, description) for `pv`, applying the same inference
-    `StaticRecordProvider.add`, `IOCRecordProvider.add`, and
-    `IOCRecordServer`'s plain-dict shorthand all use: `valtype` falls back to
+    """(valtype, description) for `pv`, shared by every `add()`/shorthand
+    that builds record fields: `valtype` falls back to
     `_infer_valtype_of_pv(pv)` (then ``'d'``) when not given explicitly;
-    `description` is always a one-time snapshot of `pv`'s
-    ``display.description`` (see `_description_of_pv`).
+    `description` is a snapshot of `pv`'s ``display.description``.
     """
     if valtype is None:
         valtype = _infer_valtype_of_pv(pv) or "d"

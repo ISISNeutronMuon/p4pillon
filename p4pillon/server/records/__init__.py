@@ -34,20 +34,16 @@ Field defaults are taken from EPICS Base wherever it defines one:
    only when `valtype` is one of those numeric codes (see
    `~p4pillon.server.records.fields._field_applies`), defaulting to 0.
  - DESC always mirrors the base PV's own `display.description` sub-field
-   (present only when built with e.g. ``NTScalar(..., display=True)``),
-   the same way an IOC's dbChannel layer resolves "RECORD.DESC" from the
-   record's own DESC member rather than a separately-settable value --
-   like NAME, DESC isn't settable via 'fields'. All of `StaticRecordProvider.add`,
-   `IOCRecordProvider.add`, and `DynamicRecordFields` take just a one-time
-   snapshot of it (at `add()` time, or per `makeChannel()` call for
-   `DynamicRecordFields`) -- neither path tracks later display.description
-   changes automatically. Both `StaticRecordProvider` and `IOCRecordProvider`
-   have a `set_description` method to update it explicitly afterward;
-   `StaticRecordProvider`'s additionally pushes the update live to any
-   already-open connection (it holds real DESC/DESC$ PV references),
-   while `IOCRecordProvider`'s only affects *new* connections from that
-   point on, since the lazy path keeps no live PV reference at all.
-   Absent a display.description field entirely, DESC is always "".
+   (present only when built with e.g. ``NTScalar(..., display=True)``) --
+   like NAME, it isn't settable via 'fields'. Every path takes just a
+   one-time snapshot of it (at `add()` time, or per `makeChannel()` call for
+   `DynamicRecordFields`); later `display.description` changes aren't
+   tracked automatically. Both `StaticRecordProvider` and `IOCRecordProvider`
+   have a `set_description` method to update it explicitly afterward --
+   `StaticRecordProvider`'s pushes the update live to any already-open
+   connection, while `IOCRecordProvider`'s only affects *new* connections,
+   since the lazy path keeps no live PV reference. Absent a
+   display.description field entirely, DESC is always "".
 Any of these can be overridden via the 'fields' dict accepted by
 `build_record_fields`, `StaticRecordProvider.add`, and `IOCRecordProvider.add`,
 e.g. {"SCAN": "1 second", "RTYP": "ai"}.
