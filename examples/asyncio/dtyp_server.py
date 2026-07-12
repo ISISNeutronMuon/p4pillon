@@ -2,7 +2,7 @@
 DTYP, RTYP, NAME, and the fields common to every EPICS record -- see that
 module's docstring for the full rationale.
 
-Uses `RecordProvider`, the primary/recommended way to use this: every
+Uses `IOCChannelProvider`, the primary/recommended way to use this: every
 "<name>.<FIELD>" sub-PV is built and registered up front, when `add()` is
 called, automatically matching the flavor of the base PV passed to it --
 the asyncio `SharedPV` imported below, in this example.
@@ -22,16 +22,18 @@ from p4p.nt import NTScalar
 from p4p.server import Server
 
 from p4pillon.server.asyncio import SharedPV
-from p4pillon.server.records import FIELD_NAMES, RecordProvider
+from p4pillon.server.records import FIELD_NAMES, IOCChannelProvider
 
 
 async def main():
-    base = RecordProvider("base")
-    base.add("EXAMPLE:PV", SharedPV(nt=NTScalar('d'), initial=1.234),
-              valtype='d',
+    base = IOCChannelProvider("base")
+    base.add("EXAMPLE:PV",
+              SharedPV(nt=NTScalar('d', display=True),
+                       initial={"value": 1.234,
+                                "display": {"description": "An example ai-like record"}}),
               dtyp_choices=["Soft Channel", "Raw Soft Channel"],
-              fields={"DESC": "An example ai-like record", "SCAN": "1 second"})
-    base.add("EXAMPLE:PV2", SharedPV(nt=NTScalar('i'), initial=0), valtype='i')
+              fields={"SCAN": "1 second"})
+    base.add("EXAMPLE:PV2", SharedPV(nt=NTScalar('i'), initial=0))
 
     with Server(providers=[base]):
         print("Serving:", list(base.keys()))
