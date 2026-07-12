@@ -27,13 +27,16 @@ from p4pillon.server.records import FIELD_NAMES, IOCChannelProvider
 
 async def main():
     base = IOCChannelProvider("base")
-    base.add("EXAMPLE:PV",
-              SharedPV(nt=NTScalar('d', display=True),
-                       initial={"value": 1.234,
-                                "display": {"description": "An example ai-like record"}}),
-              dtyp_choices=["Soft Channel", "Raw Soft Channel"],
-              fields={"SCAN": "1 second"})
-    base.add("EXAMPLE:PV2", SharedPV(nt=NTScalar('i'), initial=0))
+    base.add(
+        "EXAMPLE:PV",
+        SharedPV(
+            nt=NTScalar("d", display=True),
+            initial={"value": 1.234, "display": {"description": "An example ai-like record"}},
+        ),
+        dtyp_choices=["Soft Channel", "Raw Soft Channel"],
+        fields={"SCAN": "1 second"},
+    )
+    base.add("EXAMPLE:PV2", SharedPV(nt=NTScalar("i"), initial=0))
 
     with Server(providers=[base]):
         print("Serving:", list(base.keys()))

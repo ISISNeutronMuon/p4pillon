@@ -75,37 +75,63 @@ from p4p.server.raw import SharedPV as _SharedPVBase
 from p4pillon.nt import NTEnum, NTScalar, defaultNT
 
 __all__ = (
-    'MENU_SCAN',
-    'MENU_PINI',
-    'MENU_PRIORITY',
-    'MENU_ALARM_STAT',
-    'MENU_ALARM_SEVR',
-    'MENU_YES_NO',
-    'COMMON_FIELDS',
-    'STRING_FIELDS',
-    'FIELD_NAMES',
-    'RecordFieldOverrides',
-    'RegistryEntry',
-    'infer_rtyp',
-    'build_record_fields',
-    'IOCChannelProvider',
-    'DynamicRecordFields',
+    "MENU_SCAN",
+    "MENU_PINI",
+    "MENU_PRIORITY",
+    "MENU_ALARM_STAT",
+    "MENU_ALARM_SEVR",
+    "MENU_YES_NO",
+    "COMMON_FIELDS",
+    "STRING_FIELDS",
+    "FIELD_NAMES",
+    "RecordFieldOverrides",
+    "RegistryEntry",
+    "infer_rtyp",
+    "build_record_fields",
+    "IOCChannelProvider",
+    "DynamicRecordFields",
 )
 
 # --- menu choice lists, copied verbatim from EPICS Base's dbd/menu*.dbd,
 #     in declaration order (the order fixes each choice's index) ---
 
 MENU_SCAN: list[str] = [
-    "Passive", "Event", "I/O Intr",
-    "10 second", "5 second", "2 second", "1 second",
-    ".5 second", ".2 second", ".1 second",
+    "Passive",
+    "Event",
+    "I/O Intr",
+    "10 second",
+    "5 second",
+    "2 second",
+    "1 second",
+    ".5 second",
+    ".2 second",
+    ".1 second",
 ]
 MENU_PINI: list[str] = ["NO", "YES", "RUN", "RUNNING", "PAUSE", "PAUSED"]
 MENU_PRIORITY: list[str] = ["LOW", "MEDIUM", "HIGH"]
 MENU_ALARM_STAT: list[str] = [
-    "NO_ALARM", "READ", "WRITE", "HIHI", "HIGH", "LOLO", "LOW", "STATE",
-    "COS", "COMM", "TIMEOUT", "HWLIMIT", "CALC", "SCAN", "LINK", "SOFT",
-    "BAD_SUB", "UDF", "DISABLE", "SIMM", "READ_ACCESS", "WRITE_ACCESS",
+    "NO_ALARM",
+    "READ",
+    "WRITE",
+    "HIHI",
+    "HIGH",
+    "LOLO",
+    "LOW",
+    "STATE",
+    "COS",
+    "COMM",
+    "TIMEOUT",
+    "HWLIMIT",
+    "CALC",
+    "SCAN",
+    "LINK",
+    "SOFT",
+    "BAD_SUB",
+    "UDF",
+    "DISABLE",
+    "SIMM",
+    "READ_ACCESS",
+    "WRITE_ACCESS",
 ]
 MENU_ALARM_SEVR: list[str] = ["NO_ALARM", "MINOR", "MAJOR", "INVALID"]
 MENU_YES_NO: list[str] = ["NO", "YES"]
@@ -123,37 +149,37 @@ MENU_YES_NO: list[str] = ["NO", "YES"]
 # does (see ioc/channel.cpp).
 
 COMMON_FIELDS: dict[str, dict[str, Any]] = {
-    "ASG":   {"valtype": "s", "default": ""},
-    "SCAN":  {"choices": MENU_SCAN, "default": "Passive"},
-    "PINI":  {"choices": MENU_PINI, "default": "NO"},
-    "PHAS":  {"valtype": "h", "default": 0},
-    "EVNT":  {"valtype": "s", "default": ""},
-    "TSE":   {"valtype": "h", "default": 0},
-    "TSEL":  {"valtype": "s", "default": ""},
-    "DISV":  {"valtype": "h", "default": 1},
-    "DISA":  {"valtype": "h", "default": 0},
-    "SDIS":  {"valtype": "s", "default": ""},
-    "DISP":  {"valtype": "B", "default": 0},
-    "PROC":  {"valtype": "B", "default": 0},
-    "STAT":  {"choices": MENU_ALARM_STAT, "default": "UDF"},
-    "SEVR":  {"choices": MENU_ALARM_SEVR, "default": "NO_ALARM"},
-    "AMSG":  {"valtype": "s", "default": ""},
-    "NSTA":  {"choices": MENU_ALARM_STAT, "default": "NO_ALARM"},
-    "NSEV":  {"choices": MENU_ALARM_SEVR, "default": "NO_ALARM"},
+    "ASG": {"valtype": "s", "default": ""},
+    "SCAN": {"choices": MENU_SCAN, "default": "Passive"},
+    "PINI": {"choices": MENU_PINI, "default": "NO"},
+    "PHAS": {"valtype": "h", "default": 0},
+    "EVNT": {"valtype": "s", "default": ""},
+    "TSE": {"valtype": "h", "default": 0},
+    "TSEL": {"valtype": "s", "default": ""},
+    "DISV": {"valtype": "h", "default": 1},
+    "DISA": {"valtype": "h", "default": 0},
+    "SDIS": {"valtype": "s", "default": ""},
+    "DISP": {"valtype": "B", "default": 0},
+    "PROC": {"valtype": "B", "default": 0},
+    "STAT": {"choices": MENU_ALARM_STAT, "default": "UDF"},
+    "SEVR": {"choices": MENU_ALARM_SEVR, "default": "NO_ALARM"},
+    "AMSG": {"valtype": "s", "default": ""},
+    "NSTA": {"choices": MENU_ALARM_STAT, "default": "NO_ALARM"},
+    "NSEV": {"choices": MENU_ALARM_SEVR, "default": "NO_ALARM"},
     "NAMSG": {"valtype": "s", "default": ""},
-    "ACKS":  {"choices": MENU_ALARM_SEVR, "default": "NO_ALARM"},
-    "ACKT":  {"choices": MENU_YES_NO, "default": "YES"},
-    "DISS":  {"choices": MENU_ALARM_SEVR, "default": "NO_ALARM"},
-    "LCNT":  {"valtype": "B", "default": 0},
-    "PACT":  {"valtype": "B", "default": 0},
-    "PUTF":  {"valtype": "B", "default": 0},
-    "RPRO":  {"valtype": "B", "default": 0},
-    "PRIO":  {"choices": MENU_PRIORITY, "default": "LOW"},
-    "TPRO":  {"valtype": "B", "default": 0},
-    "UDF":   {"valtype": "B", "default": 1},
-    "UDFS":  {"choices": MENU_ALARM_SEVR, "default": "INVALID"},
-    "UTAG":  {"valtype": "L", "default": 0},
-    "FLNK":  {"valtype": "s", "default": ""},
+    "ACKS": {"choices": MENU_ALARM_SEVR, "default": "NO_ALARM"},
+    "ACKT": {"choices": MENU_YES_NO, "default": "YES"},
+    "DISS": {"choices": MENU_ALARM_SEVR, "default": "NO_ALARM"},
+    "LCNT": {"valtype": "B", "default": 0},
+    "PACT": {"valtype": "B", "default": 0},
+    "PUTF": {"valtype": "B", "default": 0},
+    "RPRO": {"valtype": "B", "default": 0},
+    "PRIO": {"choices": MENU_PRIORITY, "default": "LOW"},
+    "TPRO": {"valtype": "B", "default": 0},
+    "UDF": {"valtype": "B", "default": 1},
+    "UDFS": {"choices": MENU_ALARM_SEVR, "default": "INVALID"},
+    "UTAG": {"valtype": "L", "default": 0},
+    "FLNK": {"valtype": "s", "default": ""},
 }
 
 # String-valued field names -- each gets a "<FIELD>$" long-string alias (see
@@ -168,8 +194,11 @@ STRING_FIELDS: frozenset[str] = frozenset(
 
 # Every field name servable through build_record_fields()/IOCChannelProvider.
 # ADEL/MDEL are only included when _field_applies() says so (see below).
-FIELD_NAMES: frozenset[str] = (frozenset(COMMON_FIELDS) | {"DTYP", "RTYP", "NAME", "ADEL", "MDEL", "DESC"}
-                               | {f"{fieldname}$" for fieldname in STRING_FIELDS})
+FIELD_NAMES: frozenset[str] = (
+    frozenset(COMMON_FIELDS)
+    | {"DTYP", "RTYP", "NAME", "ADEL", "MDEL", "DESC"}
+    | {f"{fieldname}$" for fieldname in STRING_FIELDS}
+)
 
 # Static-typing counterpart to the runtime FIELD_NAMES check (_validate_fields):
 # lets a type checker (mypy/pyright) flag a typo'd key in a `fields={...}`
@@ -183,45 +212,59 @@ FIELD_NAMES: frozenset[str] = (frozenset(COMMON_FIELDS) | {"DTYP", "RTYP", "NAME
 # _validate_fields checks -- not value-type mismatches, since a menu-kind
 # field's override is a choice name (str) while a scalar-kind field's is a
 # raw value matching its own valtype, i.e. no single type fits every key.
-RecordFieldOverrides = TypedDict('RecordFieldOverrides', {
-    'DESC': Any, 'DESC$': Any,
-    'ASG': Any, 'ASG$': Any,
-    'SCAN': Any,
-    'PINI': Any,
-    'PHAS': Any,
-    'EVNT': Any, 'EVNT$': Any,
-    'TSE': Any,
-    'TSEL': Any, 'TSEL$': Any,
-    'DISV': Any,
-    'DISA': Any,
-    'SDIS': Any, 'SDIS$': Any,
-    'DISP': Any,
-    'PROC': Any,
-    'STAT': Any,
-    'SEVR': Any,
-    'AMSG': Any, 'AMSG$': Any,
-    'NSTA': Any,
-    'NSEV': Any,
-    'NAMSG': Any, 'NAMSG$': Any,
-    'ACKS': Any,
-    'ACKT': Any,
-    'DISS': Any,
-    'LCNT': Any,
-    'PACT': Any,
-    'PUTF': Any,
-    'RPRO': Any,
-    'PRIO': Any,
-    'TPRO': Any,
-    'UDF': Any,
-    'UDFS': Any,
-    'UTAG': Any,
-    'FLNK': Any, 'FLNK$': Any,
-    'DTYP': Any,
-    'RTYP': Any, 'RTYP$': Any,
-    'NAME': Any, 'NAME$': Any,
-    'ADEL': Any,
-    'MDEL': Any,
-}, total=False)
+RecordFieldOverrides = TypedDict(
+    "RecordFieldOverrides",
+    {
+        "DESC": Any,
+        "DESC$": Any,
+        "ASG": Any,
+        "ASG$": Any,
+        "SCAN": Any,
+        "PINI": Any,
+        "PHAS": Any,
+        "EVNT": Any,
+        "EVNT$": Any,
+        "TSE": Any,
+        "TSEL": Any,
+        "TSEL$": Any,
+        "DISV": Any,
+        "DISA": Any,
+        "SDIS": Any,
+        "SDIS$": Any,
+        "DISP": Any,
+        "PROC": Any,
+        "STAT": Any,
+        "SEVR": Any,
+        "AMSG": Any,
+        "AMSG$": Any,
+        "NSTA": Any,
+        "NSEV": Any,
+        "NAMSG": Any,
+        "NAMSG$": Any,
+        "ACKS": Any,
+        "ACKT": Any,
+        "DISS": Any,
+        "LCNT": Any,
+        "PACT": Any,
+        "PUTF": Any,
+        "RPRO": Any,
+        "PRIO": Any,
+        "TPRO": Any,
+        "UDF": Any,
+        "UDFS": Any,
+        "UTAG": Any,
+        "FLNK": Any,
+        "FLNK$": Any,
+        "DTYP": Any,
+        "RTYP": Any,
+        "RTYP$": Any,
+        "NAME": Any,
+        "NAME$": Any,
+        "ADEL": Any,
+        "MDEL": Any,
+    },
+    total=False,
+)
 
 
 class _RegistryEntryRequired(TypedDict):
@@ -237,6 +280,7 @@ class RegistryEntry(_RegistryEntryRequired, total=False):
     the way `IOCChannelProvider.add()` tracks a base PV's display.description,
     since this registry holds no live PV reference to observe.
     """
+
     dtyp_choices: list[str] | None
     fields: RecordFieldOverrides
     description: str
@@ -289,7 +333,7 @@ def _infer_valtype_of_pv(pv: _SharedPVBase) -> str | None:
     """
     nt = getattr(pv, "nt", None)
     if isinstance(nt, NTScalar):
-        return nt.type['value']
+        return nt.type["value"]
     return None
 
 
@@ -330,8 +374,7 @@ _NON_SCALAR_NT_IDS: frozenset[str] = frozenset(
 
 
 def _raise_rtyp_not_inferrable(desc: str) -> NoReturn:
-    raise ValueError(
-        f"Cannot infer RTYP for {desc}; pass fields={{'RTYP': ...}} explicitly.")
+    raise ValueError(f"Cannot infer RTYP for {desc}; pass fields={{'RTYP': ...}} explicitly.")
 
 
 def _raw_current_or_none(pv: _SharedPVBase) -> Any | None:
@@ -381,7 +424,8 @@ def _validate_fields(fields: RecordFieldOverrides, name: str) -> None:
         warnings.warn(
             f"fields override for {name!r} has unrecognized field name(s) "
             f"{sorted(unknown)!r}; ignored. See FIELD_NAMES for valid names.",
-            stacklevel=3)
+            stacklevel=3,
+        )
 
 
 def _build_one_field(
@@ -474,8 +518,11 @@ def build_record_fields(
         # live PV to check). Checked once here, not per-field, since RTYP
         # and RTYP$ would otherwise each re-read pv.current().
         _check_rtyp_inferrable(pv)
-    return {fieldname: _build_one_field(fieldname, name, valtype, dtyp_choices, fields, description)
-            for fieldname in FIELD_NAMES if _field_applies(fieldname, valtype)}
+    return {
+        fieldname: _build_one_field(fieldname, name, valtype, dtyp_choices, fields, description)
+        for fieldname in FIELD_NAMES
+        if _field_applies(fieldname, valtype)
+    }
 
 
 def _description_of_pv(pv: _SharedPVBase) -> tuple[str, bool]:
@@ -488,7 +535,7 @@ def _description_of_pv(pv: _SharedPVBase) -> tuple[str, bool]:
     # structurally possible with no further access (same rationale as
     # _check_rtyp_inferrable's fast path).
     nt = getattr(pv, "nt", None)
-    if nt is not None and 'display.description' not in nt.type:
+    if nt is not None and "display.description" not in nt.type:
         return "", False
 
     # Slow path: pv.nt confirmed display.description exists (needs a
@@ -498,9 +545,9 @@ def _description_of_pv(pv: _SharedPVBase) -> tuple[str, bool]:
     if raw is None:
         return "", False
     try:
-        if 'display.description' not in raw:
+        if "display.description" not in raw:
             return "", False
-        return raw.get('display.description', '') or '', True
+        return raw.get("display.description", "") or "", True
     except TypeError:
         # raw isn't Value-like (e.g. a hand-rolled unwrap= returning
         # something else) -- give up gracefully, same as above.
@@ -513,6 +560,7 @@ def _patched_shared_pv_cls() -> type:
     # dependency on p4pillon.server.raw for callers who only want
     # build_record_fields(), without re-importing on every call.
     from p4pillon.server.raw import SharedPV as _PatchedSharedPV
+
     return _PatchedSharedPV
 
 
@@ -546,12 +594,12 @@ class _DescriptionSyncHandler:
         # than assumed present -- otherwise an unrelated post() (e.g. a bare
         # `pv.post(1.0)`) would read back "" and wrongly blank out DESC.
         try:
-            changed = value.changed('display.description')
+            changed = value.changed("display.description")
         except KeyError:
             return
         if not changed:
             return
-        wrapped = _scalar_nt("s").wrap(value.get('display.description', '') or '')
+        wrapped = _scalar_nt("s").wrap(value.get("display.description", "") or "")
         self._desc_pv.post(wrapped)
         self._desc_dollar_pv.post(wrapped)
 
@@ -566,14 +614,14 @@ class _DescriptionSyncHandler:
 
     def open(self, value: Value) -> None:
         self._sync(value)
-        self._delegate('open', value)
+        self._delegate("open", value)
 
     def post(self, pv: _SharedPVBase, value: Value) -> None:
         self._sync(value)
-        self._delegate('post', pv, value)
+        self._delegate("post", pv, value)
 
     def close(self, pv: _SharedPVBase) -> None:
-        self._delegate('close', pv)
+        self._delegate("close", pv)
 
 
 class IOCChannelProvider(StaticProvider):
@@ -663,11 +711,12 @@ class IOCChannelProvider(StaticProvider):
             return
 
         if valtype is None:
-            valtype = _infer_valtype_of_pv(pv) or 'd'
+            valtype = _infer_valtype_of_pv(pv) or "d"
 
         description, has_description = _description_of_pv(pv)
-        built = build_record_fields(name, valtype, dtyp_choices=dtyp_choices, fields=fields, pv=pv,
-                                     description=description)
+        built = build_record_fields(
+            name, valtype, dtyp_choices=dtyp_choices, fields=fields, pv=pv, description=description
+        )
         field_pvs: dict[str, _SharedPVBase] = {}
         for fieldname, value in built.items():
             field_pv = _field_shared_pv(value, type(pv))
@@ -687,7 +736,8 @@ class IOCChannelProvider(StaticProvider):
                     "display.description changes made after add() -- only "
                     "p4pillon.server.thread.SharedPV and p4pillon.server.asyncio.SharedPV "
                     "support this (see IOCChannelProvider's docstring).",
-                    stacklevel=2)
+                    stacklevel=2,
+                )
 
     def remove(self, name: str) -> None:
         """Remove a PV, and any "<name>.<FIELD>" sub-PVs previously added for it."""
@@ -773,9 +823,14 @@ class DynamicRecordFields:
         entry = self._registry.get(basename)
         if entry is None or not _field_applies(field, entry["valtype"]):
             return None
-        value = _build_one_field(field, basename, entry["valtype"],
-                                  entry.get("dtyp_choices"), entry.get("fields") or {},
-                                  entry.get("description") or "")
+        value = _build_one_field(
+            field,
+            basename,
+            entry["valtype"],
+            entry.get("dtyp_choices"),
+            entry.get("fields") or {},
+            entry.get("description") or "",
+        )
         return _field_shared_pv(value, self._pv_factory)
 
 
@@ -800,7 +855,8 @@ def _check_pv_factory_is_safe(pv_factory: type[_SharedPVBase]) -> None:
             "always called by the server's own internal thread, never the thread "
             "running an asyncio event loop, so it can never construct one. Use "
             "p4pillon.server.thread.SharedPV (the default) or p4p.server.cothread.SharedPV "
-            "instead.")
+            "instead."
+        )
 
 
 @functools.cache
@@ -809,6 +865,7 @@ def _default_pv_factory() -> type[_SharedPVBase]:
     # force a hard dependency on it for callers who only use
     # build_record_fields() or always pass their own pv_factory.
     from p4pillon.server.thread import SharedPV
+
     return SharedPV
 
 

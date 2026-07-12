@@ -28,6 +28,7 @@ class SharedPV(_AsyncioSharedPV):
     # shared p4p class would leak into anyone else holding a reference to it.
     _requires_running_loop = True
 
+
 #####
 # Monkey patching the Handler is a simpler operation as it's a straight
 # substitution with our new version.
