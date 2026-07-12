@@ -4,11 +4,16 @@ module's docstring for the full rationale.
 
 Uses `IOCRecordServer`, which builds "<name>.<FIELD>" sub-PVs for free for
 any base PV in a providers=[] entry -- either an explicit `IOCRecordProvider`
-(needed for per-PV overrides, as for EXAMPLE:PV's dtyp_choices/fields below),
-or, for the common case needing no overrides, a plain {name: pv} dict, same
-as any ordinary p4p server (see EXAMPLE:PV2 below). Each sub-PV automatically
-matches the flavor of its base PV -- the asyncio `SharedPV` imported below,
-in this example.
+(needed for per-PV overrides, as for EXAMPLE:PV's dtyp_choices/fields below;
+note it isn't itself a single provider, so it's spread via `*base.providers`
+below), or, for the common case needing no overrides, a plain {name: pv} dict,
+same as any ordinary p4p server (see EXAMPLE:PV2 below). Every sub-PV is built
+lazily, on first client connection, as a plain thread-flavored SharedPV --
+regardless of the base PV's own flavor (the asyncio `SharedPV` imported below,
+in this example) -- and, unlike `StaticRecordProvider`'s eager sub-PVs, won't show
+up in a plain channel-list query (e.g. the `pvlist` tool); only the base PVs
+will. See `IOCRecordProvider`'s docstring for the full set of tradeoffs
+against the eager path.
 
 in another terminal use
  `python -m p4p.client.cli get EXAMPLE:PV`
@@ -42,8 +47,8 @@ async def main():
     )
     pvs = {"EXAMPLE:PV2": SharedPV(nt=NTScalar("i"), initial=0)}
 
-    with IOCRecordServer(providers=[base, pvs]):
-        print("Serving:", list(base.keys()) + list(pvs.keys()))
+    with IOCRecordServer(providers=[*base.providers, pvs]):
+        print("Serving:", list(base.providers[0].keys()) + list(pvs.keys()))
         print("Also serving <PV>.<FIELD> for FIELD in:", ", ".join(sorted(FIELD_NAMES)))
         try:
             while True:

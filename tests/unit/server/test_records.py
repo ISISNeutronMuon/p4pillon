@@ -16,7 +16,7 @@ from p4pillon.server.records import (
     IOCRecordProvider,
     IOCRecordServer,
     RecordFieldOverrides,
-    _supports_handler_hooks,
+    StaticRecordProvider,
     build_record_fields,
     infer_rtyp,
 )
@@ -159,9 +159,9 @@ def _pv_with_description(description=None, valtype="d", initial=1.234):
     return SharedPV(nt=NTScalar(valtype, display=True), initial=value)
 
 
-class TestIOCRecordProvider:
+class TestStaticRecordProvider:
     def setup_method(self, _method):
-        self.P = IOCRecordProvider("test")
+        self.P = StaticRecordProvider("test")
 
     def test_add_creates_field_pvs(self):
         self.P.add("PV:NAME", _pv(), valtype="d")
@@ -338,13 +338,11 @@ class TestIOCRecordProvider:
                 assert C.get("EXAMPLE:PV.DESC") == "real description"
 
     def test_desc_snapshot_only_by_default(self):
-        # Live tracking is opt-in (sync_description) -- by default add() only
-        # takes a one-time snapshot of display.description, same as for a
-        # non-p4pillon-flavored PV.
+        # add() only takes a one-time snapshot of display.description --
+        # a later pv.post() is never reflected without an explicit
+        # set_description() call.
         pv = _pv_with_description("initial description")
         self.P.add("EXAMPLE:PV", pv, valtype="d")
-        assert pv._handler is not None
-        assert "EXAMPLE:PV" not in self.P._description_sync
 
         with Server(providers=[self.P], isolate=True) as S:
             with Context("pva", conf=S.conf(), useenv=False) as C:
@@ -354,92 +352,27 @@ class TestIOCRecordProvider:
 
                 assert C.get("EXAMPLE:PV.DESC") == "initial description"
 
-    def test_desc_tracks_display_description_live_after_add(self):
+    def test_set_description_pushes_live_to_open_connection(self):
         pv = _pv_with_description("initial description")
-        self.P.add("EXAMPLE:PV", pv, valtype="d", sync_description=True)
+        self.P.add("EXAMPLE:PV", pv, valtype="d")
 
         with Server(providers=[self.P], isolate=True) as S:
             with Context("pva", conf=S.conf(), useenv=False) as C:
                 assert C.get("EXAMPLE:PV.DESC") == "initial description"
 
-                pv.post({"display": {"description": "updated description"}})
+                self.P.set_description("EXAMPLE:PV", "updated description")
 
                 assert C.get("EXAMPLE:PV.DESC") == "updated description"
                 assert C.get("EXAMPLE:PV.DESC$") == "updated description"
 
-                # An unrelated post (not touching display.description) must
-                # not blank DESC back out -- only fields actually marked
-                # changed in a given post() are applied at all.
-                pv.post(2.5)
-                assert C.get("EXAMPLE:PV") == 2.5
-                assert C.get("EXAMPLE:PV.DESC") == "updated description"
+    def test_set_description_raises_for_unknown_name(self):
+        with pytest.raises(KeyError):
+            self.P.set_description("NOSUCH:PV", "x")
 
-    def test_desc_sync_opt_in_via_constructor(self):
-        # sync_description=True at the constructor applies to every add()
-        # that doesn't override it itself.
-        provider = IOCRecordProvider("test", sync_description=True)
-        pv = _pv_with_description("initial description")
-        provider.add("EXAMPLE:PV", pv, valtype="d")
-
-        with Server(providers=[provider], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                pv.post({"display": {"description": "updated description"}})
-                assert C.get("EXAMPLE:PV.DESC") == "updated description"
-
-    def test_desc_sync_per_add_overrides_constructor_default(self):
-        provider = IOCRecordProvider("test", sync_description=True)
-        off_pv = _pv_with_description("off")
-        provider.add("EXAMPLE:OFF", off_pv, valtype="d", sync_description=False)
-        assert "EXAMPLE:OFF" not in provider._description_sync
-
-        on_pv = _pv_with_description("on")
-        self.P.add("EXAMPLE:ON", on_pv, valtype="d", sync_description=True)
-        assert "EXAMPLE:ON" in self.P._description_sync
-
-    def test_desc_sync_handler_delegates_to_original_handler(self):
-        put_calls = []
-
-        class _Handler:
-            def put(self, pv, op):
-                put_calls.append(op.value())
-                op.done()
-
-        pv = SharedPV(
-            handler=_Handler(), nt=NTScalar("d", display=True), initial={"value": 1.0, "display": {"description": "x"}}
-        )
-        self.P.add("EXAMPLE:PV", pv, valtype="d", sync_description=True)
-
-        with Server(providers=[self.P], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                C.put("EXAMPLE:PV", 9.0)
-                assert put_calls == [9.0]
-                assert C.get("EXAMPLE:PV.DESC") == "x"
-
-    def test_desc_sync_handler_restored_on_remove(self):
-        pv = _pv_with_description("desc")
-        original_handler = pv._handler
-        self.P.add("EXAMPLE:PV", pv, valtype="d", sync_description=True)
-        assert pv._handler is not original_handler
-
-        self.P.remove("EXAMPLE:PV")
-        assert pv._handler is original_handler
-
-    def test_supports_handler_hooks_detects_p4pillon_flavor(self):
-        # Unit-level check of the isinstance test IOCRecordProvider.add() uses
-        # to decide whether live DESC tracking is even possible (see
-        # _DescriptionSyncHandler/_supports_handler_hooks) -- deliberately
-        # not exercised against a real p4p.server.thread.SharedPV/
-        # p4p.server.cothread.SharedPV instance here: importing
-        # p4p.server.thread directly, before p4pillon.server.thread has run
-        # its (import-order-sensitive) monkey-patch of p4p.server.raw.SharedPV,
-        # silently breaks that patch for the rest of the process -- see
-        # p4pillon/server/thread.py's own comment on this fragility.
-        assert _supports_handler_hooks(_pv()) is True
-
-        class _NotAPatchedSharedPV:
-            pass
-
-        assert _supports_handler_hooks(_NotAPatchedSharedPV()) is False
+    def test_set_description_raises_when_record_fields_false(self):
+        self.P.add("EXAMPLE:PV", _pv_with_description("x"), record_fields=False)
+        with pytest.raises(KeyError):
+            self.P.set_description("EXAMPLE:PV", "y")
 
     def test_no_such_field_times_out(self):
         self.P.add("EXAMPLE:PV", _pv(), valtype="d")
@@ -465,8 +398,9 @@ class TestIOCRecordServer:
     def test_dict_provider_gets_field_pvs(self):
         # Plain p4p.server.Server treats a bare dict as shorthand for a plain
         # StaticProvider (base PV only, no "<name>.<FIELD>" sub-PVs) --
-        # IOCRecordServer should instead treat it as shorthand for an
-        # IOCRecordProvider (sub-PVs included), with no other code changes.
+        # IOCRecordServer should instead also serve "<name>.<FIELD>" for it,
+        # via a DynamicRecordFields-backed DynamicProvider built alongside
+        # the (otherwise untouched) dict, with no other code changes.
         pvs = {"EXAMPLE:PV": _pv()}
 
         with IOCRecordServer(providers=[pvs], isolate=True) as S:
@@ -477,9 +411,10 @@ class TestIOCRecordServer:
 
     def test_non_dict_providers_pass_through_unchanged(self):
         # A provider name string and an already-constructed provider instance
-        # (including an explicit IOCRecordProvider) aren't dicts -- must be
-        # forwarded to p4p.server.Server as-is, not touched by _iocify.
-        explicit = IOCRecordProvider("explicit")
+        # (including an explicit StaticRecordProvider) aren't dicts -- must be
+        # forwarded to p4p.server.Server as-is, with no extra DynamicProvider
+        # built for them (see _dynamic_fields_provider).
+        explicit = StaticRecordProvider("explicit")
         explicit.add("EXPLICIT:PV", _pv())
 
         with IOCRecordServer(providers=[explicit], isolate=True) as S:
@@ -488,7 +423,7 @@ class TestIOCRecordServer:
 
     def test_mixed_dict_and_provider_entries(self):
         pvs = {"EXAMPLE:PV": _pv()}
-        explicit = IOCRecordProvider("explicit")
+        explicit = StaticRecordProvider("explicit")
         explicit.add("EXPLICIT:PV", _pv())
 
         with IOCRecordServer(providers=[pvs, explicit], isolate=True) as S:
@@ -499,7 +434,7 @@ class TestIOCRecordServer:
 
 class TestDynamicRecordFields:
     def test_unknown_fields_key_warns_eagerly_at_construction(self):
-        # Unlike IOCRecordProvider.add(), this registry's 'fields' is never
+        # Unlike StaticRecordProvider.add(), this registry's 'fields' is never
         # otherwise inspected until (if ever) a client connects to that
         # specific record's fields -- validated eagerly here instead so the
         # typo is caught regardless of whether a client ever asks.
@@ -533,7 +468,7 @@ class TestDynamicRecordFields:
                     C.get("NOSUCHBASE.DESC", timeout=0.2)
 
                 # 's' is a non-numeric valtype -- ADEL/MDEL don't apply, same
-                # as IOCRecordProvider (see TestIOCRecordProvider.
+                # as StaticRecordProvider (see TestStaticRecordProvider.
                 # test_adel_mdel_unreachable_for_non_numeric_pv).
                 with pytest.raises(TimeoutError):
                     C.get("EXAMPLE:PV3.ADEL", timeout=0.2)
@@ -552,7 +487,7 @@ class TestDynamicRecordFields:
         # No live PV reference here (see RegistryEntry's docstring) -- DESC
         # comes from the registry's 'description' entry, a one-time snapshot
         # re-read per makeChannel() call; 'fields'={"DESC": ...} is ignored,
-        # same as IOCRecordProvider.
+        # same as StaticRecordProvider.
         base = {"EXAMPLE:PV5": SharedPV(nt=NTScalar("d"), initial=1.0)}
         registry = {
             "EXAMPLE:PV5": {"valtype": "d", "description": "snapshot description", "fields": {"DESC": "ignored"}}
@@ -591,17 +526,144 @@ class TestDynamicRecordFields:
                 assert C.get("EXAMPLE:PV7.DESC") == "second"
 
 
+class TestIOCRecordProvider:
+    def setup_method(self, _method):
+        self.P = IOCRecordProvider("test")
+
+    def test_add_creates_registry_entry_and_live_get(self):
+        self.P.add("PV:NAME", _pv(), valtype="d")
+        assert "PV:NAME" in self.P._registry
+
+        with Server(providers=[*self.P.providers], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("PV:NAME") == 1.234
+                assert C.get("PV:NAME.NAME") == "PV:NAME"
+                assert C.get("PV:NAME.RTYP") == "ai"
+                assert C.get("PV:NAME.SCAN").choice == "Passive"
+
+                with pytest.raises(TimeoutError):
+                    C.get("PV:NAME.NOSUCHFIELD", timeout=0.2)
+
+    def test_record_fields_false_opts_out(self):
+        self.P.add("PV:NAME", _pv(), record_fields=False)
+        assert "PV:NAME" not in self.P._registry
+
+        with Server(providers=[*self.P.providers], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("PV:NAME") == 1.234
+                with pytest.raises(TimeoutError):
+                    C.get("PV:NAME.RTYP", timeout=0.2)
+
+    def test_valtype_inferred_from_pv_nt_when_omitted(self):
+        self.P.add("PV:NAME", _pv("s", "hello"))
+        assert self.P._registry["PV:NAME"]["valtype"] == "s"
+
+        with Server(providers=[*self.P.providers], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("PV:NAME.RTYP") == "stringin"
+                # 's' has no ADEL/MDEL
+                with pytest.raises(TimeoutError):
+                    C.get("PV:NAME.ADEL", timeout=0.2)
+
+    def test_explicit_valtype_overrides_inference(self):
+        self.P.add("PV:NAME", _pv("s", "hello"), valtype="d")
+
+        with Server(providers=[*self.P.providers], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("PV:NAME.RTYP") == "ai"
+
+    def test_rtyp_not_inferrable_raises_at_add_time(self):
+        # Same eager check build_record_fields()/StaticRecordProvider.add() do
+        # -- unlike DynamicRecordFields' own registry-only constructor, add()
+        # has the live pv here and so can check inferrability up front,
+        # rather than only failing (or silently misbehaving) once a client
+        # first connects to the RTYP sub-PV.
+        table_pv = SharedPV(nt=NTTable(columns=[("A", "d")]), initial=[{"A": 1.0}])
+        with pytest.raises(ValueError, match="RTYP"):
+            self.P.add("TBL:PV", table_pv)
+
+    def test_rtyp_not_inferrable_accepts_explicit_override(self):
+        table_pv = SharedPV(nt=NTTable(columns=[("A", "d")]), initial=[{"A": 1.0}])
+        self.P.add("TBL:PV", table_pv, fields={"RTYP": "waveform"})
+        assert self.P._registry["TBL:PV"]["fields"] == {"RTYP": "waveform"}
+
+    def test_unknown_fields_key_warns_at_add_time(self):
+        with pytest.warns(UserWarning, match="DESK"):
+            self.P.add("PV:NAME", _pv(), fields={"DESK": "typo"})
+
+    def test_desc_is_snapshot_taken_at_add_time(self):
+        # No live PV reference held -- a later pv.post() changing
+        # display.description is never reflected (see the class docstring).
+        pv = _pv_with_description("hello")
+        self.P.add("PV:NAME", pv, valtype="d")
+
+        with Server(providers=[*self.P.providers], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("PV:NAME.DESC") == "hello"
+
+            pv.post({"value": 1.234, "display": {"description": "changed"}})
+
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("PV:NAME.DESC") == "hello"  # still the add()-time snapshot
+
+    def test_remove_cleans_up_base_and_registry(self):
+        self.P.add("PV:NAME", _pv(), valtype="d")
+        self.P.remove("PV:NAME")
+        assert "PV:NAME" not in self.P._registry
+
+        with Server(providers=[*self.P.providers], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                with pytest.raises(TimeoutError):
+                    C.get("PV:NAME", timeout=0.2)
+                with pytest.raises(TimeoutError):
+                    C.get("PV:NAME.RTYP", timeout=0.2)
+
+    def test_remove_without_fields_is_safe(self):
+        self.P.add("PV:NAME", _pv(), record_fields=False)
+        self.P.remove("PV:NAME")  # must not raise
+
+    def test_providers_property(self):
+        assert self.P.providers == (self.P._static, self.P._dynamic)
+
+    def test_set_description_updates_registry_for_new_connections_only(self):
+        # No live PV reference here (unlike StaticRecordProvider) -- an
+        # already-open connection keeps the snapshot taken when it connected;
+        # only a *new* connection picks up the update.
+        pv = _pv_with_description("initial description")
+        self.P.add("PV:NAME", pv, valtype="d")
+
+        with Server(providers=[*self.P.providers], isolate=True) as S:
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("PV:NAME.DESC") == "initial description"
+
+                self.P.set_description("PV:NAME", "updated description")
+
+                assert C.get("PV:NAME.DESC") == "initial description"
+
+            with Context("pva", conf=S.conf(), useenv=False) as C:
+                assert C.get("PV:NAME.DESC") == "updated description"
+
+    def test_set_description_raises_for_unknown_name(self):
+        with pytest.raises(KeyError):
+            self.P.set_description("NOSUCH:PV", "x")
+
+    def test_set_description_raises_when_record_fields_false(self):
+        self.P.add("PV:NAME", _pv_with_description("x"), record_fields=False)
+        with pytest.raises(KeyError):
+            self.P.set_description("PV:NAME", "y")
+
+
 def _async_pv(valtype="d", initial=1.234):
     return AsyncSharedPV(nt=NTScalar(valtype), initial=initial)
 
 
-class TestIOCRecordProviderAsyncio:
+class TestStaticRecordProviderAsyncio:
     async def test_live_get(self):
         # Field-value semantics (defaults, overrides, RTYP inference, etc)
-        # are covered by TestIOCRecordProvider.test_live_get; this only
-        # confirms the same IOCRecordProvider works against an
+        # are covered by TestStaticRecordProvider.test_live_get; this only
+        # confirms the same StaticRecordProvider works against an
         # asyncio-flavored PV/Context.
-        P = IOCRecordProvider("test")
+        P = StaticRecordProvider("test")
         P.add("EXAMPLE:PV", _async_pv(), valtype="d")
 
         with Server(providers=[P], isolate=True) as S:
@@ -614,7 +676,7 @@ class TestIOCRecordProviderAsyncio:
                     await asyncio.wait_for(C.get("EXAMPLE:PV.NOSUCHFIELD"), timeout=0.2)
 
     async def test_mixed_pv_flavors(self):
-        # A single IOCRecordProvider can mix thread- and asyncio-flavored base
+        # A single StaticRecordProvider can mix thread- and asyncio-flavored base
         # PVs; each record's own "<name>.<FIELD>" sub-PVs are built using
         # that same PV's class (type(pv)), so they automatically use the
         # same concurrency model rather than a single flavor for the whole
@@ -632,7 +694,7 @@ class TestIOCRecordProviderAsyncio:
                 super().__init__(**kw)
                 async_instances.append(self)
 
-        P = IOCRecordProvider("test")
+        P = StaticRecordProvider("test")
         P.add("EXAMPLE:THREAD", TrackedThreadPV(nt=NTScalar("d"), initial=1.234), valtype="d")
         P.add("EXAMPLE:ASYNC", TrackedAsyncPV(nt=NTScalar("d"), initial=2.345), valtype="d")
 
