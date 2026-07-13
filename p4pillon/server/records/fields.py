@@ -197,6 +197,12 @@ RecordFieldOverrides = TypedDict(
     },
     total=False,
 )
+RecordFieldOverrides.__doc__ = """Shape of the `fields` override dict accepted by
+`build_record_fields`, `StaticRecordProvider.add`, and `IOCRecordProvider.add`.
+Every key is optional; a present key's value is a raw value for scalar-kind
+fields, or a choice name (str) for menu-kind fields including DTYP and RTYP.
+An unrecognized key is ignored and emits a `UserWarning` (see `_validate_fields`).
+"""
 
 
 class _RegistryEntryRequired(TypedDict):

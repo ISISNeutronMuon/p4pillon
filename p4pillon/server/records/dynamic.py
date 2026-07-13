@@ -66,6 +66,10 @@ class DynamicRecordFields:
         self._pv_factory: type[_SharedPVBase] | None = pv_factory
 
     def testChannel(self, name: str) -> bool:
+        """Whether `name` is a "<basename>.<FIELD>" for a `basename` known to
+        `registry` and a `field` that applies to its `valtype`. Part of the
+        `~p4p.server.DynamicProvider` handler protocol.
+        """
         basename, field = _split_field_name(name)
         if field is None:
             return False
@@ -75,6 +79,11 @@ class DynamicRecordFields:
         return _field_applies(field, entry["valtype"])
 
     def makeChannel(self, name: str, peer: str) -> _SharedPVBase | None:
+        """Build the "<basename>.<FIELD>" sub-PV for `name`, or `None` if
+        `testChannel` would reject it. `peer` is unused -- every field's
+        initial value is the same regardless of which client connects. Part
+        of the `~p4p.server.DynamicProvider` handler protocol.
+        """
         basename, field = _split_field_name(name)
         if field is None:
             return None
