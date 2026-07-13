@@ -39,7 +39,7 @@ Field defaults are taken from EPICS Base wherever it defines one:
    one-time snapshot of it (at `add()` time, or per `makeChannel()` call for
    `DynamicRecordFields`); later `display.description` changes aren't
    tracked automatically. Both `StaticRecordProvider` and `IOCRecordProvider`
-   have a `set_description` method to update it explicitly afterward --
+   have a `set_desc_record` method to update it explicitly afterward --
    `StaticRecordProvider`'s pushes the update live to any already-open
    connection, while `IOCRecordProvider`'s only affects *new* connections,
    since the lazy path keeps no live PV reference. Absent a

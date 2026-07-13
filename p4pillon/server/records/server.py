@@ -57,7 +57,7 @@ class IOCRecordServer(_Server):
     Each dict entry's sub-PVs get `DynamicRecordFields`'s defaults: `valtype`
     inferred from the base PV, DESC seeded as a one-time snapshot of
     `display.description` (with no way to reach the registry built here
-    afterward to call `set_description`, unlike `IOCRecordProvider`), and no
+    afterward to call `set_desc_record`, unlike `IOCRecordProvider`), and no
     `dtyp_choices`/`fields` overrides. See `DynamicRecordFields` and
     `IOCRecordProvider`'s docstrings for the rest of the lazy path's
     limitations (sub-PV flavor, `pvlist` visibility, etc.), which apply here

@@ -121,7 +121,7 @@ class IOCRecordProvider:
     behaviour everywhere the lazy path can support it, but a few things
     `StaticRecordProvider` supports work differently or not at all here:
 
-     - `set_description` only updates the snapshot new connections see --
+     - `set_desc_record` only updates the snapshot new connections see --
        there's no live channel here to `post()` an update to an
        already-open connection.
      - Every sub-PV is built lazily on first client connection, using
@@ -188,7 +188,7 @@ class IOCRecordProvider:
             "description": description,
         }
 
-    def set_description(self, name: str, description: str) -> None:
+    def set_desc_record(self, name: str, description: str) -> None:
         """Update the DESC/DESC$ snapshot for `name`, picked up by any *new*
         connection from this point on (see the class docstring).
 

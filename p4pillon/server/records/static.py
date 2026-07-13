@@ -50,7 +50,7 @@ class StaticRecordProvider(StaticProvider):
     automatically matches the base PV's own concurrency model.
 
     DESC/DESC$ are seeded from the base PV's ``display.description`` at
-    `add()` time and not tracked afterward; call `set_description` to push
+    `add()` time and not tracked afterward; call `set_desc_record` to push
     an update.
     """
 
@@ -58,7 +58,7 @@ class StaticRecordProvider(StaticProvider):
         super().__init__(name)
         # name -> {fieldname: field pv}, for the sub-PVs actually added (may
         # be fewer than FIELD_NAMES, e.g. ADEL/MDEL omitted for a
-        # non-numeric valtype) -- lets remove()/set_description() find them.
+        # non-numeric valtype) -- lets remove()/set_desc_record() find them.
         self._field_pvs: dict[str, dict[str, _SharedPVBase]] = {}
 
     def add(
@@ -98,7 +98,7 @@ class StaticRecordProvider(StaticProvider):
             field_pvs[fieldname] = field_pv
         self._field_pvs[name] = field_pvs
 
-    def set_description(self, name: str, description: str) -> None:
+    def set_desc_record(self, name: str, description: str) -> None:
         """Update "<name>.DESC"/"<name>.DESC$" to `description`, pushed live
         to any already-open connection via `post()`.
 

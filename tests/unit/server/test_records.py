@@ -340,7 +340,7 @@ class TestStaticRecordProvider:
     def test_desc_snapshot_only_by_default(self):
         # add() only takes a one-time snapshot of display.description --
         # a later pv.post() is never reflected without an explicit
-        # set_description() call.
+        # set_desc_record() call.
         pv = _pv_with_description("initial description")
         self.P.add("EXAMPLE:PV", pv, valtype="d")
 
@@ -352,7 +352,7 @@ class TestStaticRecordProvider:
 
                 assert C.get("EXAMPLE:PV.DESC") == "initial description"
 
-    def test_set_description_pushes_live_to_open_connection(self):
+    def test_set_desc_record_pushes_live_to_open_connection(self):
         pv = _pv_with_description("initial description")
         self.P.add("EXAMPLE:PV", pv, valtype="d")
 
@@ -360,19 +360,19 @@ class TestStaticRecordProvider:
             with Context("pva", conf=S.conf(), useenv=False) as C:
                 assert C.get("EXAMPLE:PV.DESC") == "initial description"
 
-                self.P.set_description("EXAMPLE:PV", "updated description")
+                self.P.set_desc_record("EXAMPLE:PV", "updated description")
 
                 assert C.get("EXAMPLE:PV.DESC") == "updated description"
                 assert C.get("EXAMPLE:PV.DESC$") == "updated description"
 
-    def test_set_description_raises_for_unknown_name(self):
+    def test_set_desc_record_raises_for_unknown_name(self):
         with pytest.raises(KeyError):
-            self.P.set_description("NOSUCH:PV", "x")
+            self.P.set_desc_record("NOSUCH:PV", "x")
 
-    def test_set_description_raises_when_record_fields_false(self):
+    def test_set_desc_record_raises_when_record_fields_false(self):
         self.P.add("EXAMPLE:PV", _pv_with_description("x"), record_fields=False)
         with pytest.raises(KeyError):
-            self.P.set_description("EXAMPLE:PV", "y")
+            self.P.set_desc_record("EXAMPLE:PV", "y")
 
     def test_no_such_field_times_out(self):
         self.P.add("EXAMPLE:PV", _pv(), valtype="d")
@@ -641,7 +641,7 @@ class TestIOCRecordProvider:
     def test_providers_property(self):
         assert self.P.providers == (self.P._static, self.P._dynamic)
 
-    def test_set_description_updates_registry_for_new_connections_only(self):
+    def test_set_desc_record_updates_registry_for_new_connections_only(self):
         # No live PV reference here (unlike StaticRecordProvider) -- an
         # already-open connection keeps the snapshot taken when it connected;
         # only a *new* connection picks up the update.
@@ -652,21 +652,21 @@ class TestIOCRecordProvider:
             with Context("pva", conf=S.conf(), useenv=False) as C:
                 assert C.get("PV:NAME.DESC") == "initial description"
 
-                self.P.set_description("PV:NAME", "updated description")
+                self.P.set_desc_record("PV:NAME", "updated description")
 
                 assert C.get("PV:NAME.DESC") == "initial description"
 
             with Context("pva", conf=S.conf(), useenv=False) as C:
                 assert C.get("PV:NAME.DESC") == "updated description"
 
-    def test_set_description_raises_for_unknown_name(self):
+    def test_set_desc_record_raises_for_unknown_name(self):
         with pytest.raises(KeyError):
-            self.P.set_description("NOSUCH:PV", "x")
+            self.P.set_desc_record("NOSUCH:PV", "x")
 
-    def test_set_description_raises_when_record_fields_false(self):
+    def test_set_desc_record_raises_when_record_fields_false(self):
         self.P.add("PV:NAME", _pv_with_description("x"), record_fields=False)
         with pytest.raises(KeyError):
-            self.P.set_description("PV:NAME", "y")
+            self.P.set_desc_record("PV:NAME", "y")
 
 
 def _async_pv(valtype="d", initial=1.234):
