@@ -231,7 +231,7 @@ class BaseRule(ABC):
         return any(newpvstate.changed(x) for x in test_fields)
 
     @check_applicable_init
-    def init_rule(self, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
+    def init_rule(self, _newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
         """
         Rule that only needs to consider the potential future state of a PV.
         Consider implementing if this rule could apply to a newly initialised PV.
@@ -241,7 +241,7 @@ class BaseRule(ABC):
         return RulesFlow.CONTINUE
 
     @check_applicable_post
-    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
+    def post_rule(self, _oldpvstate: Value, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
         """
         Rule that needs to consider the current and potential future state of a PV.
         Usually this will involve a post where the oldpvstate is actually the current

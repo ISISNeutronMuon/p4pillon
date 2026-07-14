@@ -10,6 +10,11 @@ from p4p.server.raw import SharedPV as _SharedPV
 _log = logging.getLogger(__name__)
 
 
+def _get_handler_attr(handler, name):
+    """Look up an optional handler method, returning None if it isn't implemented."""
+    return getattr(handler, name, None)
+
+
 class Handler(ABC):
     """Skeleton of SharedPV Handler
 
@@ -27,7 +32,7 @@ class Handler(ABC):
         """
         pass
 
-    def put(self, pv, op):
+    def put(self, _pv, op):
         """
         Called each time a client issues a Put
         operation on this Channel.
@@ -48,7 +53,7 @@ class Handler(ABC):
         """
         pass
 
-    def rpc(self, pv, op):
+    def rpc(self, _pv, op):
         """
         Called each time a client issues a Remote Procedure Call
         operation on this Channel.
@@ -152,11 +157,8 @@ class SharedPV(_SharedPV, ABC):
 
         # Guard goes here because we can have handlers that don't inherit from
         # the Handler base class
-        try:
-            open_fn = self._handler.open
-        except AttributeError:
-            pass
-        else:
+        open_fn = _get_handler_attr(self._handler, "open")
+        if open_fn is not None:
             open_fn(V)
 
         _SharedPV.open(self, V)
@@ -178,11 +180,8 @@ class SharedPV(_SharedPV, ABC):
 
         # Guard goes here because we can have handlers that don't inherit from
         # the Handler base class
-        try:
-            post_fn = self._handler.post
-        except AttributeError:
-            pass
-        else:
+        post_fn = _get_handler_attr(self._handler, "post")
+        if post_fn is not None:
             post_fn(self, V)
 
         _SharedPV.post(self, V)
@@ -195,41 +194,29 @@ class SharedPV(_SharedPV, ABC):
         Prevent reconnection by __first__ stopping the Server, removing with :py:meth:`StaticProvider.remove()`,
         or preventing a :py:class:`DynamicProvider` from making new channels to this SharedPV.
         """
-        try:
-            close_fn = self._handler.close
-        except AttributeError:
-            pass
-        else:
+        close_fn = _get_handler_attr(self._handler, "close")
+        if close_fn is not None:
             close_fn(self)
 
-        _SharedPV.close(self)
+        _SharedPV.close(self, destroy)
 
     class _WrapHandler(_SharedPV._WrapHandler):  # pylint: disable=W0212
         "Wrapper around user Handler which logs exceptions"
 
         def open(self, value):
             _log.debug("OPEN %s %s", self._pv, value)
-            try:
-                open_fn = self._real.open
-            except AttributeError:
-                pass
-            else:
+            open_fn = _get_handler_attr(self._real, "open")
+            if open_fn is not None:
                 self._pv._exec(None, open_fn, value)
 
         def post(self, value):
             _log.debug("POST %s %s", self._pv, value)
-            try:
-                post_fn = self._real.post
-            except AttributeError:
-                pass
-            else:
+            post_fn = _get_handler_attr(self._real, "post")
+            if post_fn is not None:
                 self._pv._exec(None, post_fn, self._pv, value)
 
         def close(self):
             _log.debug("CLOSE %s", self._pv)
-            try:
-                close_fn = self._real.close
-            except AttributeError:
-                pass
-            else:
+            close_fn = _get_handler_attr(self._real, "close")
+            if close_fn is not None:
                 self._pv._exec(None, close_fn, self._pv)

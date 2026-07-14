@@ -95,7 +95,7 @@ def test_ntscalar_timestamp(mock_time, pvtype, time_val):
         else:
             assert recipe.timestamp is None
 
-        pv = recipe.create_pv("TEST:NAME")
+        pv = recipe.create_pv()
 
         if time_val is not None:
             # once we've added the PVs and started the server, the PV timestamp should be respected
@@ -288,7 +288,7 @@ def test_ntscalar_numeric_create_pv(mock_time, recipe, pvtype, with_limits, expe
         recipe.set_control_limits()
         recipe.set_alarm_limits()
 
-    pv = recipe.create_pv(pv_name="UNIT:TEST:PV")
+    pv = recipe.create_pv()
 
     pvdict = pv.current().raw.todict()
 
@@ -333,7 +333,7 @@ def test_ntscalar_string_create_pv(mock_time, recipe, expected_value):
     initial = "test"
     recipe = recipe(PVTypes.STRING, description="test", initial_value=initial)
 
-    pv = recipe.create_pv(pv_name="UNIT:TEST:PV")
+    pv = recipe.create_pv()
 
     pvdict = pv.current().raw.todict()
 
@@ -373,7 +373,7 @@ def test_ntenum_create_pv(mock_time):
         alarmNTEnum={},
     )
 
-    pv = recipe.create_pv("TEST:PV:ENUM")
+    pv = recipe.create_pv()
 
     pvdict = pv.current().raw.todict()
 

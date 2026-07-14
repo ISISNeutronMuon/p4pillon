@@ -25,14 +25,6 @@ class ControlRule(BaseScalarRule):
     fields: ClassVar[list[str] | None] = ["control"]
     wrap_for_array = True
 
-    # @property
-    # def name(self) -> str:
-    #     return "control"
-
-    # @property
-    # def fields(self) -> list[str]:
-    #     return ["control"]
-
     @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         """Check whether a value should be clipped by the control limits

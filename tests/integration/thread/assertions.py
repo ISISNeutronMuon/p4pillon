@@ -8,7 +8,10 @@ def assert_value_changed(pvname: str, put_value, put_timestamp: float, ctx: Cont
     pv_state = ctx.get(pvname)
     current_value = pv_state.raw.todict()["value"]
     assert np.array_equal(np.array(current_value), np.array(put_value))
-    # assert pv_state.timestamp >= put_timestamp  # TODO: Check why this timestamp is broken?
+    print(
+        f"time from PV = {pv_state.timestamp}, time at put = {put_timestamp}, diff = {pv_state.timestamp - put_timestamp}"
+    )
+    assert pv_state.timestamp >= put_timestamp
 
 
 def assert_value_not_changed(pvname: str, put_value, ctx: Context):

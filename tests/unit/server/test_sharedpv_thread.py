@@ -19,11 +19,11 @@ class TestThreadHandler:
             self.last_op = "open"
             value["value"] = 17
 
-        def post(self, pv, value):
+        def post(self, _pv, value):
             self.last_op = "post"
             value["value"] = value["value"] * 2
 
-        def close(self, pv):
+        def close(self, _pv):
             self.last_op = "close"
 
     def setup_method(self, _method):

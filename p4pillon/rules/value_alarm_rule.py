@@ -27,14 +27,6 @@ class ValueAlarmRule(BaseGatherableRule):
     fields: ClassVar[list[str] | None] = ["alarm", "valueAlarm"]
     wrap_for_array = True
 
-    # @property
-    # def name(self) -> str:
-    #     return "valueAlarm"
-
-    # @property
-    # def fields(self) -> list[str]:
-    #     return ["alarm", "valueAlarm"]
-
     @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:
         """Evaluate alarm value limits"""

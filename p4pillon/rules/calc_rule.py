@@ -54,7 +54,7 @@ class CalcRule(BaseScalarRule):
             self._server = server
             self._pv_name = pv_name
 
-        def cb(self, v: Value):
+        def cb(self, _v: Value):
             """This callback "cb" is part of the context.monitor() functionality.
             See https://epics-base.github.io/p4p/client.html#monitor for further information."""
             self._server.put_pv_value(self._pv_name, {})
@@ -80,7 +80,7 @@ class CalcRule(BaseScalarRule):
         if "pv_name" in calc:
             self._pv_name = calc["pv_name"]
 
-    def init_rule(self, value: Value, **kwargs):
+    def init_rule(self, value: Value):
         """
         Method to initialise monitor call backs for the variables to be monitored.
         This should be added as an on start method when creating the pv.
@@ -120,7 +120,7 @@ class CalcRule(BaseScalarRule):
 
         return pvs
 
-    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
+    def post_rule(self, _oldpvstate: Value, newpvstate: Value) -> RulesFlow:
         """
         Evaluate the calculation.
           The syntax for using pvs in the calc string is to use the pv array, e.g. 'pv[0]' to use the first variable

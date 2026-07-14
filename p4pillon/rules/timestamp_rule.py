@@ -22,14 +22,6 @@ class TimestampRule(BaseRule):
     nttypes: ClassVar[list[SupportedNTTypes] | None] = [SupportedNTTypes.ALL]
     fields: ClassVar[list[str] | None] = ["timeStamp"]
 
-    # @property
-    # def name(self) -> str:
-    #     return "timestamp"
-
-    # @property
-    # def fields(self) -> list[str]:
-    #     return ["timeStamp"]
-
     type = SupportedNTTypes.ALL
 
     def is_applicable(self, newpvstate: Value) -> bool:

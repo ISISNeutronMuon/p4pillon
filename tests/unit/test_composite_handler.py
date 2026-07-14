@@ -92,7 +92,7 @@ class TestCompositeHandler(unittest.TestCase):
         self.op.done.assert_called_once_with()
 
     def test_put_abort_exception(self):
-        def abort_put(pv, op):
+        def abort_put(_pv, _op):
             raise AbortHandlerException("abort!")
 
         self.h1.put = abort_put
@@ -117,7 +117,7 @@ class TestCompositeHandler(unittest.TestCase):
         self.op.done.assert_called_once_with(error=None)
 
     def test_rpc_abort_exception(self):
-        def abort_rpc(pv, op):
+        def abort_rpc(_pv, _op):
             raise AbortHandlerException("rpc abort!")
 
         self.h2.rpc = abort_rpc

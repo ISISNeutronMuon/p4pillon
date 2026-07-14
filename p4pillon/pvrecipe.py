@@ -110,7 +110,7 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
         self.config_settings["descriptor"] = self.description
 
     @abstractmethod
-    def create_pv(self, pv_name: str | None = None) -> SharedPvT:
+    def create_pv(self) -> SharedPvT:
         """Turn the recipe into an NT object with an array"""
 
         raise NotImplementedError
@@ -174,7 +174,7 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
 class PVScalarRecipe(BasePVRecipe):
     """Recipe to build an NTScalar"""
 
-    def create_pv(self, pv_name: str | None = None) -> SharedPV:
+    def create_pv(self) -> SharedPV:
         """Turn the recipe into an actual NTScalar, NTEnum, or
         other BasePV derived object"""
 
@@ -352,7 +352,7 @@ class PVScalarArrayRecipe(PVScalarRecipe):
     allowing for the definition of initial values, descriptions, and other properties.
     """
 
-    def create_pv(self, pv_name: str | None = None) -> SharedPV:
+    def create_pv(self) -> SharedPV:
         """Turn the recipe into an actual NTScalar with an array"""
 
         self._config_display()
@@ -378,7 +378,7 @@ class PVEnumRecipe(BasePVRecipe):
         if not self.pvtype == PVTypes.ENUM:
             raise ValueError(f"Unsupported pv type {self.pvtype} for class {{self.__class__.__name__}}")
 
-    def create_pv(self, pv_name: str | None = None) -> SharedPV:
+    def create_pv(self) -> SharedPV:
         """Turn the recipe into an actual NTEnum"""
 
         return super().build_pv()
