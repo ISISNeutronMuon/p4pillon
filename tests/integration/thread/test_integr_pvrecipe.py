@@ -275,27 +275,27 @@ class TestAlarms:
         test_list = [0] * 5
 
         # At start
-        ctx.put(pvname, [-10] + test_list)
+        ctx.put(pvname, [-10, *test_list])
         assert_pv_in_major_alarm_state(pvname, ctx)
-        ctx.put(pvname, [-5] + test_list)
+        ctx.put(pvname, [-5, *test_list])
         assert_pv_in_minor_alarm_state(pvname, ctx)
-        ctx.put(pvname, [0] + test_list)
+        ctx.put(pvname, [0, *test_list])
         assert_pv_not_in_alarm_state(pvname, ctx)
-        ctx.put(pvname, [5] + test_list)
+        ctx.put(pvname, [5, *test_list])
         assert_pv_in_minor_alarm_state(pvname, ctx)
-        ctx.put(pvname, [10] + test_list)
+        ctx.put(pvname, [10, *test_list])
         assert_pv_in_major_alarm_state(pvname, ctx)
 
         # At end
-        ctx.put(pvname, test_list + [-10])
+        ctx.put(pvname, [*test_list, -10])
         assert_pv_in_major_alarm_state(pvname, ctx)
-        ctx.put(pvname, test_list + [-5])
+        ctx.put(pvname, [*test_list, -5])
         assert_pv_in_minor_alarm_state(pvname, ctx)
-        ctx.put(pvname, test_list + [0])
+        ctx.put(pvname, [*test_list, 0])
         assert_pv_not_in_alarm_state(pvname, ctx)
-        ctx.put(pvname, test_list + [5])
+        ctx.put(pvname, [*test_list, 5])
         assert_pv_in_minor_alarm_state(pvname, ctx)
-        ctx.put(pvname, test_list + [10])
+        ctx.put(pvname, [*test_list, 10])
         assert_pv_in_major_alarm_state(pvname, ctx)
 
     @pytest.mark.parametrize("pvtype", [(PVTypes.DOUBLE), (PVTypes.INTEGER)])
@@ -312,7 +312,7 @@ class TestAlarms:
         test_list = [0] * 5
 
         for val in [-10, -5, 0, 5, 10]:
-            ctx.put(pvname, test_list + [val])
+            ctx.put(pvname, [*test_list, val])
             assert_pv_not_in_alarm_state(pvname, ctx)
 
 
@@ -429,5 +429,5 @@ class TestControl:
         test_list = [0] * (array_length - 1)
 
         timestamp = time.time()
-        ctx.put(pvname, test_list + [put_val])
-        assert_value_changed(pvname, test_list + [expected_val], timestamp, ctx)
+        ctx.put(pvname, [*test_list, put_val])
+        assert_value_changed(pvname, [*test_list, expected_val], timestamp, ctx)

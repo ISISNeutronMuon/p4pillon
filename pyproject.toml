@@ -90,8 +90,9 @@ extend-select = [
   "B",     # flake8-bugbear
   "ASYNC", # flake8-async
   "SIM",   # flake8-simplify
+  "RUF",   # ruff-specific rules
 ]
-# Not yet enabled due to a backlog of pre-existing violations: RUF, ARG, N, C4, PTH
+# Not yet enabled due to a backlog of pre-existing violations: ARG, N, C4, PTH
 ignore = [
   "B024", # Several base classes (BaseRule, Handler, Server) intentionally define
   "B027", # only optional, overridable hook methods with no required abstract methods.

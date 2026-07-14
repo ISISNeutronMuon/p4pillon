@@ -5,6 +5,7 @@ Rule to implement calc record functionality.
 import ast
 import logging
 import math as m  # noqa: F401
+from typing import ClassVar
 
 from p4p import Value
 
@@ -36,8 +37,8 @@ class CalcRule(BaseScalarRule):
         self.set_calc(calc=kwargs)
 
     name = "calc"
-    nttypes = [SupportedNTTypes.ALL]
-    fields = []
+    nttypes: ClassVar[list[SupportedNTTypes] | None] = [SupportedNTTypes.ALL]
+    fields: ClassVar[list[str] | None] = []
     add_automatically = False
 
     class MonitorCB:

@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from enum import IntEnum, auto
 from functools import wraps
-from typing import Any  # Hack to type hint number types
+from typing import Any, ClassVar  # Hack to type hint number types
 
 from p4p import Type, Value
 from p4p.server import ServerOperation
@@ -163,22 +163,22 @@ class BaseRule(ABC):
     # These class variables are required to support introspection by NTScalar.
     # The intention is that they will be overridden in derived classes.
 
-    name: str | None = None
-    """ A string setting the name of the class. None is used to indicate it is unset. 
-        This name is used to access the Handler / Rule through the CompositeHandler. 
+    name: ClassVar[str | None] = None
+    """ A string setting the name of the class. None is used to indicate it is unset.
+        This name is used to access the Handler / Rule through the CompositeHandler.
         It also provides a human-readable name for the rule used in error and debug messages
         This variable MUST be set appropriately in each derived class."""
 
-    nttypes: list[SupportedNTTypes] | None = None
-    """ 
+    nttypes: ClassVar[list[SupportedNTTypes] | None] = None
+    """
     A list of SupportedNTTypes. This may be used to restict a Rule to only apply to the
     specified NTTypes, e.g. NTScalar and NTScalarArray. In general use of fields should be
-    preferred. At this time an empty list signal thats the Rule may apply to all types; 
-    this may be revised in future. This may be made more explicit through the use of 
+    preferred. At this time an empty list signal thats the Rule may apply to all types;
+    this may be revised in future. This may be made more explicit through the use of
     SupportedNTTypes.ALL.
     """
 
-    fields: list[str] | None = None
+    fields: ClassVar[list[str] | None] = None
     """
     Fields required to be present for the Rule to apply. For example, a timestamp Rule
     requires that there be a timeStamp field. Currently this is a list of strings, but
@@ -188,13 +188,13 @@ class BaseRule(ABC):
     have been changed.
     """
 
-    wrap_for_array = False
+    wrap_for_array: ClassVar[bool] = False
     """
     Signals that a Rule needs to use the ScalarToArrayWrapperRule class to make it applicable
     to an NTScalarArray.
     """
 
-    add_automatically = True
+    add_automatically: ClassVar[bool] = True
     """
     Signals that a Rule is able to fully automatically configure itself. Generally, if a
     Rule requires constructor settings to function it must set this to False.

@@ -4,6 +4,7 @@ Rules for timeStamp fields of Normative Types.
 
 import logging
 import time
+from typing import ClassVar
 
 from p4p import Value
 
@@ -18,8 +19,8 @@ class TimestampRule(BaseRule):
     """Set current timestamp unless provided with an alternative value"""
 
     name = "timestamp"
-    nttype = [SupportedNTTypes.ALL]
-    fields = ["timeStamp"]
+    nttype: ClassVar[list[SupportedNTTypes]] = [SupportedNTTypes.ALL]
+    fields: ClassVar[list[str] | None] = ["timeStamp"]
 
     # @property
     # def name(self) -> str:

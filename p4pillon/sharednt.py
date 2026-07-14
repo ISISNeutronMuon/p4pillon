@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from abc import ABC
 from collections import OrderedDict
-from typing import Any
+from typing import Any, ClassVar
 
 from p4p import Type, Value
 
@@ -53,7 +53,7 @@ class SharedNT(SharedPV, ABC):
     functionality to support Normative Type logic.
     """
 
-    registered_handlers: list[type[BaseRule]] = [
+    registered_handlers: ClassVar[list[type[BaseRule]]] = [
         AlarmRule,
         ControlRule,
         AlarmNTEnumRule,

@@ -3,6 +3,7 @@ Rules for the control and control_t fields of Normative Types.
 """
 
 import logging
+from typing import ClassVar
 from typing import SupportsFloat as Numeric
 
 from p4p import Value
@@ -20,8 +21,8 @@ class ControlRule(BaseScalarRule):
     """
 
     name = "control"
-    nttypes = [SupportedNTTypes.ALL]
-    fields = ["control"]
+    nttypes: ClassVar[list[SupportedNTTypes] | None] = [SupportedNTTypes.ALL]
+    fields: ClassVar[list[str] | None] = ["control"]
     wrap_for_array = True
 
     # @property

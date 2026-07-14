@@ -16,7 +16,7 @@ def _build_mailbox(*kargs, **kwargs):
 # pylint: disable=wrong-import-position, wrong-import-order, unused-import
 import p4p.server.cli  # noqa: E402
 
-p4p.server.cli.buildMailbox = _build_mailbox  # noqa: F811
+p4p.server.cli.buildMailbox = _build_mailbox
 
 if __name__ == "__main__":
     args = p4p.server.cli.getargs()
