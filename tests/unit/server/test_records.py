@@ -110,7 +110,7 @@ class TestBuildRecordFields:
         assert "MDEL" not in built
 
     def test_string_field_dollar_alias_mirrors_value(self):
-        assert STRING_FIELDS == {"DESC", "ASG", "EVNT", "TSEL", "SDIS", "AMSG", "NAMSG", "FLNK", "NAME", "RTYP"}
+        assert {"DESC", "ASG", "EVNT", "TSEL", "SDIS", "AMSG", "NAMSG", "FLNK", "NAME", "RTYP"} == STRING_FIELDS
 
         built = build_record_fields("PV:NAME", "d", fields={"RTYP": "waveform"}, description="hello")
         for fieldname in STRING_FIELDS:
@@ -165,36 +165,34 @@ class TestStaticRecordProvider:
 
     def test_add_creates_field_pvs(self):
         self.P.add("PV:NAME", _pv(), valtype="d")
-        keys = set(self.P.keys())
+        keys = set(self.P)
         assert "PV:NAME" in keys
         for field in FIELD_NAMES:
             assert f"PV:NAME.{field}" in keys
 
     def test_record_fields_false_opts_out(self):
         self.P.add("PV:NAME", _pv(), record_fields=False)
-        assert list(self.P.keys()) == ["PV:NAME"]
+        assert list(self.P) == ["PV:NAME"]
 
     def test_valtype_inferred_from_pv_nt_when_omitted(self):
         # pv.nt is an NTScalar('s') -- valtype (and so RTYP/ADEL-MDEL
         # applicability) should be inferred from that, not silently
         # defaulted to 'd'/"ai".
         self.P.add("PV:NAME", _pv("s", "hello"))
-        keys = set(self.P.keys())
+        keys = set(self.P)
         assert "PV:NAME.ADEL" not in keys  # 's' has no ADEL/MDEL
         assert "PV:NAME.MDEL" not in keys
 
-        with Server(providers=[self.P], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("PV:NAME.RTYP") == "stringin"
+        with Server(providers=[self.P], isolate=True) as S, Context("pva", conf=S.conf(), useenv=False) as C:
+            assert C.get("PV:NAME.RTYP") == "stringin"
 
     def test_explicit_valtype_overrides_inference(self):
         # pv.nt is NTScalar('s'), but an explicit valtype takes precedence
         # over whatever could be inferred from pv.nt.
         self.P.add("PV:NAME", _pv("s", "hello"), valtype="d")
 
-        with Server(providers=[self.P], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("PV:NAME.RTYP") == "ai"
+        with Server(providers=[self.P], isolate=True) as S, Context("pva", conf=S.conf(), useenv=False) as C:
+            assert C.get("PV:NAME.RTYP") == "ai"
 
     def test_valtype_defaults_to_d_when_not_inferrable(self):
         # A hand-built PV (no nt=) has no pv.nt to infer from -- falls back
@@ -202,32 +200,31 @@ class TestStaticRecordProvider:
         value = NTScalar("l").wrap(5)
         self.P.add("PV:NAME", SharedPV(initial=value))
 
-        with Server(providers=[self.P], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("PV:NAME.RTYP") == "ai"
-                assert "PV:NAME.ADEL" in self.P.keys()
+        with Server(providers=[self.P], isolate=True) as S, Context("pva", conf=S.conf(), useenv=False) as C:
+            assert C.get("PV:NAME.RTYP") == "ai"
+            assert "PV:NAME.ADEL" in self.P
 
     def test_remove_cleans_up_fields(self):
         self.P.add("PV:NAME", _pv(), valtype="d")
-        assert len(self.P.keys()) > 1
+        assert len(self.P) > 1
         self.P.remove("PV:NAME")
-        assert list(self.P.keys()) == []
+        assert list(self.P) == []
 
     def test_remove_without_fields_is_safe(self):
         self.P.add("PV:NAME", _pv(), record_fields=False)
         self.P.remove("PV:NAME")  # must not raise
-        assert list(self.P.keys()) == []
+        assert list(self.P) == []
 
     def test_adel_mdel_omitted_for_non_numeric_pv_and_remove_still_clean(self):
         self.P.add("PV:NAME", _pv("s", "hello"), valtype="s")
-        keys = set(self.P.keys())
+        keys = set(self.P)
         assert "PV:NAME.ADEL" not in keys
         assert "PV:NAME.MDEL" not in keys
         for field in FIELD_NAMES - {"ADEL", "MDEL"}:
             assert f"PV:NAME.{field}" in keys
 
         self.P.remove("PV:NAME")  # must not raise despite ADEL/MDEL never having been added
-        assert list(self.P.keys()) == []
+        assert list(self.P) == []
 
     def _check_rtyp_required_for(self, name, make_img, make_tbl):
         # infer_rtyp() has no plausible guess for a structural PV.  Rejected
@@ -238,10 +235,10 @@ class TestStaticRecordProvider:
             self.P.add(f"EXAMPLE:{name}_TBL", make_tbl(), valtype="d")
 
         self.P.add(f"EXAMPLE:{name}_IMG2", make_img(), valtype="d", fields={"RTYP": "waveform"})
-        assert f"EXAMPLE:{name}_IMG2.RTYP" in self.P.keys()
+        assert f"EXAMPLE:{name}_IMG2.RTYP" in self.P
 
         self.P.add(f"EXAMPLE:{name}_TBL2", make_tbl(), valtype="d", fields={"RTYP": "waveform"})
-        assert f"EXAMPLE:{name}_TBL2.RTYP" in self.P.keys()
+        assert f"EXAMPLE:{name}_TBL2.RTYP" in self.P
 
     def test_rtyp_required_for_non_scalar_nt(self):
         # Detected via pv.nt (set by SharedPV(nt=...)) rather than the
@@ -299,43 +296,40 @@ class TestStaticRecordProvider:
             fields={"SCAN": "1 second", "ADEL": 0.5, "MDEL": 0.1},
         )
 
-        with Server(providers=[self.P], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:PV") == 1.234
-                assert C.get("EXAMPLE:PV.NAME") == "EXAMPLE:PV"
-                assert C.get("EXAMPLE:PV.RTYP") == "ai"
-                assert C.get("EXAMPLE:PV.DESC") == "An example ai-like record"
-                assert C.get("EXAMPLE:PV.ADEL") == 0.5
-                assert C.get("EXAMPLE:PV.MDEL") == 0.1
+        with Server(providers=[self.P], isolate=True) as S, Context("pva", conf=S.conf(), useenv=False) as C:
+            assert C.get("EXAMPLE:PV") == 1.234
+            assert C.get("EXAMPLE:PV.NAME") == "EXAMPLE:PV"
+            assert C.get("EXAMPLE:PV.RTYP") == "ai"
+            assert C.get("EXAMPLE:PV.DESC") == "An example ai-like record"
+            assert C.get("EXAMPLE:PV.ADEL") == 0.5
+            assert C.get("EXAMPLE:PV.MDEL") == 0.1
 
-                assert C.get("EXAMPLE:PV.DESC$") == "An example ai-like record"
-                assert C.get("EXAMPLE:PV.NAME$") == "EXAMPLE:PV"
-                assert C.get("EXAMPLE:PV.RTYP$") == "ai"
+            assert C.get("EXAMPLE:PV.DESC$") == "An example ai-like record"
+            assert C.get("EXAMPLE:PV.NAME$") == "EXAMPLE:PV"
+            assert C.get("EXAMPLE:PV.RTYP$") == "ai"
 
-                dtyp = C.get("EXAMPLE:PV.DTYP")
-                assert dtyp.choice == "Soft Channel"
+            dtyp = C.get("EXAMPLE:PV.DTYP")
+            assert dtyp.choice == "Soft Channel"
 
-                scan = C.get("EXAMPLE:PV.SCAN")
-                assert scan.choice == "1 second"
+            scan = C.get("EXAMPLE:PV.SCAN")
+            assert scan.choice == "1 second"
 
-                stat = C.get("EXAMPLE:PV.STAT")
-                assert stat.choice == "UDF"
+            stat = C.get("EXAMPLE:PV.STAT")
+            assert stat.choice == "UDF"
 
     def test_desc_default_empty_without_display_description(self):
         self.P.add("EXAMPLE:PV", _pv(), valtype="d")
 
-        with Server(providers=[self.P], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:PV.DESC") == ""
-                assert C.get("EXAMPLE:PV.DESC$") == ""
+        with Server(providers=[self.P], isolate=True) as S, Context("pva", conf=S.conf(), useenv=False) as C:
+            assert C.get("EXAMPLE:PV.DESC") == ""
+            assert C.get("EXAMPLE:PV.DESC$") == ""
 
     def test_desc_not_settable_via_fields(self):
         pv = _pv_with_description("real description")
         self.P.add("EXAMPLE:PV", pv, valtype="d", fields={"DESC": "ignored"})
 
-        with Server(providers=[self.P], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:PV.DESC") == "real description"
+        with Server(providers=[self.P], isolate=True) as S, Context("pva", conf=S.conf(), useenv=False) as C:
+            assert C.get("EXAMPLE:PV.DESC") == "real description"
 
     def test_desc_snapshot_only_by_default(self):
         # add() only takes a one-time snapshot of display.description --
@@ -344,26 +338,24 @@ class TestStaticRecordProvider:
         pv = _pv_with_description("initial description")
         self.P.add("EXAMPLE:PV", pv, valtype="d")
 
-        with Server(providers=[self.P], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:PV.DESC") == "initial description"
+        with Server(providers=[self.P], isolate=True) as S, Context("pva", conf=S.conf(), useenv=False) as C:
+            assert C.get("EXAMPLE:PV.DESC") == "initial description"
 
-                pv.post({"display": {"description": "updated description"}})
+            pv.post({"display": {"description": "updated description"}})
 
-                assert C.get("EXAMPLE:PV.DESC") == "initial description"
+            assert C.get("EXAMPLE:PV.DESC") == "initial description"
 
     def test_set_desc_record_pushes_live_to_open_connection(self):
         pv = _pv_with_description("initial description")
         self.P.add("EXAMPLE:PV", pv, valtype="d")
 
-        with Server(providers=[self.P], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:PV.DESC") == "initial description"
+        with Server(providers=[self.P], isolate=True) as S, Context("pva", conf=S.conf(), useenv=False) as C:
+            assert C.get("EXAMPLE:PV.DESC") == "initial description"
 
-                self.P.set_desc_record("EXAMPLE:PV", "updated description")
+            self.P.set_desc_record("EXAMPLE:PV", "updated description")
 
-                assert C.get("EXAMPLE:PV.DESC") == "updated description"
-                assert C.get("EXAMPLE:PV.DESC$") == "updated description"
+            assert C.get("EXAMPLE:PV.DESC") == "updated description"
+            assert C.get("EXAMPLE:PV.DESC$") == "updated description"
 
     def test_set_desc_record_raises_for_unknown_name(self):
         with pytest.raises(KeyError):
@@ -377,21 +369,22 @@ class TestStaticRecordProvider:
     def test_no_such_field_times_out(self):
         self.P.add("EXAMPLE:PV", _pv(), valtype="d")
 
-        with Server(providers=[self.P], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                with pytest.raises(TimeoutError):
-                    C.get("EXAMPLE:PV.NOSUCHFIELD", timeout=0.2)
+        with (
+            Server(providers=[self.P], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+            pytest.raises(TimeoutError),
+        ):
+            C.get("EXAMPLE:PV.NOSUCHFIELD", timeout=0.2)
 
     def test_adel_mdel_unreachable_for_non_numeric_pv(self):
         self.P.add("EXAMPLE:STR", _pv("s", "hello"), valtype="s")
 
-        with Server(providers=[self.P], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:STR") == "hello"
-                with pytest.raises(TimeoutError):
-                    C.get("EXAMPLE:STR.ADEL", timeout=0.2)
-                with pytest.raises(TimeoutError):
-                    C.get("EXAMPLE:STR.MDEL", timeout=0.2)
+        with Server(providers=[self.P], isolate=True) as S, Context("pva", conf=S.conf(), useenv=False) as C:
+            assert C.get("EXAMPLE:STR") == "hello"
+            with pytest.raises(TimeoutError):
+                C.get("EXAMPLE:STR.ADEL", timeout=0.2)
+            with pytest.raises(TimeoutError):
+                C.get("EXAMPLE:STR.MDEL", timeout=0.2)
 
 
 class TestIOCRecordServer:
@@ -403,11 +396,13 @@ class TestIOCRecordServer:
         # the (otherwise untouched) dict, with no other code changes.
         pvs = {"EXAMPLE:PV": _pv()}
 
-        with IOCRecordServer(providers=[pvs], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:PV") == 1.234
-                assert C.get("EXAMPLE:PV.RTYP") == "ai"
-                assert C.get("EXAMPLE:PV.SCAN").choice == "Passive"
+        with (
+            IOCRecordServer(providers=[pvs], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert C.get("EXAMPLE:PV") == 1.234
+            assert C.get("EXAMPLE:PV.RTYP") == "ai"
+            assert C.get("EXAMPLE:PV.SCAN").choice == "Passive"
 
     def test_non_dict_providers_pass_through_unchanged(self):
         # A provider name string and an already-constructed provider instance
@@ -417,19 +412,23 @@ class TestIOCRecordServer:
         explicit = StaticRecordProvider("explicit")
         explicit.add("EXPLICIT:PV", _pv())
 
-        with IOCRecordServer(providers=[explicit], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXPLICIT:PV.RTYP") == "ai"
+        with (
+            IOCRecordServer(providers=[explicit], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert C.get("EXPLICIT:PV.RTYP") == "ai"
 
     def test_mixed_dict_and_provider_entries(self):
         pvs = {"EXAMPLE:PV": _pv()}
         explicit = StaticRecordProvider("explicit")
         explicit.add("EXPLICIT:PV", _pv())
 
-        with IOCRecordServer(providers=[pvs, explicit], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:PV.RTYP") == "ai"
-                assert C.get("EXPLICIT:PV.RTYP") == "ai"
+        with (
+            IOCRecordServer(providers=[pvs, explicit], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert C.get("EXAMPLE:PV.RTYP") == "ai"
+            assert C.get("EXPLICIT:PV.RTYP") == "ai"
 
     def test_ioc_record_provider_passed_directly(self):
         # An IOCRecordProvider isn't itself a single provider (it holds a
@@ -440,12 +439,14 @@ class TestIOCRecordServer:
         base.add("EXAMPLE:PV", _pv(), dtyp_choices=["Soft Channel", "Raw Soft Channel"])
         pvs = {"EXAMPLE:PV2": _pv()}
 
-        with IOCRecordServer(providers=[base, pvs], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:PV") == 1.234
-                assert C.get("EXAMPLE:PV.RTYP") == "ai"
-                assert C.get("EXAMPLE:PV.DTYP").raw["value.choices"] == ["Soft Channel", "Raw Soft Channel"]
-                assert C.get("EXAMPLE:PV2.RTYP") == "ai"
+        with (
+            IOCRecordServer(providers=[base, pvs], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert C.get("EXAMPLE:PV") == 1.234
+            assert C.get("EXAMPLE:PV.RTYP") == "ai"
+            assert C.get("EXAMPLE:PV.DTYP").raw["value.choices"] == ["Soft Channel", "Raw Soft Channel"]
+            assert C.get("EXAMPLE:PV2.RTYP") == "ai"
 
 
 class TestDynamicRecordFields:
@@ -469,35 +470,39 @@ class TestDynamicRecordFields:
         registry = {"EXAMPLE:PV3": {"valtype": "s"}}
         field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
 
-        with Server(providers=[base, field_provider], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:PV3") == "hello"
-                assert C.get("EXAMPLE:PV3.NAME") == "EXAMPLE:PV3"
-                assert C.get("EXAMPLE:PV3.RTYP") == "stringin"
-                assert C.get("EXAMPLE:PV3.NAME$") == "EXAMPLE:PV3"
-                assert C.get("EXAMPLE:PV3.RTYP$") == "stringin"
+        with (
+            Server(providers=[base, field_provider], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert C.get("EXAMPLE:PV3") == "hello"
+            assert C.get("EXAMPLE:PV3.NAME") == "EXAMPLE:PV3"
+            assert C.get("EXAMPLE:PV3.RTYP") == "stringin"
+            assert C.get("EXAMPLE:PV3.NAME$") == "EXAMPLE:PV3"
+            assert C.get("EXAMPLE:PV3.RTYP$") == "stringin"
 
-                with pytest.raises(TimeoutError):
-                    C.get("EXAMPLE:PV3.NOSUCHFIELD", timeout=0.2)
+            with pytest.raises(TimeoutError):
+                C.get("EXAMPLE:PV3.NOSUCHFIELD", timeout=0.2)
 
-                with pytest.raises(TimeoutError):
-                    C.get("NOSUCHBASE.DESC", timeout=0.2)
+            with pytest.raises(TimeoutError):
+                C.get("NOSUCHBASE.DESC", timeout=0.2)
 
-                # 's' is a non-numeric valtype -- ADEL/MDEL don't apply, same
-                # as StaticRecordProvider (see TestStaticRecordProvider.
-                # test_adel_mdel_unreachable_for_non_numeric_pv).
-                with pytest.raises(TimeoutError):
-                    C.get("EXAMPLE:PV3.ADEL", timeout=0.2)
+            # 's' is a non-numeric valtype -- ADEL/MDEL don't apply, same
+            # as StaticRecordProvider (see TestStaticRecordProvider.
+            # test_adel_mdel_unreachable_for_non_numeric_pv).
+            with pytest.raises(TimeoutError):
+                C.get("EXAMPLE:PV3.ADEL", timeout=0.2)
 
     def test_adel_mdel_reachable_for_numeric_valtype(self):
         base = {"EXAMPLE:PV4": SharedPV(nt=NTScalar("l"), initial=42)}
         registry = {"EXAMPLE:PV4": {"valtype": "l", "fields": {"ADEL": 3, "MDEL": 1}}}
         field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
 
-        with Server(providers=[base, field_provider], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:PV4.ADEL") == 3
-                assert C.get("EXAMPLE:PV4.MDEL") == 1
+        with (
+            Server(providers=[base, field_provider], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert C.get("EXAMPLE:PV4.ADEL") == 3
+            assert C.get("EXAMPLE:PV4.MDEL") == 1
 
     def test_desc_from_registry_snapshot_not_fields(self):
         # No live PV reference here (see RegistryEntry's docstring) -- DESC
@@ -510,19 +515,23 @@ class TestDynamicRecordFields:
         }
         field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
 
-        with Server(providers=[base, field_provider], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:PV5.DESC") == "snapshot description"
-                assert C.get("EXAMPLE:PV5.DESC$") == "snapshot description"
+        with (
+            Server(providers=[base, field_provider], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert C.get("EXAMPLE:PV5.DESC") == "snapshot description"
+            assert C.get("EXAMPLE:PV5.DESC$") == "snapshot description"
 
     def test_desc_default_empty_without_registry_description(self):
         base = {"EXAMPLE:PV6": SharedPV(nt=NTScalar("d"), initial=1.0)}
         registry = {"EXAMPLE:PV6": {"valtype": "d"}}
         field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
 
-        with Server(providers=[base, field_provider], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("EXAMPLE:PV6.DESC") == ""
+        with (
+            Server(providers=[base, field_provider], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert C.get("EXAMPLE:PV6.DESC") == ""
 
     def test_desc_snapshot_reread_per_connection(self):
         # Mutating the registry entry between connects is picked up on the
@@ -550,43 +559,51 @@ class TestIOCRecordProvider:
         self.P.add("PV:NAME", _pv(), valtype="d")
         assert "PV:NAME" in self.P._registry
 
-        with Server(providers=[*self.P.providers], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("PV:NAME") == 1.234
-                assert C.get("PV:NAME.NAME") == "PV:NAME"
-                assert C.get("PV:NAME.RTYP") == "ai"
-                assert C.get("PV:NAME.SCAN").choice == "Passive"
+        with (
+            Server(providers=[*self.P.providers], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert C.get("PV:NAME") == 1.234
+            assert C.get("PV:NAME.NAME") == "PV:NAME"
+            assert C.get("PV:NAME.RTYP") == "ai"
+            assert C.get("PV:NAME.SCAN").choice == "Passive"
 
-                with pytest.raises(TimeoutError):
-                    C.get("PV:NAME.NOSUCHFIELD", timeout=0.2)
+            with pytest.raises(TimeoutError):
+                C.get("PV:NAME.NOSUCHFIELD", timeout=0.2)
 
     def test_record_fields_false_opts_out(self):
         self.P.add("PV:NAME", _pv(), record_fields=False)
         assert "PV:NAME" not in self.P._registry
 
-        with Server(providers=[*self.P.providers], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("PV:NAME") == 1.234
-                with pytest.raises(TimeoutError):
-                    C.get("PV:NAME.RTYP", timeout=0.2)
+        with (
+            Server(providers=[*self.P.providers], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert C.get("PV:NAME") == 1.234
+            with pytest.raises(TimeoutError):
+                C.get("PV:NAME.RTYP", timeout=0.2)
 
     def test_valtype_inferred_from_pv_nt_when_omitted(self):
         self.P.add("PV:NAME", _pv("s", "hello"))
         assert self.P._registry["PV:NAME"]["valtype"] == "s"
 
-        with Server(providers=[*self.P.providers], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("PV:NAME.RTYP") == "stringin"
-                # 's' has no ADEL/MDEL
-                with pytest.raises(TimeoutError):
-                    C.get("PV:NAME.ADEL", timeout=0.2)
+        with (
+            Server(providers=[*self.P.providers], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert C.get("PV:NAME.RTYP") == "stringin"
+            # 's' has no ADEL/MDEL
+            with pytest.raises(TimeoutError):
+                C.get("PV:NAME.ADEL", timeout=0.2)
 
     def test_explicit_valtype_overrides_inference(self):
         self.P.add("PV:NAME", _pv("s", "hello"), valtype="d")
 
-        with Server(providers=[*self.P.providers], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                assert C.get("PV:NAME.RTYP") == "ai"
+        with (
+            Server(providers=[*self.P.providers], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert C.get("PV:NAME.RTYP") == "ai"
 
     def test_rtyp_not_inferrable_raises_at_add_time(self):
         # Same eager check build_record_fields()/StaticRecordProvider.add() do
@@ -627,12 +644,14 @@ class TestIOCRecordProvider:
         self.P.remove("PV:NAME")
         assert "PV:NAME" not in self.P._registry
 
-        with Server(providers=[*self.P.providers], isolate=True) as S:
-            with Context("pva", conf=S.conf(), useenv=False) as C:
-                with pytest.raises(TimeoutError):
-                    C.get("PV:NAME", timeout=0.2)
-                with pytest.raises(TimeoutError):
-                    C.get("PV:NAME.RTYP", timeout=0.2)
+        with (
+            Server(providers=[*self.P.providers], isolate=True) as S,
+            Context("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            with pytest.raises(TimeoutError):
+                C.get("PV:NAME", timeout=0.2)
+            with pytest.raises(TimeoutError):
+                C.get("PV:NAME.RTYP", timeout=0.2)
 
     def test_remove_without_fields_is_safe(self):
         self.P.add("PV:NAME", _pv(), record_fields=False)
@@ -682,14 +701,13 @@ class TestStaticRecordProviderAsyncio:
         P = StaticRecordProvider("test")
         P.add("EXAMPLE:PV", _async_pv(), valtype="d")
 
-        with Server(providers=[P], isolate=True) as S:
-            with AsyncContext("pva", conf=S.conf(), useenv=False) as C:
-                assert (await C.get("EXAMPLE:PV")) == 1.234
-                assert (await C.get("EXAMPLE:PV.NAME")) == "EXAMPLE:PV"
-                assert (await C.get("EXAMPLE:PV.RTYP")) == "ai"
+        with Server(providers=[P], isolate=True) as S, AsyncContext("pva", conf=S.conf(), useenv=False) as C:
+            assert (await C.get("EXAMPLE:PV")) == 1.234
+            assert (await C.get("EXAMPLE:PV.NAME")) == "EXAMPLE:PV"
+            assert (await C.get("EXAMPLE:PV.RTYP")) == "ai"
 
-                with pytest.raises(asyncio.TimeoutError):
-                    await asyncio.wait_for(C.get("EXAMPLE:PV.NOSUCHFIELD"), timeout=0.2)
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(C.get("EXAMPLE:PV.NOSUCHFIELD"), timeout=0.2)
 
     async def test_mixed_pv_flavors(self):
         # A single StaticRecordProvider can mix thread- and asyncio-flavored base
@@ -720,12 +738,11 @@ class TestStaticRecordProviderAsyncio:
         assert all(isinstance(pv, SharedPV) for pv in thread_instances)
         assert all(isinstance(pv, AsyncSharedPV) for pv in async_instances)
 
-        with Server(providers=[P], isolate=True) as S:
-            with AsyncContext("pva", conf=S.conf(), useenv=False) as C:
-                assert (await C.get("EXAMPLE:THREAD")) == 1.234
-                assert (await C.get("EXAMPLE:THREAD.NAME")) == "EXAMPLE:THREAD"
-                assert (await C.get("EXAMPLE:ASYNC")) == 2.345
-                assert (await C.get("EXAMPLE:ASYNC.NAME")) == "EXAMPLE:ASYNC"
+        with Server(providers=[P], isolate=True) as S, AsyncContext("pva", conf=S.conf(), useenv=False) as C:
+            assert (await C.get("EXAMPLE:THREAD")) == 1.234
+            assert (await C.get("EXAMPLE:THREAD.NAME")) == "EXAMPLE:THREAD"
+            assert (await C.get("EXAMPLE:ASYNC")) == 2.345
+            assert (await C.get("EXAMPLE:ASYNC.NAME")) == "EXAMPLE:ASYNC"
 
 
 class TestDynamicRecordFieldsAsyncio:
@@ -739,14 +756,16 @@ class TestDynamicRecordFieldsAsyncio:
         registry = {"EXAMPLE:PV3": {"valtype": "s"}}
         field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
 
-        with Server(providers=[base, field_provider], isolate=True) as S:
-            with AsyncContext("pva", conf=S.conf(), useenv=False) as C:
-                assert (await C.get("EXAMPLE:PV3")) == "hello"
-                assert (await C.get("EXAMPLE:PV3.NAME")) == "EXAMPLE:PV3"
-                assert (await C.get("EXAMPLE:PV3.RTYP")) == "stringin"
+        with (
+            Server(providers=[base, field_provider], isolate=True) as S,
+            AsyncContext("pva", conf=S.conf(), useenv=False) as C,
+        ):
+            assert (await C.get("EXAMPLE:PV3")) == "hello"
+            assert (await C.get("EXAMPLE:PV3.NAME")) == "EXAMPLE:PV3"
+            assert (await C.get("EXAMPLE:PV3.RTYP")) == "stringin"
 
-                with pytest.raises(asyncio.TimeoutError):
-                    await asyncio.wait_for(C.get("EXAMPLE:PV3.NOSUCHFIELD"), timeout=0.2)
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(C.get("EXAMPLE:PV3.NOSUCHFIELD"), timeout=0.2)
 
     def test_pv_factory_rejects_asyncio_flavor(self):
         # Caught eagerly at construction time -- see the pv_factory docstring for

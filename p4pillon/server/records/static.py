@@ -5,9 +5,12 @@ registry-driven alternative, `.server` for `IOCRecordServer` (which uses
 `p4pillon.server.records` package docstring for the overall rationale.
 """
 
+from collections.abc import Iterator
+
 from p4p.server import StaticProvider
 from p4p.server.raw import SharedPV as _SharedPVBase
 
+from ._util import _KeysContainerMixin
 from .fields import (
     RecordFieldOverrides,
     _field_shared_pv,
@@ -19,7 +22,7 @@ from .fields import (
 __all__ = ("StaticRecordProvider",)
 
 
-class StaticRecordProvider(StaticProvider):
+class StaticRecordProvider(_KeysContainerMixin, StaticProvider):
     """A `~p4p.server.StaticProvider` which, in addition to serving each added PV
     under its own name, also serves "<name>.<FIELD>" as independent read-only
     channels for DTYP, RTYP, NAME, the fields common to every EPICS record
@@ -117,3 +120,6 @@ class StaticRecordProvider(StaticProvider):
             for fieldname in field_pvs:
                 super().remove(f"{name}.{fieldname}")
         super().remove(name)
+
+    def _keys(self) -> Iterator[str]:
+        return self.keys()

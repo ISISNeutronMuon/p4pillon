@@ -6,11 +6,13 @@ docstring for the overall rationale.
 """
 
 import uuid
+from collections.abc import Iterator
 
 from p4p.server import DynamicProvider as _DynamicProvider
 from p4p.server import StaticProvider as _StaticProvider
 from p4p.server.raw import SharedPV as _SharedPVBase
 
+from ._util import _KeysContainerMixin
 from .fields import (
     FIELD_NAMES,
     RecordFieldOverrides,
@@ -101,7 +103,7 @@ class DynamicRecordFields:
         return _field_shared_pv(value, self._pv_factory)
 
 
-class IOCRecordProvider:
+class IOCRecordProvider(_KeysContainerMixin):
     """An incrementally-mutable `add()`/`remove()` counterpart to
     `~p4pillon.server.records.StaticRecordProvider`, backed by
     `DynamicRecordFields` (the lazy, registry-driven path) instead of
@@ -211,6 +213,12 @@ class IOCRecordProvider:
         *new* connections (see the class docstring)."""
         self._registry.pop(name, None)
         self._static.remove(name)
+
+    def _keys(self) -> Iterator[str]:
+        """Base PV names -- mirrors the internal `StaticProvider`, not the
+        "<name>.<FIELD>" registry (see the class docstring: those sub-PVs
+        aren't enumerable here, only servable)."""
+        return self._static.keys()
 
 
 def _anonymous_dynamic_provider(handler: DynamicRecordFields) -> _DynamicProvider:

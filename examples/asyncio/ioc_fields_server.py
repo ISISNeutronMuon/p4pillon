@@ -52,7 +52,7 @@ async def main():
         print("Serving:", list(base.providers[0].keys()) + list(pvs.keys()))
         print("Also serving <PV>.<FIELD> for FIELD in:", ", ".join(sorted(FIELD_NAMES)))
         try:
-            while True:
+            while True:  # noqa: ASYNC110
                 await asyncio.sleep(1)
         except KeyboardInterrupt:
             pass
