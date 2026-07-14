@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import logging
-
-from p4p import Value
-from p4p.server import ServerOperation
+from typing import TYPE_CHECKING
 
 from p4pillon.composite_handler import AbortHandlerError
 from p4pillon.rules import BaseRule, RulesFlow
 from p4pillon.server.raw import Handler, SharedPV
 from p4pillon.utils import overwrite_unmarked
+
+if TYPE_CHECKING:
+    from p4p import Value
+    from p4p.server import ServerOperation
 
 logger = logging.getLogger(__name__)
 

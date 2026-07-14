@@ -99,7 +99,6 @@ def test_ntscalar_timestamp(mock_time, pvtype, time_val):
 
         if time_val is not None:
             # once we've added the PVs and started the server, the PV timestamp should be respected
-            print(pv.current().timestamp, time_val)
             assert math.isclose(pv.current().timestamp, time_val)
         else:
             # if the timestamp isn't set, we use the default time.time return val

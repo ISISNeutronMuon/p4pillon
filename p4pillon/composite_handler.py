@@ -8,11 +8,13 @@ The ordered dictionary also controls the order in which the handlers are called.
 from __future__ import annotations
 
 from collections import OrderedDict
-
-from p4p import Value
-from p4p.server import ServerOperation
+from typing import TYPE_CHECKING
 
 from p4pillon.server.raw import Handler, SharedPV
+
+if TYPE_CHECKING:
+    from p4p import Value
+    from p4p.server import ServerOperation
 
 
 class HandlerError(Exception):

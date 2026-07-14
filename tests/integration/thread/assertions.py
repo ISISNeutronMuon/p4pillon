@@ -8,7 +8,7 @@ def assert_value_changed(pvname: str, put_value, put_timestamp: float, ctx: Cont
     pv_state = ctx.get(pvname)
     current_value = pv_state.raw.todict()["value"]
     assert np.array_equal(np.array(current_value), np.array(put_value))
-    print(
+    print(  # noqa: T201 - diagnostic output for debugging PV timestamp/put-timing assertions
         f"time from PV = {pv_state.timestamp}, time at put = {put_timestamp}, diff = {pv_state.timestamp - put_timestamp}"
     )
     assert pv_state.timestamp >= put_timestamp
@@ -114,7 +114,7 @@ def assert_enum_value_changed(pvname: str, put_value: dict, put_timestamp: float
     pv_state = ctx.get(pvname)
     current_value = pv_state.raw.todict()["value"]
     assert put_value == current_value
-    print(
+    print(  # noqa: T201 - diagnostic output for debugging PV timestamp/put-timing assertions
         f"time from PV = {pv_state.timestamp}, time at put = {put_timestamp}, diff = {pv_state.timestamp - put_timestamp}"
     )
     assert pv_state.timestamp >= put_timestamp

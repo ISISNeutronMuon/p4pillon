@@ -6,8 +6,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC
-from collections import OrderedDict
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from p4p import Type, Value
 
@@ -30,6 +29,9 @@ from p4pillon.rules.rules import (
     SupportedNTTypes,
 )
 from p4pillon.server.raw import Handler, SharedPV
+
+if TYPE_CHECKING:
+    from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
 

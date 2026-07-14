@@ -13,14 +13,16 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from enum import IntEnum, auto
 from functools import wraps
-from typing import Any, ClassVar  # Hack to type hint number types
+from typing import TYPE_CHECKING, Any, ClassVar  # Hack to type hint number types
 
 from p4p import Type, Value
-from p4p.server import ServerOperation
 from p4p.server.raw import ServOpWrap
 
 from p4pillon.nt.identify import NTType
 from p4pillon.utils import overwrite_marked
+
+if TYPE_CHECKING:
+    from p4p.server import ServerOperation
 
 logger = logging.getLogger(__name__)
 

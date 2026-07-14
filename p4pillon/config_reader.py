@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from p4pillon.definitions import PVTypes
-from p4pillon.pvrecipe import BasePVRecipe
-from p4pillon.server.server import Server
 from p4pillon.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
+
+if TYPE_CHECKING:
+    from p4pillon.pvrecipe import BasePVRecipe
+    from p4pillon.server.server import Server
 
 logger = logging.getLogger(__name__)
 

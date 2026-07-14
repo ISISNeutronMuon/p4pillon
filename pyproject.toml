@@ -102,6 +102,8 @@ extend-select = [
   "PERF",  # perflint
   "LOG",   # flake8-logging
   "PT",    # flake8-pytest-style
+  "TC",    # flake8-type-checking
+  "T20",   # flake8-print
 ]
 ignore = [
   "B024", # Several base classes (BaseRule, Handler, Server) intentionally define
@@ -117,5 +119,7 @@ ignore = [
 "tests/unit/test_composite_handler.py" = ["N802"]
 # assert is the standard way to make test assertions.
 "tests/**" = ["S101"]
+# Examples are demo scripts meant to print output to the console for the user running them.
+"examples/**" = ["T201"]
 
 

@@ -6,13 +6,16 @@ from __future__ import annotations
 
 import logging
 from abc import ABC
+from typing import TYPE_CHECKING
 
 from p4p.client.raw import Context
 from p4p.server import Server as _Server
 from p4p.server import StaticProvider
 
 from p4pillon.pvrecipe import BasePVRecipe
-from p4pillon.server.raw import SharedPV
+
+if TYPE_CHECKING:
+    from p4pillon.server.raw import SharedPV
 
 logger = logging.getLogger(__name__)
 
