@@ -358,9 +358,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
         val_aspy = arrayval.type().aspy()
         val_type = dict(val_aspy[2])  # extract the actual structure recipe
         val_type["value"] = val_type["value"][1:]  # change the value type to a scalar
-        val_type = list(val_type.items())  # back to a list
-
-        return val_type
+        return list(val_type.items())  # back to a list
 
     def _value_without_value(self, arrayval: Value, index: int | None = None) -> dict[str, Any]:
         # It would be straightforward to use arrayval.todict() but the value

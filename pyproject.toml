@@ -98,6 +98,7 @@ extend-select = [
   "TRY",   # tryceratops
   "EM",    # flake8-errmsg
   "S",     # flake8-bandit
+  "RET",   # flake8-return
 ]
 ignore = [
   "B024", # Several base classes (BaseRule, Handler, Server) intentionally define

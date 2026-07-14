@@ -125,8 +125,7 @@ class SharedNT(SharedPV, ABC):
 
     def _setup_auth_handlers(self, auth_handlers) -> CompositeHandler:
         """If an auth_handler has been given then configure a CompositeHandler with it."""
-        handler = CompositeHandler(auth_handlers) if auth_handlers else CompositeHandler()
-        return handler
+        return CompositeHandler(auth_handlers) if auth_handlers else CompositeHandler()
 
     @property
     def handler(self) -> CompositeHandler:

@@ -5,8 +5,7 @@ import pytest
 
 @pytest.fixture
 def mock_recipe():
-    pv = MagicMock()
-    return pv
+    return MagicMock()
 
 
 @pytest.fixture
