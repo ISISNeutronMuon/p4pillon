@@ -19,7 +19,7 @@ class TimestampRule(BaseRule):
     """Set current timestamp unless provided with an alternative value"""
 
     name = "timestamp"
-    nttype: ClassVar[list[SupportedNTTypes]] = [SupportedNTTypes.ALL]
+    nttypes: ClassVar[list[SupportedNTTypes] | None] = [SupportedNTTypes.ALL]
     fields: ClassVar[list[str] | None] = ["timeStamp"]
 
     # @property
