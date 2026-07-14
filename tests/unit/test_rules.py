@@ -1,3 +1,4 @@
+import inspect
 import logging
 from unittest.mock import patch
 
@@ -5,9 +6,30 @@ import numpy
 import pytest
 from p4p.nt import NTScalar
 
+import p4pillon.rules as rules_module
 from p4pillon.definitions import AlarmSeverity
-from p4pillon.rules import CalcRule, ControlRule, RulesFlow, ScalarToArrayWrapperRule, TimestampRule, ValueAlarmRule
+from p4pillon.rules import (
+    BaseRule,
+    CalcRule,
+    ControlRule,
+    RulesFlow,
+    ScalarToArrayWrapperRule,
+    TimestampRule,
+    ValueAlarmRule,
+)
+from p4pillon.rules.rules import SupportedNTTypes
 from p4pillon.utils import overwrite_unmarked
+
+# Concrete Rules exported from p4pillon.rules -- excludes BaseRule itself and
+# ScalarToArrayWrapperRule, whose name/nttypes are properties derived from the
+# rule it wraps rather than fixed class attributes.
+CONCRETE_RULE_CLASSES = [
+    getattr(rules_module, class_name)
+    for class_name in rules_module.__all__
+    if inspect.isclass(getattr(rules_module, class_name))
+    and issubclass(getattr(rules_module, class_name), BaseRule)
+    and getattr(rules_module, class_name) not in (BaseRule, ScalarToArrayWrapperRule)
+]
 
 
 class TestTimestamp:
@@ -521,3 +543,24 @@ class TestCalcRule:
         assert len(rule._variables) == 1 and rule._variables[0] == "a:pv:name"
         assert rule._server == "fakeServer"
         assert rule._pv_name == "this:pv:name"
+
+
+class TestRuleClassAttributes:
+    """`name` and `nttypes` are used by SharedNT/CompositeHandler for rule
+    introspection (see BaseRule's docstring). A Rule that leaves either unset
+    -- e.g. through a typo like `nttype` instead of `nttypes` -- silently
+    becomes invisible to that machinery instead of raising an error."""
+
+    @pytest.mark.parametrize("rule_cls", CONCRETE_RULE_CLASSES, ids=lambda cls: cls.__name__)
+    def test_name_is_set(self, rule_cls):
+        assert isinstance(rule_cls.name, str) and rule_cls.name != ""
+
+    @pytest.mark.parametrize("rule_cls", CONCRETE_RULE_CLASSES, ids=lambda cls: cls.__name__)
+    def test_nttypes_is_set(self, rule_cls):
+        # None/[] both mean "applies to all types" (see BaseRule.nttypes docstring
+        # and sharednt.py's `if supported_nttypes:` check) -- either is valid, but
+        # whatever is set must only contain real SupportedNTTypes members.
+        if rule_cls.nttypes is None:
+            return
+        assert isinstance(rule_cls.nttypes, list)
+        assert all(isinstance(nttype, SupportedNTTypes) for nttype in rule_cls.nttypes)

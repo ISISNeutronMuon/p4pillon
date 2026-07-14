@@ -18,7 +18,7 @@ class TimestampRule(BaseRule):
     """Set current timestamp unless provided with an alternative value"""
 
     name = "timestamp"
-    nttype = [SupportedNTTypes.ALL]
+    nttypes = [SupportedNTTypes.ALL]
     fields = ["timeStamp"]
 
     # @property
