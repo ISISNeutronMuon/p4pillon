@@ -9,7 +9,7 @@ from p4pillon.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalar
 
 
 @pytest.mark.parametrize(
-    "name, config, pvtype",
+    ("name", "config", "pvtype"),
     [
         ("TEST:PV:DOUBLE", {"initial": 0.0, "type": "DOUBLE"}, PVTypes.DOUBLE),
         ("TEST:PV:DOUBLE", {"initial": 17.0, "type": "DOUBLE"}, PVTypes.DOUBLE),
@@ -42,7 +42,7 @@ def test_parse_config_with_server(name, config, pvtype):
 
 
 @pytest.mark.parametrize(
-    "config, error_msg",
+    ("config", "error_msg"),
     [
         ({"description": "test"}, "'type' not specified"),
         ({"type": PVTypes.DOUBLE}, "'description' not specified"),
@@ -55,7 +55,7 @@ def test_parse_config_syntax_errors(config, error_msg):
 
 
 @pytest.mark.parametrize(
-    "name, config, pvtype",
+    ("name", "config", "pvtype"),
     [
         ("TEST:PV:ENUM", {"initial": {"index": 0, "choices": ["False", "True"]}, "type": "ENUM"}, PVTypes.ENUM),
         ("TEST:PV:ENUM", {"initial": {"index": 1, "choices": ["OFF", "ON"]}, "type": "ENUM"}, PVTypes.ENUM),

@@ -38,7 +38,7 @@ with (root_dir / "integration" / "ntscalar_config.yml").open() as f:
     f.close()
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
+@pytest.mark.parametrize(("pvname", "pv_config"), list(ntscalar_config.items()))
 def test_configs(pvname, yaml_server, pv_config, ctx):
     # NOTE by using pytest and parameterize here we run the test individually
     # per PV in the config file, helping us to identify which PVs are causing
@@ -72,7 +72,7 @@ def test_configs(pvname, yaml_server, pv_config, ctx):
         assert pv_state.get("valueAlarm") is None
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
+@pytest.mark.parametrize(("pvname", "pv_config"), list(ntscalar_config.items()))
 def test_value_change(pvname, yaml_server, pv_config, ctx):
     pvname = yaml_server.prefix + pvname
 
@@ -92,7 +92,7 @@ def test_value_change(pvname, yaml_server, pv_config, ctx):
         assert pvstate == current_state
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
+@pytest.mark.parametrize(("pvname", "pv_config"), list(ntscalar_config.items()))
 def test_field_change(pvname, yaml_server, pv_config, ctx):
     pvname = yaml_server.prefix + pvname
 
@@ -321,7 +321,7 @@ class TestControl:
     of PV types"""
 
     @pytest.mark.parametrize(
-        "pvtype, put_val, expected_val",
+        ("pvtype", "put_val", "expected_val"),
         [
             (PVTypes.DOUBLE, -10, -9),
             (PVTypes.DOUBLE, 0, 0),
@@ -347,7 +347,7 @@ class TestControl:
         assert_value_changed(pvname, expected_val, timestamp, ctx)
 
     @pytest.mark.parametrize(
-        "pvtype, put_val",
+        ("pvtype", "put_val"),
         [
             (PVTypes.DOUBLE, -10),
             (PVTypes.DOUBLE, 0),
@@ -403,7 +403,7 @@ class TestControl:
         assert_value_changed(pvname, new_val, timestamp, ctx)
 
     @pytest.mark.parametrize(
-        "pvtype, put_val, expected_val",
+        ("pvtype", "put_val", "expected_val"),
         [
             (PVTypes.DOUBLE, -10, -9),
             (PVTypes.DOUBLE, 0, 0),

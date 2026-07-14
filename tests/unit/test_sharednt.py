@@ -13,7 +13,7 @@ from p4pillon.sharednt import SharedNT
 
 
 @pytest.mark.parametrize(
-    "pvtype, expected_handlername",
+    ("pvtype", "expected_handlername"),
     [
         ("d", ["control", "alarm", "timestamp"]),
         ("ad", ["control", "alarm", "timestamp"]),
@@ -32,7 +32,7 @@ def testntscalar_create1(pvtype, expected_handlername):
 
 
 @pytest.mark.parametrize(
-    "pvtype, expected_handlername",
+    ("pvtype", "expected_handlername"),
     [
         ("d", ["alarm", "alarm_limit", "timestamp"]),
         ("ad", ["alarm", "alarm_limit", "timestamp"]),
@@ -51,7 +51,7 @@ def testntscalar_create2(pvtype, expected_handlername):
 
 
 @pytest.mark.parametrize(
-    "pvtype, expected_handlername",
+    ("pvtype", "expected_handlername"),
     [
         ("d", ["control", "alarm", "alarm_limit", "timestamp"]),
         ("ad", ["control", "alarm", "alarm_limit", "timestamp"]),
@@ -70,7 +70,7 @@ def testntscalar_create3(pvtype, expected_handlername):
 
 
 @pytest.mark.parametrize(
-    "pvtype, expected_handlername",
+    ("pvtype", "expected_handlername"),
     [
         (
             "d",
@@ -204,7 +204,7 @@ class TestControl:
     of PV types"""
 
     @pytest.mark.parametrize(
-        "pvtype, init_val, expected_val",
+        ("pvtype", "init_val", "expected_val"),
         [
             ("d", -10, -9.0),
             ("d", 0, 0.0),

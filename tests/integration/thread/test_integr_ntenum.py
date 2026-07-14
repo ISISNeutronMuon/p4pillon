@@ -29,7 +29,7 @@ with (root_dir / "integration" / "ntenum_config.yml").open() as f:
     f.close()
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntenum_config.items()))
+@pytest.mark.parametrize(("pvname", "pv_config"), list(ntenum_config.items()))
 def test_configs(pvname, enum_yaml_server, pv_config, ctx):
     # NOTE by using pytest and parameterize here we run the test individually
     # per PV in the config file, helping us to identify which PVs are causing
@@ -48,7 +48,7 @@ def test_configs(pvname, enum_yaml_server, pv_config, ctx):
     assert pv_state.get("valueAlarm") is None
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntenum_config.items()))
+@pytest.mark.parametrize(("pvname", "pv_config"), list(ntenum_config.items()))
 def test_value_change(pvname, enum_yaml_server, pv_config, ctx):
     pvname = enum_yaml_server.prefix + pvname
 
@@ -63,7 +63,7 @@ def test_value_change(pvname, enum_yaml_server, pv_config, ctx):
         assert_enum_value_not_changed(pvname, put_val, ctx)
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntenum_config.items()))
+@pytest.mark.parametrize(("pvname", "pv_config"), list(ntenum_config.items()))
 def test_field_change(pvname, enum_yaml_server, pv_config, ctx):
     pvname = enum_yaml_server.prefix + pvname
 

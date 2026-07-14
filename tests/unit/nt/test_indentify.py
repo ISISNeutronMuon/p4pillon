@@ -5,7 +5,7 @@ from p4pillon.nt.identify import NTType, id_nttype
 
 
 @pytest.mark.parametrize(
-    "input_val, expected_result",
+    ("input_val", "expected_result"),
     [
         (NTScalar("?"), NTType.NTSCALAR),
         (NTScalar("d"), NTType.NTSCALAR),

@@ -26,7 +26,7 @@ def ntenum_config():
     return ntenum_dict
 
 
-@pytest.fixture()
+@pytest.fixture
 def enum_yaml_server(ntenum_config) -> Server:
     """fixture that handles creation and desctruction of server for use during tests"""
     # NOTE this could be tidied up by moving the tests into classes and using
@@ -39,7 +39,7 @@ def enum_yaml_server(ntenum_config) -> Server:
     server.stop()
 
 
-@pytest.fixture()
+@pytest.fixture
 def yaml_server(ntscalar_config) -> Server:
     """fixture that handles creation and desctruction of server for use during tests"""
     # NOTE this could be tidied up by moving the tests into classes and using
@@ -52,7 +52,7 @@ def yaml_server(ntscalar_config) -> Server:
     server.stop()
 
 
-@pytest.fixture()
+@pytest.fixture
 def basic_server() -> Server:
     server = Server(
         prefix="TEST:",
@@ -61,7 +61,7 @@ def basic_server() -> Server:
     server.stop()
 
 
-@pytest.fixture()
+@pytest.fixture
 def ctx() -> Context:
     client_context = Context("pva")
     yield client_context

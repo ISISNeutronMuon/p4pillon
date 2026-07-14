@@ -101,6 +101,7 @@ extend-select = [
   "RET",   # flake8-return
   "PERF",  # perflint
   "LOG",   # flake8-logging
+  "PT",    # flake8-pytest-style
 ]
 ignore = [
   "B024", # Several base classes (BaseRule, Handler, Server) intentionally define
