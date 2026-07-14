@@ -85,25 +85,25 @@ line-length = 120
 
 [tool.ruff.lint]
 extend-select = [
-  "UP",    # pyupgrade
-  "I",     # isort
-  "B",     # flake8-bugbear
-  "ASYNC", # flake8-async
-  "SIM",   # flake8-simplify
-  "RUF",   # ruff-specific rules
   "ARG",   # flake8-unused-arguments
+  "ASYNC", # flake8-async
+  "B",     # flake8-bugbear
   "C4",    # flake8-comprehensions
-  "PTH",   # flake8-use-pathlib
-  "N",     # pep8-naming
-  "TRY",   # tryceratops
   "EM",    # flake8-errmsg
-  "S",     # flake8-bandit
-  "RET",   # flake8-return
-  "PERF",  # perflint
+  "I",     # isort
   "LOG",   # flake8-logging
+  "N",     # pep8-naming
+  "PERF",  # perflint
   "PT",    # flake8-pytest-style
-  "TC",    # flake8-type-checking
+  "PTH",   # flake8-use-pathlib
+  "RET",   # flake8-return
+  "RUF",   # ruff-specific rules
+  "S",     # flake8-bandit
+  "SIM",   # flake8-simplify
   "T20",   # flake8-print
+  "TC",    # flake8-type-checking
+  "TRY",   # tryceratops
+  "UP",    # pyupgrade
 ]
 ignore = [
   "B024", # Several base classes (BaseRule, Handler, Server) intentionally define
