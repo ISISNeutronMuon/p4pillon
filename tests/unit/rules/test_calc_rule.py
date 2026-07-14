@@ -40,7 +40,9 @@ class TestCalcRuleConfiguration:
         """A single variable name string is wrapped into a one-element list."""
         rule = CalcRule()
 
-        rule.set_calc({"calc_str": "pv[0]+10", "variables": "a:pv:name", "server": "fakeServer", "pv_name": "this:pv:name"})
+        rule.set_calc(
+            {"calc_str": "pv[0]+10", "variables": "a:pv:name", "server": "fakeServer", "pv_name": "this:pv:name"}
+        )
 
         assert rule._calc_str == "pv[0]+10"
         assert rule._variables == ["a:pv:name"]
