@@ -100,6 +100,7 @@ extend-select = [
   "S",     # flake8-bandit
   "RET",   # flake8-return
   "PERF",  # perflint
+  "LOG",   # flake8-logging
 ]
 ignore = [
   "B024", # Several base classes (BaseRule, Handler, Server) intentionally define
