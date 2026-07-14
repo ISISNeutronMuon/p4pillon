@@ -92,8 +92,10 @@ extend-select = [
   "SIM",   # flake8-simplify
   "RUF",   # ruff-specific rules
   "ARG",   # flake8-unused-arguments
+  "C4",    # flake8-comprehensions
+  "PTH",   # flake8-use-pathlib
+  "N",     # pep8-naming
 ]
-# Not yet enabled due to a backlog of pre-existing violations: N, C4, PTH
 ignore = [
   "B024", # Several base classes (BaseRule, Handler, Server) intentionally define
   "B027", # only optional, overridable hook methods with no required abstract methods.

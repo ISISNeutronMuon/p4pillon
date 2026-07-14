@@ -33,7 +33,7 @@ from tests.integration.thread.assertions import (
 root_dir = Path(__file__).parents[2]
 
 
-with open(f"{root_dir}/integration/ntscalar_config.yml") as f:
+with (root_dir / "integration" / "ntscalar_config.yml").open() as f:
     ntscalar_config = yaml.load(f, Loader=yaml.SafeLoader)
     f.close()
 

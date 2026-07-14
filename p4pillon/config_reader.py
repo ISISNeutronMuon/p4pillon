@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -28,7 +29,7 @@ def parse_config_file(filename: str, server: Server | None = None) -> dict[str, 
     Optionally add the pvs to a server if server != None
     """
     pvconfigs = {}
-    with open(filename, encoding="utf8") as f:
+    with Path(filename).open(encoding="utf8") as f:
         pvconfigs = yaml.load(f, yaml.SafeLoader)
 
     return parse_config(pvconfigs, server)

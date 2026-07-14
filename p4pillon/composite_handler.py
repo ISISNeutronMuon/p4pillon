@@ -15,11 +15,11 @@ from p4p.server import ServerOperation
 from p4pillon.server.raw import Handler, SharedPV
 
 
-class HandlerException(Exception):
+class HandlerError(Exception):
     """Exception raised for errors in the handler operations."""
 
 
-class AbortHandlerException(HandlerException):
+class AbortHandlerError(HandlerError):
     """Exception raised to abort the current operation in the handler."""
 
     def __init__(self, message: str = "Operation aborted"):
@@ -52,7 +52,7 @@ class CompositeHandler(Handler, OrderedDict):
         for _name, handler in self.items():
             try:
                 handler.put(pv, op)
-            except AbortHandlerException as e:
+            except AbortHandlerError as e:
                 errmsg = e.message
                 break
 
@@ -72,7 +72,7 @@ class CompositeHandler(Handler, OrderedDict):
         for handler in self.values():
             try:
                 handler.rpc(pv, op)
-            except AbortHandlerException as e:
+            except AbortHandlerError as e:
                 errmsg = e.message
                 break
 
@@ -83,7 +83,7 @@ class CompositeHandler(Handler, OrderedDict):
         for handler in self.values():
             handler.onFirstConnect(pv)
 
-    def onFirstConnect(self, pv: Value):
+    def onFirstConnect(self, pv: Value):  # noqa: N802 - deprecated camelCase alias, kept for backward compatibility
         self.on_first_connect(pv)
 
     def on_last_disconnect(self, pv: SharedPV):
@@ -91,7 +91,7 @@ class CompositeHandler(Handler, OrderedDict):
         for handler in self.values():
             handler.onLastDisconnect(pv)
 
-    def onLastDisconnect(self, pv: Value):
+    def onLastDisconnect(self, pv: Value):  # noqa: N802 - deprecated camelCase alias, kept for backward compatibility
         self.on_last_disconnect(pv)
 
     def close(self, pv: SharedPV):

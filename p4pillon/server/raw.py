@@ -63,7 +63,7 @@ class Handler(ABC):
         """
         op.done(error="Not supported")
 
-    def onFirstConnect(self, pv):
+    def onFirstConnect(self, pv):  # noqa: N802 - name required by the p4p Handler protocol
         """
         Called when the first Client channel is created.
 
@@ -71,7 +71,7 @@ class Handler(ABC):
         """
         pass
 
-    def onLastDisconnect(self, pv):
+    def onLastDisconnect(self, pv):  # noqa: N802 - name required by the p4p Handler protocol
         """
         Called when the last Client channel is closed.
 
@@ -151,7 +151,7 @@ class SharedPV(_SharedPV, ABC):
         self._unwrap = unwrap or (nt and nt.unwrap) or self._unwrap
 
         try:
-            V = self._wrap(value, **kwargs)
+            v = self._wrap(value, **kwargs)
         except Exception as exc:  # py3 will chain automatically, py2 won't
             raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kwargs}") from exc
 
@@ -159,9 +159,9 @@ class SharedPV(_SharedPV, ABC):
         # the Handler base class
         open_fn = _get_handler_attr(self._handler, "open")
         if open_fn is not None:
-            open_fn(V)
+            open_fn(v)
 
-        _SharedPV.open(self, V)
+        _SharedPV.open(self, v)
 
     def post(self, value, **kwargs):
         """Provide an update to the Value of this PV.
@@ -174,7 +174,7 @@ class SharedPV(_SharedPV, ABC):
         Common arguments include: timestamp= , severity= , and message= .
         """
         try:
-            V = self._wrap(value, **kwargs)
+            v = self._wrap(value, **kwargs)
         except Exception as exc:  # py3 will chain automatically, py2 won't
             raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kwargs}") from exc
 
@@ -182,9 +182,9 @@ class SharedPV(_SharedPV, ABC):
         # the Handler base class
         post_fn = _get_handler_attr(self._handler, "post")
         if post_fn is not None:
-            post_fn(self, V)
+            post_fn(self, v)
 
-        _SharedPV.post(self, V)
+        _SharedPV.post(self, v)
 
     def close(self, destroy=False):
         """Close PV, disconnecting any clients.

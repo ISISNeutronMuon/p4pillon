@@ -1,4 +1,3 @@
-import inspect
 import logging
 from unittest.mock import patch
 
@@ -7,12 +6,14 @@ import pytest
 from p4p import Type, Value
 from p4p.nt import NTScalar
 
-import p4pillon.rules as rules_module
 from p4pillon.definitions import AlarmSeverity
 from p4pillon.rules import (
+    AlarmNTEnumRule,
+    AlarmRule,
     BaseRule,
     CalcRule,
     ControlRule,
+    ReadOnlyRule,
     RulesFlow,
     ScalarToArrayWrapperRule,
     TimestampRule,
@@ -25,11 +26,13 @@ from p4pillon.utils import overwrite_unmarked
 # ScalarToArrayWrapperRule, whose name/nttypes are properties derived from the
 # rule it wraps rather than fixed class attributes.
 CONCRETE_RULE_CLASSES = [
-    getattr(rules_module, class_name)
-    for class_name in rules_module.__all__
-    if inspect.isclass(getattr(rules_module, class_name))
-    and issubclass(getattr(rules_module, class_name), BaseRule)
-    and getattr(rules_module, class_name) not in (BaseRule, ScalarToArrayWrapperRule)
+    AlarmNTEnumRule,
+    AlarmRule,
+    CalcRule,
+    ControlRule,
+    ReadOnlyRule,
+    TimestampRule,
+    ValueAlarmRule,
 ]
 
 
@@ -587,8 +590,8 @@ class TestCalcRule:
     def test_initialise_calc_rule(self):
         rule = CalcRule()
 
-        aServer = "fakeServer"
-        calc = {"calc_str": "pv[0]+10", "variables": "a:pv:name", "server": aServer, "pv_name": "this:pv:name"}
+        a_server = "fakeServer"
+        calc = {"calc_str": "pv[0]+10", "variables": "a:pv:name", "server": a_server, "pv_name": "this:pv:name"}
         rule.set_calc(calc)
         assert rule._calc_str == "pv[0]+10"
         assert type(rule._variables) is list

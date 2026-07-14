@@ -7,7 +7,7 @@ import unittest
 from collections import OrderedDict
 from unittest.mock import MagicMock
 
-from p4pillon.composite_handler import AbortHandlerException, CompositeHandler
+from p4pillon.composite_handler import AbortHandlerError, CompositeHandler
 
 
 class DummyHandler:
@@ -26,10 +26,10 @@ class DummyHandler:
     def rpc(self, pv, op):
         self.calls.append(("rpc", pv, op))
 
-    def onFirstConnect(self, pv):
+    def onFirstConnect(self, pv):  # noqa: N802 - name required by the p4p Handler protocol
         self.calls.append(("onFirstConnect", pv))
 
-    def onLastDisconnect(self, pv):
+    def onLastDisconnect(self, pv):  # noqa: N802 - name required by the p4p Handler protocol
         self.calls.append(("onLastDisconnect", pv))
 
     def close(self, pv):
@@ -93,7 +93,7 @@ class TestCompositeHandler(unittest.TestCase):
 
     def test_put_abort_exception(self):
         def abort_put(_pv, _op):
-            raise AbortHandlerException("abort!")
+            raise AbortHandlerError("abort!")
 
         self.h1.put = abort_put
         self.comp.put(self.pv, self.op)
@@ -118,7 +118,7 @@ class TestCompositeHandler(unittest.TestCase):
 
     def test_rpc_abort_exception(self):
         def abort_rpc(_pv, _op):
-            raise AbortHandlerException("rpc abort!")
+            raise AbortHandlerError("rpc abort!")
 
         self.h2.rpc = abort_rpc
         self.comp.rpc(self.pv, self.op)
@@ -135,7 +135,7 @@ class TestCompositeHandler(unittest.TestCase):
         comp = CompositeHandler()
         comp.on_first_connect(self.pv)  # Should not raise
 
-    def test_onFirstConnect_deprecated(self):
+    def test_on_first_connect_camel_case_deprecated(self):
         self.comp.onFirstConnect(self.pv)
         self.assertEqual(self.h1.calls[0], ("onFirstConnect", self.pv))
 
@@ -148,7 +148,7 @@ class TestCompositeHandler(unittest.TestCase):
         comp = CompositeHandler()
         comp.on_last_disconnect(self.pv)  # Should not raise
 
-    def test_onLastDisconnect_deprecated(self):
+    def test_on_last_disconnect_camel_case_deprecated(self):
         self.comp.onLastDisconnect(self.pv)
         self.assertEqual(self.h1.calls[0], ("onLastDisconnect", self.pv))
 

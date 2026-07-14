@@ -11,7 +11,7 @@ from p4pillon.nt import NTScalar
 from p4pillon.thread.sharednt import SharedNT as ThreadSharedNT
 
 
-class testMixedConcurrency(unittest.IsolatedAsyncioTestCase):
+class TestMixedConcurrency(unittest.IsolatedAsyncioTestCase):
     async def start_server(self):
         a = AsyncioSharedNT(nt=NTScalar("d"), initial=5.5)
         b = ThreadSharedNT(nt=NTScalar("d"), initial=9.9)

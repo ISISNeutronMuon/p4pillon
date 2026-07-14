@@ -24,7 +24,7 @@ root_dir = Path(__file__).parents[2]
 sys.path.append(str(root_dir))
 
 
-with open(f"{root_dir}/integration/ntenum_config.yml") as f:
+with (root_dir / "integration" / "ntenum_config.yml").open() as f:
     ntenum_config = yaml.load(f, Loader=yaml.SafeLoader)
     f.close()
 

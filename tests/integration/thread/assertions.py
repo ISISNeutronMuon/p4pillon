@@ -66,28 +66,28 @@ def assert_correct_control_config(pv_state: dict, pv_config: dict):
 
 
 def assert_correct_alarm_config(pv_state: dict, pv_config: dict):
-    valueAlarm_state = pv_state.get("valueAlarm")
+    value_alarm_state = pv_state.get("valueAlarm")
 
-    valueAlarm_config = pv_config.get("valueAlarm")
-    if valueAlarm_config is None:
+    value_alarm_config = pv_config.get("valueAlarm")
+    if value_alarm_config is None:
         # this occurs when the entry in the yaml file is present but nothing
         # listed within it
-        valueAlarm_config = {}
+        value_alarm_config = {}
 
     if pv_config["type"] == "DOUBLE":
         default_max, default_min = MAX_FLOAT, MIN_FLOAT
     else:
         default_max, default_min = MAX_INT32, MIN_INT32
 
-    assert valueAlarm_state.get("lowAlarmLimit") == valueAlarm_config.get("low_alarm", default_min)
-    assert valueAlarm_state.get("lowWarningLimit") == valueAlarm_config.get("low_warning", default_min)
-    assert valueAlarm_state.get("highAlarmLimit") == valueAlarm_config.get("high_alarm", default_max)
-    assert valueAlarm_state.get("highWarningLimit") == valueAlarm_config.get("high_warning", default_max)
-    assert valueAlarm_state.get("lowAlarmSeverity") == AlarmSeverity.MAJOR_ALARM.value
-    assert valueAlarm_state.get("lowWarningSeverity") == AlarmSeverity.MINOR_ALARM.value
-    assert valueAlarm_state.get("highAlarmSeverity") == AlarmSeverity.MAJOR_ALARM.value
-    assert valueAlarm_state.get("highWarningSeverity") == AlarmSeverity.MINOR_ALARM.value
-    assert valueAlarm_state.get("hysteresis") == 0
+    assert value_alarm_state.get("lowAlarmLimit") == value_alarm_config.get("low_alarm", default_min)
+    assert value_alarm_state.get("lowWarningLimit") == value_alarm_config.get("low_warning", default_min)
+    assert value_alarm_state.get("highAlarmLimit") == value_alarm_config.get("high_alarm", default_max)
+    assert value_alarm_state.get("highWarningLimit") == value_alarm_config.get("high_warning", default_max)
+    assert value_alarm_state.get("lowAlarmSeverity") == AlarmSeverity.MAJOR_ALARM.value
+    assert value_alarm_state.get("lowWarningSeverity") == AlarmSeverity.MINOR_ALARM.value
+    assert value_alarm_state.get("highAlarmSeverity") == AlarmSeverity.MAJOR_ALARM.value
+    assert value_alarm_state.get("highWarningSeverity") == AlarmSeverity.MINOR_ALARM.value
+    assert value_alarm_state.get("hysteresis") == 0
 
 
 def assert_pv_in_major_alarm_state(pvname: str, ctx: Context):

@@ -36,11 +36,11 @@ else:
                 value = self.Value(self.type, {"value": value})
         else:
             # index or string
-            V = self.type()
+            v = self.type()
             if choices is not None:
-                V["value.choices"] = choices
-            self.assign(V, value)
-            value = V
+                v["value.choices"] = choices
+            self.assign(v, value)
+            value = v
 
         # pylint: disable=W0212
         self._choices = value["value.choices"] or self._choices  # pyright: ignore[reportOptionalSubscript]

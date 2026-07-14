@@ -31,7 +31,7 @@ class NTScalarMatch(NTScalar):
     """
 
     @staticmethod
-    def buildType(valtype, extra=None, *args, **kws):
+    def buildType(valtype, extra=None, *args, **kws):  # noqa: N802 - overrides p4p's NTScalar.buildType
         """Build a Type
 
         :param str valtype: A type code to be used with the 'value' field.  See :ref:`valuecodes`
