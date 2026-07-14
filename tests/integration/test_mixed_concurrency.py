@@ -30,11 +30,15 @@ class testMixedConcurrency(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         if sys.version_info >= (3, 11, 0):
             async with asyncio.timeout(delay=2):
-                asyncio.create_task(self.start_server())
+                self._server_task = asyncio.create_task(self.start_server())
                 await asyncio.sleep(0.1)
         else:
-            asyncio.create_task(self.start_server())
+            self._server_task = asyncio.create_task(self.start_server())
             await asyncio.sleep(0.1)
+
+    async def asyncTearDown(self):
+        self._stop_event.set()
+        await self._server_task
 
     async def test_asyncio(self):
         context = AsyncioContext("pva")
@@ -46,12 +50,8 @@ class testMixedConcurrency(unittest.IsolatedAsyncioTestCase):
 
         assert value == 5.5
 
-        self._stop_event.set()
-
     def test_thread(self):
         context = ThreadContext("pva")
         value = context.get("demo:b", timeout=1)
 
         assert value == 9.9
-
-        self._stop_event.set()
