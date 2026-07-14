@@ -94,9 +94,11 @@ def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
 
     # Check that type and description are specified, absence is a syntax error
     if "type" not in pvdetails:
-        raise SyntaxError(f"'type' not specified in record {pvname}")
+        msg = f"'type' not specified in record {pvname}"
+        raise SyntaxError(msg)
     if "description" not in pvdetails:
-        raise SyntaxError(f"'description' not specified in record {pvname}")
+        msg = f"'description' not specified in record {pvname}"
+        raise SyntaxError(msg)
 
     initial = pvdetails.get("initial")
     array_size = pvdetails.get("array_size", 1)
@@ -109,7 +111,8 @@ def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
         elif pvtype == "STRING":
             initial = [""] * array_size if array_size > 1 else ""
         else:
-            raise SyntaxError(f"for PV {pvname} of type '{pvtype}' an initial value must be supplied")
+            msg = f"for PV {pvname} of type '{pvtype}' an initial value must be supplied"
+            raise SyntaxError(msg)
 
     if isinstance(initial, list):
         pvrecipe = PVScalarArrayRecipe(PVTypes[pvdetails["type"]], pvdetails["description"], initial)

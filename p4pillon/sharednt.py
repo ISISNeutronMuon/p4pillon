@@ -33,6 +33,8 @@ from p4pillon.server.raw import Handler, SharedPV
 
 logger = logging.getLogger(__name__)
 
+_HANDLER_DECORATORS_UNSUPPORTED_MSG = "Handler decorators are not currently compatible with multiple handlers."
+
 
 def is_type_subset(fullset: Type, subset: Type) -> bool:
     """Check if the subset is a part of the fullset."""
@@ -110,7 +112,8 @@ class SharedNT(SharedPV, ABC):
             try:
                 nttype = kwargs["nt"].type
             except AttributeError as exc:
-                raise NotImplementedError("Unable to determine Type of SharedNT") from exc
+                msg = "Unable to determine Type of SharedNT"
+                raise NotImplementedError(msg) from exc
         else:
             if isinstance(kwargs["initial"], Value):
                 nttype = kwargs["initial"].type()
@@ -137,32 +140,32 @@ class SharedNT(SharedPV, ABC):
     # Re-enable when / if possible
 
     @property
-    def onFirstConnect(self):  # noqa: N802 - name mirrors the p4p Handler protocol
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+    def onFirstConnect(self):
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
-    def onLastDisconnect(self):  # noqa: N802 - name mirrors the p4p Handler protocol
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+    def onLastDisconnect(self):
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def on_open(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def on_post(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def put(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def rpc(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def on_close(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     ## Alternative PEP 8 comaptible handler decorators
     # @property

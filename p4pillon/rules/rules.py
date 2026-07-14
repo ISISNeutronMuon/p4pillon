@@ -134,10 +134,12 @@ def check_applicable(func):
             elif isinstance(args[1], ServOpWrap):
                 newpvstate = args[1].value().raw
             else:
-                raise TypeError("Type of second argument must be either Value or ServerOperation, is", type(args[1]))
+                msg = f"Type of second argument must be either Value or ServerOperation, is {type(args[1])}"
+                raise TypeError(msg)
 
         else:
-            raise TypeError(f"Expected 1 or 2 arguments, received {len(args)}")
+            msg = f"Expected 1 or 2 arguments, received {len(args)}"
+            raise TypeError(msg)
 
         # Then check if applicable and if not return a CONTINUE to short-circuit this rule
         if not self.is_applicable(newpvstate):

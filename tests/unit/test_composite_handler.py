@@ -26,10 +26,10 @@ class DummyHandler:
     def rpc(self, pv, op):
         self.calls.append(("rpc", pv, op))
 
-    def onFirstConnect(self, pv):  # noqa: N802 - name required by the p4p Handler protocol
+    def onFirstConnect(self, pv):
         self.calls.append(("onFirstConnect", pv))
 
-    def onLastDisconnect(self, pv):  # noqa: N802 - name required by the p4p Handler protocol
+    def onLastDisconnect(self, pv):
         self.calls.append(("onLastDisconnect", pv))
 
     def close(self, pv):
@@ -93,7 +93,7 @@ class TestCompositeHandler(unittest.TestCase):
 
     def test_put_abort_exception(self):
         def abort_put(_pv, _op):
-            raise AbortHandlerError("abort!")
+            raise AbortHandlerError("abort!")  # noqa: EM101 - fixed message asserted on below
 
         self.h1.put = abort_put
         self.comp.put(self.pv, self.op)
@@ -118,7 +118,7 @@ class TestCompositeHandler(unittest.TestCase):
 
     def test_rpc_abort_exception(self):
         def abort_rpc(_pv, _op):
-            raise AbortHandlerError("rpc abort!")
+            raise AbortHandlerError("rpc abort!")  # noqa: EM101, TRY003 - fixed message asserted on below
 
         self.h2.rpc = abort_rpc
         self.comp.rpc(self.pv, self.op)

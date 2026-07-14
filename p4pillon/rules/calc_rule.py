@@ -115,7 +115,7 @@ class CalcRule(BaseScalarRule):
                 pvs.append(val)
             except Exception:
                 # If there's an error getting the value of a pv return None
-                logging.error("Failed to get pv %s", pv_name)
+                logging.exception("Failed to get pv %s", pv_name)
                 return None
 
         return pvs

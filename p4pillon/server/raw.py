@@ -63,7 +63,7 @@ class Handler(ABC):
         """
         op.done(error="Not supported")
 
-    def onFirstConnect(self, pv):  # noqa: N802 - name required by the p4p Handler protocol
+    def onFirstConnect(self, pv):
         """
         Called when the first Client channel is created.
 
@@ -71,7 +71,7 @@ class Handler(ABC):
         """
         pass
 
-    def onLastDisconnect(self, pv):  # noqa: N802 - name required by the p4p Handler protocol
+    def onLastDisconnect(self, pv):
         """
         Called when the last Client channel is closed.
 
@@ -153,7 +153,8 @@ class SharedPV(_SharedPV, ABC):
         try:
             v = self._wrap(value, **kwargs)
         except Exception as exc:  # py3 will chain automatically, py2 won't
-            raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kwargs}") from exc
+            msg = f"Unable to wrap {value} with {self._wrap} and {kwargs}"
+            raise ValueError(msg) from exc
 
         # Guard goes here because we can have handlers that don't inherit from
         # the Handler base class
@@ -176,7 +177,8 @@ class SharedPV(_SharedPV, ABC):
         try:
             v = self._wrap(value, **kwargs)
         except Exception as exc:  # py3 will chain automatically, py2 won't
-            raise ValueError(f"Unable to wrap {value} with {self._wrap} and {kwargs}") from exc
+            msg = f"Unable to wrap {value} with {self._wrap} and {kwargs}"
+            raise ValueError(msg) from exc
 
         # Guard goes here because we can have handlers that don't inherit from
         # the Handler base class

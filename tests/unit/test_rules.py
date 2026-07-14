@@ -10,7 +10,6 @@ from p4pillon.definitions import AlarmSeverity
 from p4pillon.rules import (
     AlarmNTEnumRule,
     AlarmRule,
-    BaseRule,
     CalcRule,
     ControlRule,
     ReadOnlyRule,
@@ -25,6 +24,11 @@ from p4pillon.utils import overwrite_unmarked
 # Concrete Rules exported from p4pillon.rules -- excludes BaseRule itself and
 # ScalarToArrayWrapperRule, whose name/nttypes are properties derived from the
 # rule it wraps rather than fixed class attributes.
+#
+# Deliberately hand-rolled rather than derived from p4pillon.rules.__all__: a
+# derived list still needs its own exclusion set for non-rule/abstract names,
+# so it doesn't remove the upkeep, just moves it. Update this list by hand
+# when adding or removing a concrete rule.
 CONCRETE_RULE_CLASSES = [
     AlarmNTEnumRule,
     AlarmRule,

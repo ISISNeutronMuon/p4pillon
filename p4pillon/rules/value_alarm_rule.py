@@ -86,7 +86,8 @@ class ValueAlarmRule(BaseGatherableRule):
             elif alarm_type.startswith("high"):
                 op = operator.ge
             else:
-                raise SyntaxError(f"CheckAlarms/alarmStateCheck: do not know how to handle {alarm_type}")
+                msg = f"CheckAlarms/alarmStateCheck: do not know how to handle {alarm_type}"
+                raise SyntaxError(msg)
 
         severity = pvstate[f"valueAlarm.{alarm_type}Severity"]
         if op(pvstate["value"], pvstate[f"valueAlarm.{alarm_type}Limit"]) and severity:
