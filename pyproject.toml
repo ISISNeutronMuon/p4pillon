@@ -97,6 +97,7 @@ extend-select = [
   "N",     # pep8-naming
   "TRY",   # tryceratops
   "EM",    # flake8-errmsg
+  "S",     # flake8-bandit
 ]
 ignore = [
   "B024", # Several base classes (BaseRule, Handler, Server) intentionally define
@@ -110,5 +111,7 @@ ignore = [
 "p4pillon/server/raw.py" = ["N802"]
 "p4pillon/sharednt.py" = ["N802"]
 "tests/unit/test_composite_handler.py" = ["N802"]
+# assert is the standard way to make test assertions.
+"tests/**" = ["S101"]
 
 

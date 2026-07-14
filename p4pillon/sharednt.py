@@ -262,7 +262,7 @@ class SharedNT(SharedPV, ABC):
 
         # Check if we need special handling for array data
         if wrap_for_array and is_scalararray(nttype):
-            assert isinstance(instance, BaseScalarRule | BaseGatherableRule)
+            assert isinstance(instance, BaseScalarRule | BaseGatherableRule)  # noqa: S101
             composed_instance = ComposeableRulesHandler(ScalarToArrayWrapperRule(instance))
         else:
             composed_instance = ComposeableRulesHandler(instance)

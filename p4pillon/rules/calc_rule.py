@@ -138,6 +138,6 @@ class CalcRule(BaseScalarRule):
 
         node = ast.parse(self._calc_str, mode="eval")
 
-        newpvstate["value"] = eval(compile(node, "<string>", "eval"))
+        newpvstate["value"] = eval(compile(node, "<string>", "eval"))  # noqa: S307
 
         return ret_val
