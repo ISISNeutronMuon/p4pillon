@@ -104,15 +104,9 @@ def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
         # If it's a number set it to 0, if it's a string make it empty
         # If it's something else an initial value needs to be supplied
         if pvtype == "DOUBLE" or pvtype == "INTEGER":
-            if array_size > 1:
-                initial = [0] * array_size
-            else:
-                initial = 0
+            initial = [0] * array_size if array_size > 1 else 0
         elif pvtype == "STRING":
-            if array_size > 1:
-                initial = [""] * array_size
-            else:
-                initial = ""
+            initial = [""] * array_size if array_size > 1 else ""
         else:
             raise SyntaxError(f"for PV {pvname} of type '{pvtype}' an initial value must be supplied")
 

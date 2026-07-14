@@ -1,7 +1,6 @@
 import asyncio
 import sys
 import unittest
-from asyncio import sleep
 
 from p4p.client.asyncio import Context as AsyncioContext
 from p4p.client.thread import Context as ThreadContext
@@ -17,7 +16,7 @@ class testMixedConcurrency(unittest.IsolatedAsyncioTestCase):
         a = AsyncioSharedNT(nt=NTScalar("d"), initial=5.5)
         b = ThreadSharedNT(nt=NTScalar("d"), initial=9.9)
 
-        self.running = True
+        self._stop_event = asyncio.Event()
         with Server(
             providers=[
                 {
@@ -26,8 +25,7 @@ class testMixedConcurrency(unittest.IsolatedAsyncioTestCase):
                 }
             ]
         ):
-            while self.running:
-                await sleep(0.1)
+            await self._stop_event.wait()
 
     async def asyncSetUp(self):
         if sys.version_info >= (3, 11, 0):
@@ -48,7 +46,7 @@ class testMixedConcurrency(unittest.IsolatedAsyncioTestCase):
 
         assert value == 5.5
 
-        self.running = False
+        self._stop_event.set()
 
     def test_thread(self):
         context = ThreadContext("pva")
@@ -56,4 +54,4 @@ class testMixedConcurrency(unittest.IsolatedAsyncioTestCase):
 
         assert value == 9.9
 
-        self.running = False
+        self._stop_event.set()

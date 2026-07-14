@@ -83,10 +83,7 @@ class Server(ABC):
         if not pv_name.startswith(self.prefix):
             pv_name = self.prefix + pv_name
 
-        if isinstance(pv, BasePVRecipe):
-            returnval = pv.create_pv(pv_name)
-        else:
-            returnval = pv
+        returnval = pv.create_pv(pv_name) if isinstance(pv, BasePVRecipe) else pv
 
         self._pvs[pv_name] = returnval
 

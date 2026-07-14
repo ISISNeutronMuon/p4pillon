@@ -30,7 +30,7 @@ class NTScalarMatch(NTScalar):
     """
 
     @staticmethod
-    def buildType(valtype, extra=[], *args, **kws):
+    def buildType(valtype, extra=None, *args, **kws):
         """Build a Type
 
         :param str valtype: A type code to be used with the 'value' field.  See :ref:`valuecodes`
@@ -41,6 +41,8 @@ class NTScalarMatch(NTScalar):
         :param bool form: Include ``display.form`` instead of the deprecated ``display.format``.
         :returns: A :py:class:`Type`
         """
+        if extra is None:
+            extra = []
         isarray = valtype[:1] == "a"
         fields = [
             ("value", valtype),

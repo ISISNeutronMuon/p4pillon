@@ -228,10 +228,7 @@ class BaseRule(ABC):
         if "value" not in test_fields:
             test_fields.append("value")
 
-        if not any(newpvstate.changed(x) for x in test_fields):
-            return False
-
-        return True
+        return any(newpvstate.changed(x) for x in test_fields)
 
     @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
@@ -408,7 +405,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
         return value
 
     def _apply_gather(self, array_value: Value, scalar_value):
-        if self.fields and all(x in array_value.keys() for x in self.fields):
+        if self.fields and all(x in array_value for x in self.fields):
             overwrite_marked(array_value, scalar_value, self.fields)
 
     @check_applicable_init
