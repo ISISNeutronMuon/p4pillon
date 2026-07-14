@@ -28,10 +28,10 @@ class DummyHandler:
     def rpc(self, pv, op):
         self.calls.append(("rpc", pv, op))
 
-    def onFirstConnect(self, pv):
+    def onFirstConnect(self, pv):  # noqa: N802 - mandated by the p4p Handler protocol
         self.calls.append(("onFirstConnect", pv))
 
-    def onLastDisconnect(self, pv):
+    def onLastDisconnect(self, pv):  # noqa: N802 - mandated by the p4p Handler protocol
         self.calls.append(("onLastDisconnect", pv))
 
     def close(self, pv):

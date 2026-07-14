@@ -1,6 +1,6 @@
 """Shared internal helpers for `.static`/`.dynamic`'s record providers."""
 
-from collections.abc import Iterator
+from collections.abc import Collection, Iterator
 
 __all__ = ()
 
@@ -12,7 +12,7 @@ class _KeysContainerMixin:
     `IOCRecordProvider` are backed by) exposes no dunders of its own.
     """
 
-    def _keys(self) -> Iterator[str]:
+    def _keys(self) -> Collection[str]:
         raise NotImplementedError
 
     def __contains__(self, name: str) -> bool:

@@ -6,7 +6,7 @@ docstring for the overall rationale.
 """
 
 import uuid
-from collections.abc import Iterator
+from collections.abc import Collection
 
 from p4p.server import DynamicProvider as _DynamicProvider
 from p4p.server import StaticProvider as _StaticProvider
@@ -67,7 +67,7 @@ class DynamicRecordFields:
         self._registry: dict[str, RegistryEntry] = registry
         self._pv_factory: type[_SharedPVBase] | None = pv_factory
 
-    def testChannel(self, name: str) -> bool:
+    def testChannel(self, name: str) -> bool:  # noqa: N802 - mandated by the p4p DynamicProvider protocol
         """Whether `name` is a "<basename>.<FIELD>" for a `basename` known to
         `registry` and a `field` that applies to its `valtype`. Part of the
         `~p4p.server.DynamicProvider` handler protocol.
@@ -80,7 +80,11 @@ class DynamicRecordFields:
             return False
         return _field_applies(field, entry["valtype"])
 
-    def makeChannel(self, name: str, peer: str) -> _SharedPVBase | None:
+    def makeChannel(  # noqa: N802 - mandated by the p4p DynamicProvider protocol
+        self,
+        name: str,
+        peer: str,  # noqa: ARG002 - peer unused, see docstring
+    ) -> _SharedPVBase | None:
         """Build the "<basename>.<FIELD>" sub-PV for `name`, or `None` if
         `testChannel` would reject it. `peer` is unused -- every field's
         initial value is the same regardless of which client connects. Part
@@ -214,7 +218,7 @@ class IOCRecordProvider(_KeysContainerMixin):
         self._registry.pop(name, None)
         self._static.remove(name)
 
-    def _keys(self) -> Iterator[str]:
+    def _keys(self) -> Collection[str]:
         """Base PV names -- mirrors the internal `StaticProvider`, not the
         "<name>.<FIELD>" registry (see the class docstring: those sub-PVs
         aren't enumerable here, only servable)."""
@@ -246,9 +250,10 @@ def _check_pv_factory_is_safe(pv_factory: type[_SharedPVBase]) -> None:
     # naming asyncio.SharedPV directly, so any future loop-requiring flavor
     # is caught the same way.
     if isinstance(pv_factory, type) and getattr(pv_factory, "_requires_running_loop", False):
-        raise ValueError(
+        msg = (
             f"pv_factory={pv_factory.__name__} is not safe for DynamicRecordFields: makeChannel() is "
             "always called by the server's own internal thread, never the thread "
             "running an asyncio event loop, so it can never construct one. Use "
             "p4pillon.server.thread.SharedPV (the default) instead."
         )
+        raise ValueError(msg)

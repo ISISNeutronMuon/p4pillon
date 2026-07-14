@@ -147,11 +147,11 @@ class SharedNTMixin(ABC):
     # Re-enable when / if possible
 
     @property
-    def onFirstConnect(self):
+    def onFirstConnect(self):  # noqa: N802 - mandated by the p4p Handler protocol
         raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
-    def onLastDisconnect(self):
+    def onLastDisconnect(self):  # noqa: N802 - mandated by the p4p Handler protocol
         raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property

@@ -7,7 +7,8 @@ dict's base PVs are served by whatever `~p4p.server.StaticProvider`
 `p4pillon.server.records` package docstring for the overall rationale.
 """
 
-from typing import Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from p4p.server import DynamicProvider as _DynamicProvider
 from p4p.server import Server as _Server
@@ -15,24 +16,33 @@ from p4p.server import Server as _Server
 from .dynamic import DynamicRecordFields, _anonymous_dynamic_provider
 from .fields import RegistryEntry, _resolve_valtype_and_description
 
+if TYPE_CHECKING:
+    from p4p.server.raw import SharedPV as _SharedPVBase
+
 __all__ = ("IOCRecordServer",)
 
+_T = TypeVar("_T")
 
-def _with_order(item: Any, order: int | None) -> Any:
+
+def _with_order(item: _T, order: int | None) -> tuple[_T, int] | _T:
     # p4p.server.Server's providers= entries are either a bare provider or a
     # (provider, order) tuple -- reattach whichever `order` this entry came
     # in with (or none) to each provider it expands to.
     return (item, order) if order is not None else item
 
 
-def _dynamic_fields_provider(provider: Any) -> _DynamicProvider | None:
+def _dynamic_fields_provider(provider: object) -> _DynamicProvider | None:
     # Builds the *additional* DynamicRecordFields-backed provider for a
     # plain-dict entry's "<name>.<FIELD>" sub-PVs (see the class docstring
     # below). Anything that isn't a plain dict needs no such extra provider.
-    if not hasattr(provider, "items"):
+    if not isinstance(provider, Mapping):
         return None
+    # isinstance narrows to a bare Mapping -- the key/value types are our own
+    # documented contract (see the class docstring), not something the runtime
+    # check can verify.
+    mapping = cast("Mapping[str, _SharedPVBase]", provider)
     registry: dict[str, RegistryEntry] = {}
-    for name, pv in provider.items():
+    for name, pv in mapping.items():
         valtype, description = _resolve_valtype_and_description(pv, None)
         registry[name] = {"valtype": valtype, "description": description}
     return _anonymous_dynamic_provider(DynamicRecordFields(registry))
@@ -76,6 +86,8 @@ class IOCRecordServer(_Server):
     """
 
     def __init__(self, providers: list[Any], isolate: bool = False, **kws: Any) -> None:
+        # **kws is forwarded verbatim to p4p.server.Server.__init__ -- its
+        # signature isn't ours to narrow.
         # Referenced only to keep each DynamicProvider built here alive for
         # the Server's lifetime -- Server itself only does that for the
         # plain StaticProviders it builds from a bare dict, not for provider

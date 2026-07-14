@@ -279,6 +279,9 @@ def _menu_pv(choices: list[str], default_name: str, override: str | None) -> Val
 
 
 def _scalar_pv(valtype: str, default: Any, override: Any) -> Value:
+    # default/override are whatever Python-native type valtype's NTScalar
+    # wraps (str, int, float, bool, ...) -- inherently dynamic, not worth a
+    # union that has to track every valtype this ever supports.
     return _scalar_nt(valtype).wrap(default if override is None else override)
 
 
@@ -290,18 +293,24 @@ _SCALAR_LIKE_NT_TYPES: frozenset[NTType] = frozenset((NTType.NTSCALAR, NTType.NT
 
 
 def _raise_rtyp_not_inferrable(desc: str) -> NoReturn:
-    raise ValueError(f"Cannot infer RTYP for {desc}; pass fields={{'RTYP': ...}} explicitly.")
+    msg = f"Cannot infer RTYP for {desc}; pass fields={{'RTYP': ...}} explicitly."
+    raise ValueError(msg)
 
 
-def _raw_current_or_none(pv: _SharedPVBase) -> Any | None:
+def _raw_current_or_none(pv: _SharedPVBase) -> Value | None:
     # Best-effort raw Value of pv's live current(), for when pv.nt is None.
-    # None means "unknown" (not open()'d yet, or current() itself failed).
+    # None means "unknown": not open()'d yet, current() itself failed, or
+    # current() returned something we can't actually trace back to a real
+    # Value (e.g. a hand-rolled unwrap= with no `.raw`).
     # Shared by _check_rtyp_inferrable and _description_of_pv.
     try:
         current = pv.current()
     except Exception:
         return None
-    return getattr(current, "raw", current)
+    # p4p's own NT wrappers guarantee `.raw` is a real Value; a hand-rolled
+    # unwrap= makes no such promise (see test_rtyp_check_tolerates_non_value_unwrap).
+    raw = getattr(current, "raw", current)
+    return raw if isinstance(raw, Value) else None
 
 
 def _description_of_pv(pv: _SharedPVBase) -> str:
@@ -311,16 +320,9 @@ def _description_of_pv(pv: _SharedPVBase) -> str:
         return ""
 
     raw = _raw_current_or_none(pv)
-    if raw is None:
+    if raw is None or "display.description" not in raw:
         return ""
-    try:
-        if "display.description" not in raw:
-            return ""
-        return raw.get("display.description", "") or ""
-    except TypeError:
-        # raw isn't Value-like (e.g. a hand-rolled unwrap= returning
-        # something else).
-        return ""
+    return raw.get("display.description", "") or ""
 
 
 def _check_rtyp_inferrable(pv: _SharedPVBase) -> None:

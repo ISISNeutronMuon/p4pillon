@@ -5,7 +5,7 @@ registry-driven alternative, `.server` for `IOCRecordServer` (which uses
 `p4pillon.server.records` package docstring for the overall rationale.
 """
 
-from collections.abc import Iterator
+from collections.abc import Collection
 
 from p4p.server import StaticProvider
 from p4p.server.raw import SharedPV as _SharedPVBase
@@ -57,7 +57,7 @@ class StaticRecordProvider(_KeysContainerMixin, StaticProvider):
     an update.
     """
 
-    def __init__(self, name: str | None = None):
+    def __init__(self, name: str | None = None) -> None:
         super().__init__(name)
         # name -> {fieldname: field pv}, for the sub-PVs actually added (may
         # be fewer than FIELD_NAMES, e.g. ADEL/MDEL omitted for a
@@ -121,5 +121,5 @@ class StaticRecordProvider(_KeysContainerMixin, StaticProvider):
                 super().remove(f"{name}.{fieldname}")
         super().remove(name)
 
-    def _keys(self) -> Iterator[str]:
+    def _keys(self) -> Collection[str]:
         return self.keys()

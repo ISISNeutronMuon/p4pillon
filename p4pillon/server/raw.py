@@ -64,7 +64,7 @@ class Handler(ABC):
         """
         op.done(error="Not supported")
 
-    def onFirstConnect(self, pv):
+    def onFirstConnect(self, pv):  # noqa: N802 - mandated by the p4p Handler protocol
         """
         Called when the first Client channel is created.
 
@@ -72,7 +72,7 @@ class Handler(ABC):
         """
         pass
 
-    def onLastDisconnect(self, pv):
+    def onLastDisconnect(self, pv):  # noqa: N802 - mandated by the p4p Handler protocol
         """
         Called when the last Client channel is closed.
 

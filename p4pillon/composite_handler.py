@@ -85,7 +85,7 @@ class CompositeHandler(Handler, OrderedDict):
         for handler in self.values():
             handler.onFirstConnect(pv)
 
-    def onFirstConnect(self, pv: Value):
+    def onFirstConnect(self, pv: Value):  # noqa: N802 - mandated by the p4p Handler protocol
         self.on_first_connect(pv)
 
     def on_last_disconnect(self, pv: SharedPV):
@@ -93,7 +93,7 @@ class CompositeHandler(Handler, OrderedDict):
         for handler in self.values():
             handler.onLastDisconnect(pv)
 
-    def onLastDisconnect(self, pv: Value):
+    def onLastDisconnect(self, pv: Value):  # noqa: N802 - mandated by the p4p Handler protocol
         self.on_last_disconnect(pv)
 
     def close(self, pv: SharedPV):

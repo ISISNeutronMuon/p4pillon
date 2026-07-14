@@ -113,12 +113,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# onFirstConnect/onLastDisconnect are mandated by the p4p Handler protocol and
-# cannot be renamed to snake_case.
-"p4pillon/composite_handler.py" = ["N802"]
-"p4pillon/server/raw.py" = ["N802"]
-"p4pillon/sharednt.py" = ["N802"]
-"tests/unit/test_composite_handler.py" = ["N802"]
 # assert is the standard way to make test assertions.
 "tests/**" = ["S101"]
 # Examples are demo scripts meant to print output to the console for the user running them.
