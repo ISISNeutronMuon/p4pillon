@@ -13,14 +13,16 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from enum import IntEnum, auto
 from functools import wraps
-from typing import Any  # Hack to type hint number types
+from typing import TYPE_CHECKING, Any, ClassVar  # Hack to type hint number types
 
 from p4p import Type, Value
-from p4p.server import ServerOperation
 from p4p.server.raw import ServOpWrap
 
 from p4pillon.nt.identify import NTType
 from p4pillon.utils import overwrite_marked
+
+if TYPE_CHECKING:
+    from p4p.server import ServerOperation
 
 logger = logging.getLogger(__name__)
 
@@ -134,10 +136,12 @@ def check_applicable(func):
             elif isinstance(args[1], ServOpWrap):
                 newpvstate = args[1].value().raw
             else:
-                raise TypeError("Type of second argument must be either Value or ServerOperation, is", type(args[1]))
+                msg = f"Type of second argument must be either Value or ServerOperation, is {type(args[1])}"
+                raise TypeError(msg)
 
         else:
-            raise TypeError(f"Expected 1 or 2 arguments, received {len(args)}")
+            msg = f"Expected 1 or 2 arguments, received {len(args)}"
+            raise TypeError(msg)
 
         # Then check if applicable and if not return a CONTINUE to short-circuit this rule
         if not self.is_applicable(newpvstate):
@@ -163,22 +167,22 @@ class BaseRule(ABC):
     # These class variables are required to support introspection by NTScalar.
     # The intention is that they will be overridden in derived classes.
 
-    name: str | None = None
-    """ A string setting the name of the class. None is used to indicate it is unset. 
-        This name is used to access the Handler / Rule through the CompositeHandler. 
+    name: ClassVar[str | None] = None
+    """ A string setting the name of the class. None is used to indicate it is unset.
+        This name is used to access the Handler / Rule through the CompositeHandler.
         It also provides a human-readable name for the rule used in error and debug messages
         This variable MUST be set appropriately in each derived class."""
 
-    nttypes: list[SupportedNTTypes] | None = None
-    """ 
+    nttypes: ClassVar[list[SupportedNTTypes] | None] = None
+    """
     A list of SupportedNTTypes. This may be used to restict a Rule to only apply to the
     specified NTTypes, e.g. NTScalar and NTScalarArray. In general use of fields should be
-    preferred. At this time an empty list signal thats the Rule may apply to all types; 
-    this may be revised in future. This may be made more explicit through the use of 
+    preferred. At this time an empty list signal thats the Rule may apply to all types;
+    this may be revised in future. This may be made more explicit through the use of
     SupportedNTTypes.ALL.
     """
 
-    fields: list[str] | None = None
+    fields: ClassVar[list[str] | None] = None
     """
     Fields required to be present for the Rule to apply. For example, a timestamp Rule
     requires that there be a timeStamp field. Currently this is a list of strings, but
@@ -188,13 +192,13 @@ class BaseRule(ABC):
     have been changed.
     """
 
-    wrap_for_array = False
+    wrap_for_array: ClassVar[bool] = False
     """
     Signals that a Rule needs to use the ScalarToArrayWrapperRule class to make it applicable
     to an NTScalarArray.
     """
 
-    add_automatically = True
+    add_automatically: ClassVar[bool] = True
     """
     Signals that a Rule is able to fully automatically configure itself. Generally, if a
     Rule requires constructor settings to function it must set this to False.
@@ -231,7 +235,7 @@ class BaseRule(ABC):
         return any(newpvstate.changed(x) for x in test_fields)
 
     @check_applicable_init
-    def init_rule(self, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
+    def init_rule(self, _newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
         """
         Rule that only needs to consider the potential future state of a PV.
         Consider implementing if this rule could apply to a newly initialised PV.
@@ -241,7 +245,7 @@ class BaseRule(ABC):
         return RulesFlow.CONTINUE
 
     @check_applicable_post
-    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
+    def post_rule(self, _oldpvstate: Value, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
         """
         Rule that needs to consider the current and potential future state of a PV.
         Usually this will involve a post where the oldpvstate is actually the current
@@ -356,9 +360,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
         val_aspy = arrayval.type().aspy()
         val_type = dict(val_aspy[2])  # extract the actual structure recipe
         val_type["value"] = val_type["value"][1:]  # change the value type to a scalar
-        val_type = list(val_type.items())  # back to a list
-
-        return val_type
+        return list(val_type.items())  # back to a list
 
     def _value_without_value(self, arrayval: Value, index: int | None = None) -> dict[str, Any]:
         # It would be straightforward to use arrayval.todict() but the value

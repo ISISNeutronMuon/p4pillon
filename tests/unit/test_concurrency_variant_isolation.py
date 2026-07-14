@@ -46,7 +46,7 @@ def test_thread_pvrecipe_builds_thread_sharedpv():
     backed by p4p's thread SharedPV, not the asyncio one."""
     from p4pillon.thread.pvrecipe import PVScalarRecipe
 
-    pv = PVScalarRecipe(PVTypes.DOUBLE, "test", 1.0).create_pv("X:test:thread")
+    pv = PVScalarRecipe(PVTypes.DOUBLE, "test", 1.0).create_pv()
 
     assert isinstance(pv, ThreadSharedPV)
     assert not isinstance(pv, AsyncioSharedPV)
@@ -58,7 +58,7 @@ async def test_asyncio_pvrecipe_builds_asyncio_sharedpv():
     coroutine since asyncio SharedPV construction needs a running loop."""
     from p4pillon.asyncio.pvrecipe import PVScalarRecipe
 
-    pv = PVScalarRecipe(PVTypes.DOUBLE, "test", 1.0).create_pv("X:test:asyncio")
+    pv = PVScalarRecipe(PVTypes.DOUBLE, "test", 1.0).create_pv()
 
     assert isinstance(pv, AsyncioSharedPV)
     assert not isinstance(pv, ThreadSharedPV)

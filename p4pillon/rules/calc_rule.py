@@ -5,6 +5,7 @@ Rule to implement calc record functionality.
 import ast
 import logging
 import math as m  # noqa: F401
+from typing import ClassVar
 
 from p4p import Value
 
@@ -36,8 +37,8 @@ class CalcRule(BaseScalarRule):
         self.set_calc(calc=kwargs)
 
     name = "calc"
-    nttypes = [SupportedNTTypes.ALL]
-    fields = []
+    nttypes: ClassVar[list[SupportedNTTypes] | None] = [SupportedNTTypes.ALL]
+    fields: ClassVar[list[str] | None] = []
     add_automatically = False
 
     class MonitorCB:
@@ -53,7 +54,7 @@ class CalcRule(BaseScalarRule):
             self._server = server
             self._pv_name = pv_name
 
-        def cb(self, v: Value):
+        def cb(self, _v: Value):
             """This callback "cb" is part of the context.monitor() functionality.
             See https://epics-base.github.io/p4p/client.html#monitor for further information."""
             self._server.put_pv_value(self._pv_name, {})
@@ -79,7 +80,7 @@ class CalcRule(BaseScalarRule):
         if "pv_name" in calc:
             self._pv_name = calc["pv_name"]
 
-    def init_rule(self, value: Value, **kwargs):
+    def init_rule(self, value: Value):
         """
         Method to initialise monitor call backs for the variables to be monitored.
         This should be added as an on start method when creating the pv.
@@ -109,17 +110,17 @@ class CalcRule(BaseScalarRule):
             try:
                 val = self._server.get_pv_value(pv_name)
                 if val is None:
-                    logging.error("Failed to get pv %s", pv_name)
+                    logger.error("Failed to get pv %s", pv_name)
                     return None
                 pvs.append(val)
-            except Exception:
+            except Exception:  # noqa: PERF203 -- per-item error handling around I/O, returns on first failure
                 # If there's an error getting the value of a pv return None
-                logging.error("Failed to get pv %s", pv_name)
+                logger.exception("Failed to get pv %s", pv_name)
                 return None
 
         return pvs
 
-    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
+    def post_rule(self, _oldpvstate: Value, newpvstate: Value) -> RulesFlow:
         """
         Evaluate the calculation.
           The syntax for using pvs in the calc string is to use the pv array, e.g. 'pv[0]' to use the first variable
@@ -137,6 +138,6 @@ class CalcRule(BaseScalarRule):
 
         node = ast.parse(self._calc_str, mode="eval")
 
-        newpvstate["value"] = eval(compile(node, "<string>", "eval"))
+        newpvstate["value"] = eval(compile(node, "<string>", "eval"))  # noqa: S307
 
         return ret_val

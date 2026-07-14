@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from p4p import Value
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def time_in_seconds_and_nanoseconds(timestamp: float) -> tuple[int, int]:
@@ -18,7 +20,7 @@ def time_in_seconds_and_nanoseconds(timestamp: float) -> tuple[int, int]:
 def recurse_values(value1: Value, value2: Value, func: Callable[[Value, Value, str], None], keys=None) -> bool:
     """Recurse through two Values with the same structure and apply a supplied to the leaf nodes"""
     if not keys:
-        keys = cast(list[str], value1.keys())
+        keys = cast("list[str]", value1.keys())
 
     for key in keys:
         if isinstance(value1[key], Value) and isinstance(value2[key], Value):
@@ -46,7 +48,7 @@ def overwrite_marked(current: Value, update: Value, fields: list[str] | None = N
             current_leaf[key] = update_leaf[key]
 
     if not fields:
-        fields = cast(list[str], current.keys())
+        fields = cast("list[str]", current.keys())
 
     recurse_values(update, current, overwrite_changed_key, fields)
 
@@ -69,6 +71,6 @@ def overwrite_unmarked(current: Value, update: Value, fields: list[str] | None =
             update_leaf.mark(key, val=False)
 
     if not fields:
-        fields = cast(list[str], current.keys())
+        fields = cast("list[str]", current.keys())
 
     recurse_values(update, current, overwrite_unchanged_key, fields)

@@ -4,6 +4,7 @@ Rules for the valueAlarm fields of NTScalar and NTScalarArray Normative Types.
 
 import logging
 import operator
+from typing import ClassVar
 
 from p4p import Value
 
@@ -23,16 +24,8 @@ class ValueAlarmRule(BaseGatherableRule):
     """
 
     name = "alarm_limit"
-    fields = ["alarm", "valueAlarm"]
+    fields: ClassVar[list[str] | None] = ["alarm", "valueAlarm"]
     wrap_for_array = True
-
-    # @property
-    # def name(self) -> str:
-    #     return "valueAlarm"
-
-    # @property
-    # def fields(self) -> list[str]:
-    #     return ["alarm", "valueAlarm"]
 
     @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:
@@ -93,7 +86,8 @@ class ValueAlarmRule(BaseGatherableRule):
             elif alarm_type.startswith("high"):
                 op = operator.ge
             else:
-                raise SyntaxError(f"CheckAlarms/alarmStateCheck: do not know how to handle {alarm_type}")
+                msg = f"CheckAlarms/alarmStateCheck: do not know how to handle {alarm_type}"
+                raise SyntaxError(msg)
 
         severity = pvstate[f"valueAlarm.{alarm_type}Severity"]
         if op(pvstate["value"], pvstate[f"valueAlarm.{alarm_type}Limit"]) and severity:

@@ -33,12 +33,12 @@ from tests.integration.thread.assertions import (
 root_dir = Path(__file__).parents[2]
 
 
-with open(f"{root_dir}/integration/ntscalar_config.yml") as f:
+with (root_dir / "integration" / "ntscalar_config.yml").open() as f:
     ntscalar_config = yaml.load(f, Loader=yaml.SafeLoader)
     f.close()
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
+@pytest.mark.parametrize(("pvname", "pv_config"), list(ntscalar_config.items()))
 def test_configs(pvname, yaml_server, pv_config, ctx):
     # NOTE by using pytest and parameterize here we run the test individually
     # per PV in the config file, helping us to identify which PVs are causing
@@ -72,7 +72,7 @@ def test_configs(pvname, yaml_server, pv_config, ctx):
         assert pv_state.get("valueAlarm") is None
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
+@pytest.mark.parametrize(("pvname", "pv_config"), list(ntscalar_config.items()))
 def test_value_change(pvname, yaml_server, pv_config, ctx):
     pvname = yaml_server.prefix + pvname
 
@@ -92,7 +92,7 @@ def test_value_change(pvname, yaml_server, pv_config, ctx):
         assert pvstate == current_state
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
+@pytest.mark.parametrize(("pvname", "pv_config"), list(ntscalar_config.items()))
 def test_field_change(pvname, yaml_server, pv_config, ctx):
     pvname = yaml_server.prefix + pvname
 
@@ -275,27 +275,27 @@ class TestAlarms:
         test_list = [0] * 5
 
         # At start
-        ctx.put(pvname, [-10] + test_list)
+        ctx.put(pvname, [-10, *test_list])
         assert_pv_in_major_alarm_state(pvname, ctx)
-        ctx.put(pvname, [-5] + test_list)
+        ctx.put(pvname, [-5, *test_list])
         assert_pv_in_minor_alarm_state(pvname, ctx)
-        ctx.put(pvname, [0] + test_list)
+        ctx.put(pvname, [0, *test_list])
         assert_pv_not_in_alarm_state(pvname, ctx)
-        ctx.put(pvname, [5] + test_list)
+        ctx.put(pvname, [5, *test_list])
         assert_pv_in_minor_alarm_state(pvname, ctx)
-        ctx.put(pvname, [10] + test_list)
+        ctx.put(pvname, [10, *test_list])
         assert_pv_in_major_alarm_state(pvname, ctx)
 
         # At end
-        ctx.put(pvname, test_list + [-10])
+        ctx.put(pvname, [*test_list, -10])
         assert_pv_in_major_alarm_state(pvname, ctx)
-        ctx.put(pvname, test_list + [-5])
+        ctx.put(pvname, [*test_list, -5])
         assert_pv_in_minor_alarm_state(pvname, ctx)
-        ctx.put(pvname, test_list + [0])
+        ctx.put(pvname, [*test_list, 0])
         assert_pv_not_in_alarm_state(pvname, ctx)
-        ctx.put(pvname, test_list + [5])
+        ctx.put(pvname, [*test_list, 5])
         assert_pv_in_minor_alarm_state(pvname, ctx)
-        ctx.put(pvname, test_list + [10])
+        ctx.put(pvname, [*test_list, 10])
         assert_pv_in_major_alarm_state(pvname, ctx)
 
     @pytest.mark.parametrize("pvtype", [(PVTypes.DOUBLE), (PVTypes.INTEGER)])
@@ -312,7 +312,7 @@ class TestAlarms:
         test_list = [0] * 5
 
         for val in [-10, -5, 0, 5, 10]:
-            ctx.put(pvname, test_list + [val])
+            ctx.put(pvname, [*test_list, val])
             assert_pv_not_in_alarm_state(pvname, ctx)
 
 
@@ -321,7 +321,7 @@ class TestControl:
     of PV types"""
 
     @pytest.mark.parametrize(
-        "pvtype, put_val, expected_val",
+        ("pvtype", "put_val", "expected_val"),
         [
             (PVTypes.DOUBLE, -10, -9),
             (PVTypes.DOUBLE, 0, 0),
@@ -347,7 +347,7 @@ class TestControl:
         assert_value_changed(pvname, expected_val, timestamp, ctx)
 
     @pytest.mark.parametrize(
-        "pvtype, put_val",
+        ("pvtype", "put_val"),
         [
             (PVTypes.DOUBLE, -10),
             (PVTypes.DOUBLE, 0),
@@ -403,7 +403,7 @@ class TestControl:
         assert_value_changed(pvname, new_val, timestamp, ctx)
 
     @pytest.mark.parametrize(
-        "pvtype, put_val, expected_val",
+        ("pvtype", "put_val", "expected_val"),
         [
             (PVTypes.DOUBLE, -10, -9),
             (PVTypes.DOUBLE, 0, 0),
@@ -429,5 +429,5 @@ class TestControl:
         test_list = [0] * (array_length - 1)
 
         timestamp = time.time()
-        ctx.put(pvname, test_list + [put_val])
-        assert_value_changed(pvname, test_list + [expected_val], timestamp, ctx)
+        ctx.put(pvname, [*test_list, put_val])
+        assert_value_changed(pvname, [*test_list, expected_val], timestamp, ctx)

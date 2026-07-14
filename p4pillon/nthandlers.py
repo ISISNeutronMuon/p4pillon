@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
-from p4p import Value
-from p4p.server import ServerOperation
-
-from p4pillon.composite_handler import AbortHandlerException
+from p4pillon.composite_handler import AbortHandlerError
 from p4pillon.rules import BaseRule, RulesFlow
 from p4pillon.server.raw import Handler, SharedPV
 from p4pillon.utils import overwrite_unmarked
+
+if TYPE_CHECKING:
+    from p4p import Value
+    from p4p.server import ServerOperation
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +64,7 @@ class ComposeableRulesHandler(Handler):
 
         rules_flow = self.rule.put_rule(pv_value, op_value, op)
         if rules_flow == RulesFlow.ABORT:
-            raise AbortHandlerException(rules_flow.error)
+            raise AbortHandlerError(rules_flow.error)
 
     @property
     def read_only(self) -> bool:

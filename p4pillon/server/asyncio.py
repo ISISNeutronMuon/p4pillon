@@ -13,7 +13,7 @@ from p4pillon.server.raw import SharedPV as _SharedPV
 p4p.server.raw.SharedPV = _SharedPV
 
 # pylint: disable=unused-import, wrong-import-order, wrong-import-position
-from p4p.server.asyncio import Handler  # noqa: E402, F401,
+from p4p.server.asyncio import Handler  # noqa: E402,
 from p4p.server.asyncio import SharedPV as _AsyncioSharedPV  # noqa: E402
 
 

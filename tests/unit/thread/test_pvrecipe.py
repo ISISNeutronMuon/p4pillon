@@ -10,7 +10,7 @@ from p4pillon.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalar
 
 
 @pytest.mark.parametrize(
-    "pvtype, display_config, expected_values",
+    ("pvtype", "display_config", "expected_values"),
     [
         (
             # passing an empty display dictionary gives the defaults
@@ -66,7 +66,7 @@ def test_ntscalar_display(pvtype, display_config, expected_values):
 
 
 @pytest.mark.parametrize(
-    "pvtype, time_val",
+    ("pvtype", "time_val"),
     [
         pytest.param(
             PVTypes.INTEGER,
@@ -95,11 +95,10 @@ def test_ntscalar_timestamp(mock_time, pvtype, time_val):
         else:
             assert recipe.timestamp is None
 
-        pv = recipe.create_pv("TEST:NAME")
+        pv = recipe.create_pv()
 
         if time_val is not None:
             # once we've added the PVs and started the server, the PV timestamp should be respected
-            print(pv.current().timestamp, time_val)
             assert math.isclose(pv.current().timestamp, time_val)
         else:
             # if the timestamp isn't set, we use the default time.time return val
@@ -107,7 +106,7 @@ def test_ntscalar_timestamp(mock_time, pvtype, time_val):
 
 
 @pytest.mark.parametrize(
-    "pvtype, control_config, expected_values",
+    ("pvtype", "control_config", "expected_values"),
     [
         (
             PVTypes.INTEGER,
@@ -161,7 +160,7 @@ def test_ntscalar_control(pvtype, control_config, expected_values):
 
 
 @pytest.mark.parametrize(
-    "pvtype, alarm_config, expected_values",
+    ("pvtype", "alarm_config", "expected_values"),
     [
         (
             PVTypes.INTEGER,
@@ -258,14 +257,12 @@ def test_ntscalar_string_errors():
 
 
 def test_ntscalar_enum_error():
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(ValueError, match="Unsupported pv type"):
         PVScalarRecipe(PVTypes.ENUM, description="test", initial_value=1)
-
-    assert "Unsupported pv type" in str(e)
 
 
 @pytest.mark.parametrize(
-    "recipe, pvtype, with_limits, expected_value",
+    ("recipe", "pvtype", "with_limits", "expected_value"),
     [
         (PVScalarRecipe, PVTypes.DOUBLE, True, 1),
         (PVScalarRecipe, PVTypes.INTEGER, True, 1),
@@ -288,15 +285,15 @@ def test_ntscalar_numeric_create_pv(mock_time, recipe, pvtype, with_limits, expe
         recipe.set_control_limits()
         recipe.set_alarm_limits()
 
-    pv = recipe.create_pv(pv_name="UNIT:TEST:PV")
+    pv = recipe.create_pv()
 
     pvdict = pv.current().raw.todict()
 
     assert isinstance(pv._handler, CompositeHandler)
     if with_limits:
-        assert set(pv._handler.keys()) == set(["alarm", "control", "alarm_limit", "timestamp"])
+        assert set(pv._handler.keys()) == {"alarm", "control", "alarm_limit", "timestamp"}
     else:
-        assert set(pv._handler.keys()) == set(["alarm", "timestamp"])
+        assert set(pv._handler.keys()) == {"alarm", "timestamp"}
 
     assert isinstance(pv.nt, NTScalar)  # change to check the name instead?
     assert pv.isOpen() is True
@@ -315,7 +312,7 @@ def test_ntscalar_numeric_create_pv(mock_time, recipe, pvtype, with_limits, expe
 
 
 @pytest.mark.parametrize(
-    "recipe, expected_value",
+    ("recipe", "expected_value"),
     [
         (PVScalarRecipe, "test"),
         # TODO work out how to fix this - currently failing with error:
@@ -333,12 +330,12 @@ def test_ntscalar_string_create_pv(mock_time, recipe, expected_value):
     initial = "test"
     recipe = recipe(PVTypes.STRING, description="test", initial_value=initial)
 
-    pv = recipe.create_pv(pv_name="UNIT:TEST:PV")
+    pv = recipe.create_pv()
 
     pvdict = pv.current().raw.todict()
 
     assert isinstance(pv._handler, CompositeHandler)
-    assert set(pv._handler.keys()) == set(["alarm", "timestamp"])
+    assert set(pv._handler.keys()) == {"alarm", "timestamp"}
     assert isinstance(pv.nt, NTScalar)
     assert pv.isOpen() is True
     assert pv.current().timestamp == mock_time.return_value
@@ -355,10 +352,8 @@ def test_ntscalar_string_create_pv(mock_time, recipe, expected_value):
     [(PVTypes.DOUBLE), (PVTypes.INTEGER), (PVTypes.STRING)],
 )
 def test_ntenum_bad_types(pvtype):
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(ValueError, match="Unsupported pv type"):
         PVEnumRecipe(pvtype, description="test enum", initial_value={"index": 0, "choices": ["OFF", "ON"]})
-
-    assert "Unsupported pv type" in str(e)
 
 
 @pytest.mark.xfail(reason="Passing arguments to handlers not working yet")
@@ -373,13 +368,13 @@ def test_ntenum_create_pv(mock_time):
         alarmNTEnum={},
     )
 
-    pv = recipe.create_pv("TEST:PV:ENUM")
+    pv = recipe.create_pv()
 
     pvdict = pv.current().raw.todict()
 
     assert pv.isOpen()
     assert isinstance(pv._handler, CompositeHandler)
-    assert set(pv.handler.keys()) == set(["alarm", "alarmNTEnum", "timestamp"])
+    assert set(pv.handler.keys()) == {"alarm", "alarmNTEnum", "timestamp"}
     assert pv.nt.type.getID() == "epics:nt/NTEnum:1.0"
     assert pv.isOpen() is True
     assert pv.current().timestamp == mock_time.return_value

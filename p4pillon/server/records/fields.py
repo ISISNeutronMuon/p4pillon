@@ -18,19 +18,19 @@ from p4pillon.nt import NTEnum, NTScalar
 from p4pillon.nt.identify import NTType, id_nttype_type
 
 __all__ = (
-    "MENU_SCAN",
+    "COMMON_FIELDS",
+    "FIELD_NAMES",
+    "MENU_ALARM_SEVR",
+    "MENU_ALARM_STAT",
     "MENU_PINI",
     "MENU_PRIORITY",
-    "MENU_ALARM_STAT",
-    "MENU_ALARM_SEVR",
+    "MENU_SCAN",
     "MENU_YES_NO",
-    "COMMON_FIELDS",
     "STRING_FIELDS",
-    "FIELD_NAMES",
     "RecordFieldOverrides",
     "RegistryEntry",
-    "infer_rtyp",
     "build_record_fields",
+    "infer_rtyp",
 )
 
 # --- menu choice lists, copied verbatim from EPICS Base's dbd/menu*.dbd,

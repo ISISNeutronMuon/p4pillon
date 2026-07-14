@@ -3,6 +3,7 @@ Demonstration of implementing a custom Rule
 """
 
 import logging
+from typing import ClassVar
 
 import p4p.nt.common as nt_common
 from p4p import Type, Value
@@ -30,7 +31,7 @@ class NTScalarMatch(NTScalar):
     """
 
     @staticmethod
-    def buildType(valtype, extra=None, *args, **kws):
+    def buildType(valtype, extra=None, *args, **kws):  # noqa: N802 - overrides p4p's NTScalar.buildType
         """Build a Type
 
         :param str valtype: A type code to be used with the 'value' field.  See :ref:`valuecodes`
@@ -60,7 +61,7 @@ class NTScalarMatch(NTScalar):
 
 class IMatchRule(BaseRule):
     name = "imatch"
-    fields = ["alarm", "imatch"]
+    fields: ClassVar[list[str] | None] = ["alarm", "imatch"]
 
     @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:

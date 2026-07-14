@@ -8,7 +8,7 @@ from p4pillon.thread.sharednt import SharedNT
 
 
 @pytest.mark.parametrize(
-    "pvtype, expected_handlername",
+    ("pvtype", "expected_handlername"),
     [
         ("d", ["control", "alarm", "alarm_limit", "timestamp"]),
         ("ad", ["control", "alarm", "alarm_limit", "timestamp"]),

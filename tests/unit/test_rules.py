@@ -7,13 +7,42 @@ from p4p import Type, Value
 from p4p.nt import NTScalar
 
 from p4pillon.definitions import AlarmSeverity
-from p4pillon.rules import CalcRule, ControlRule, RulesFlow, ScalarToArrayWrapperRule, TimestampRule, ValueAlarmRule
+from p4pillon.rules import (
+    AlarmNTEnumRule,
+    AlarmRule,
+    CalcRule,
+    ControlRule,
+    ReadOnlyRule,
+    RulesFlow,
+    ScalarToArrayWrapperRule,
+    TimestampRule,
+    ValueAlarmRule,
+)
+from p4pillon.rules.rules import SupportedNTTypes
 from p4pillon.utils import overwrite_unmarked
+
+# Concrete Rules exported from p4pillon.rules -- excludes BaseRule itself and
+# ScalarToArrayWrapperRule, whose name/nttypes are properties derived from the
+# rule it wraps rather than fixed class attributes.
+#
+# Deliberately hand-rolled rather than derived from p4pillon.rules.__all__: a
+# derived list still needs its own exclusion set for non-rule/abstract names,
+# so it doesn't remove the upkeep, just moves it. Update this list by hand
+# when adding or removing a concrete rule.
+CONCRETE_RULE_CLASSES = [
+    AlarmNTEnumRule,
+    AlarmRule,
+    CalcRule,
+    ControlRule,
+    ReadOnlyRule,
+    TimestampRule,
+    ValueAlarmRule,
+]
 
 
 class TestTimestamp:
     @pytest.mark.parametrize(
-        "nttype, val",
+        ("nttype", "val"),
         [
             ("d", 0),
             ("i", 0),
@@ -24,7 +53,7 @@ class TestTimestamp:
         ],
     )
     @patch("time.time", return_value=123.456)
-    def test_timestamp(self, _, nttype, val):
+    def test_timestamp(self, mock_time, nttype, val):  # noqa: ARG002 - mock only needed to prevent real time.time() being used
         rule = TimestampRule()
 
         assert rule.name == "timestamp"
@@ -44,7 +73,7 @@ class TestTimestamp:
         assert new_state["timeStamp.nanoseconds"] == 456000000
 
     @pytest.mark.parametrize(
-        "nttype, val",
+        ("nttype", "val"),
         [
             ("d", 0),
             ("i", 0),
@@ -55,7 +84,7 @@ class TestTimestamp:
         ],
     )
     @patch("time.time", return_value=123.456)
-    def test_timestamp_in_put(self, _, nttype, val):
+    def test_timestamp_in_put(self, mock_time, nttype, val):  # noqa: ARG002 - mock only needed to prevent real time.time() being used
         rule = TimestampRule()
 
         assert rule.name == "timestamp"
@@ -107,7 +136,7 @@ class TestTimestamp:
         strict=True,
     )
     @patch("time.time", return_value=999.999)
-    def test_init_rule_preserves_caller_supplied_timestamp(self, _):
+    def test_init_rule_preserves_caller_supplied_timestamp(self, mock_time):  # noqa: ARG002 - mock only needed to prevent real time.time() being used
         rule = TimestampRule()
 
         nt = NTScalar("d")
@@ -129,7 +158,7 @@ class TestTimestamp:
 
 class TestControl:
     @pytest.mark.parametrize(
-        "nttype, val",
+        ("nttype", "val"),
         [
             ("d", 0),
             ("i", 0),
@@ -158,7 +187,7 @@ class TestControl:
         assert "Rule control.post_rule is not applicable" in str(caplog.records[0].getMessage())
 
     @pytest.mark.parametrize(
-        "nttype, new_value, expected_value",
+        ("nttype", "new_value", "expected_value"),
         [
             ("d", -6, -5),
             ("d", -1, -1),
@@ -201,14 +230,14 @@ class TestControl:
 
             if new_value != expected_value:
                 assert len(caplog.records) == 3
-                assert f"control limit exceeded, changing value to {str(expected_value)}" in str(
+                assert f"control limit exceeded, changing value to {expected_value!s}" in str(
                     caplog.records[2].getMessage()
                 )
         else:
             numpy.testing.assert_array_equal(new_state["value"], expected_value)
 
     @pytest.mark.parametrize(
-        "nttype, new_value, expected_value, expected_log, expected_log_index",
+        ("nttype", "new_value", "expected_value", "expected_log", "expected_log_index"),
         [
             ("d", 2, 2, "", 1),
             ("d", 1, 0, "minStep", 1),
@@ -269,7 +298,7 @@ class TestControl:
                     assert item[0] in item[1].getMessage()
 
     @pytest.mark.parametrize(
-        "nttype, control_changes, expected_value, read_only",
+        ("nttype", "control_changes", "expected_value", "read_only"),
         [
             ("d", [-6, -5, 5, 2], -5, True),
             ("d", [-6, -5, 5, 2], -5, False),
@@ -313,7 +342,7 @@ class TestControl:
 
 class TestAlarmLimit:
     @pytest.mark.parametrize(
-        "nttype, new_val, expected_severity, expected_message",
+        ("nttype", "new_val", "expected_severity", "expected_message"),
         [
             ("d", -10, AlarmSeverity.MAJOR_ALARM.value, "lowAlarm"),
             ("d", -5, AlarmSeverity.MINOR_ALARM.value, "lowWarning"),
@@ -375,7 +404,7 @@ class TestAlarmLimit:
         assert new_state["alarm.message"] == expected_message
 
     @pytest.mark.parametrize(
-        "nttype, new_val", [("d", -10), ("i", -10), ("ad", [-10, -10, -10]), ("ai", [-10, -10, -10])]
+        ("nttype", "new_val"), [("d", -10), ("i", -10), ("ad", [-10, -10, -10]), ("ai", [-10, -10, -10])]
     )
     def test_alarm_limits_not_active(self, nttype, new_val, caplog):
         nt = NTScalar(nttype, valueAlarm=True)
@@ -407,7 +436,7 @@ class TestAlarmLimit:
         assert new_state["alarm.message"] == ""
 
     @pytest.mark.parametrize(
-        "nttype, new_val", [("d", -10), ("i", -10), ("ad", [-10, -10, -10]), ("ai", [-10, -10, -10])]
+        ("nttype", "new_val"), [("d", -10), ("i", -10), ("ad", [-10, -10, -10]), ("ai", [-10, -10, -10])]
     )
     def test_alarm_limits_not_present(self, nttype, new_val, caplog):
         nt = NTScalar(nttype)
@@ -434,7 +463,7 @@ class TestAlarmLimit:
         assert new_state["alarm.message"] == ""
 
     @pytest.mark.parametrize(
-        "nttype, new_val", [("d", -10), ("i", -10), ("ad", [-10, -10, -10]), ("ai", [-10, -10, -10])]
+        ("nttype", "new_val"), [("d", -10), ("i", -10), ("ad", [-10, -10, -10]), ("ai", [-10, -10, -10])]
     )
     def test_alarm_limits_from_alarm_state_to_none(self, nttype, new_val):
         # here we make sure that changing the value from a previous alarm state will put us
@@ -485,7 +514,7 @@ class TestAlarmLimit:
         assert new_state["alarm.message"] == ""
 
     @pytest.mark.parametrize(
-        "nttype, limit_change, new_limit, expected_severity, expected_message",
+        ("nttype", "limit_change", "new_limit", "expected_severity", "expected_message"),
         [
             ("d", "lowAlarmLimit", 2, AlarmSeverity.MAJOR_ALARM, "lowAlarm"),
             ("d", "lowWarningLimit", 2, AlarmSeverity.MINOR_ALARM, "lowWarning"),
@@ -565,11 +594,34 @@ class TestCalcRule:
     def test_initialise_calc_rule(self):
         rule = CalcRule()
 
-        aServer = "fakeServer"
-        calc = {"calc_str": "pv[0]+10", "variables": "a:pv:name", "server": aServer, "pv_name": "this:pv:name"}
+        a_server = "fakeServer"
+        calc = {"calc_str": "pv[0]+10", "variables": "a:pv:name", "server": a_server, "pv_name": "this:pv:name"}
         rule.set_calc(calc)
         assert rule._calc_str == "pv[0]+10"
         assert type(rule._variables) is list
-        assert len(rule._variables) == 1 and rule._variables[0] == "a:pv:name"
+        assert len(rule._variables) == 1
+        assert rule._variables[0] == "a:pv:name"
         assert rule._server == "fakeServer"
         assert rule._pv_name == "this:pv:name"
+
+
+class TestRuleClassAttributes:
+    """`name` and `nttypes` are used by SharedNT/CompositeHandler for rule
+    introspection (see BaseRule's docstring). A Rule that leaves either unset
+    -- e.g. through a typo like `nttype` instead of `nttypes` -- silently
+    becomes invisible to that machinery instead of raising an error."""
+
+    @pytest.mark.parametrize("rule_cls", CONCRETE_RULE_CLASSES, ids=lambda cls: cls.__name__)
+    def test_name_is_set(self, rule_cls):
+        assert isinstance(rule_cls.name, str)
+        assert rule_cls.name != ""
+
+    @pytest.mark.parametrize("rule_cls", CONCRETE_RULE_CLASSES, ids=lambda cls: cls.__name__)
+    def test_nttypes_is_set(self, rule_cls):
+        # None/[] both mean "applies to all types" (see BaseRule.nttypes docstring
+        # and sharednt.py's `if supported_nttypes:` check) -- either is valid, but
+        # whatever is set must only contain real SupportedNTTypes members.
+        if rule_cls.nttypes is None:
+            return
+        assert isinstance(rule_cls.nttypes, list)
+        assert all(isinstance(nttype, SupportedNTTypes) for nttype in rule_cls.nttypes)

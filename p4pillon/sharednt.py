@@ -6,8 +6,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC
-from collections import OrderedDict
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from p4p import Type, Value
 
@@ -31,7 +30,12 @@ from p4pillon.rules.rules import (
 )
 from p4pillon.server.raw import Handler, SharedPV
 
+if TYPE_CHECKING:
+    from collections import OrderedDict
+
 logger = logging.getLogger(__name__)
+
+_HANDLER_DECORATORS_UNSUPPORTED_MSG = "Handler decorators are not currently compatible with multiple handlers."
 
 
 def is_type_subset(fullset: Type, subset: Type) -> bool:
@@ -59,7 +63,7 @@ class SharedNTMixin(ABC):
     change its base, so the base has to be chosen via inheritance instead.
     """
 
-    registered_handlers: list[type[BaseRule]] = [
+    registered_handlers: ClassVar[list[type[BaseRule]]] = [
         AlarmRule,
         ControlRule,
         AlarmNTEnumRule,
@@ -116,7 +120,8 @@ class SharedNTMixin(ABC):
             try:
                 nttype = kwargs["nt"].type
             except AttributeError as exc:
-                raise NotImplementedError("Unable to determine Type of SharedNT") from exc
+                msg = "Unable to determine Type of SharedNT"
+                raise NotImplementedError(msg) from exc
         else:
             if isinstance(kwargs["initial"], Value):
                 nttype = kwargs["initial"].type()
@@ -128,8 +133,7 @@ class SharedNTMixin(ABC):
 
     def _setup_auth_handlers(self, auth_handlers) -> CompositeHandler:
         """If an auth_handler has been given then configure a CompositeHandler with it."""
-        handler = CompositeHandler(auth_handlers) if auth_handlers else CompositeHandler()
-        return handler
+        return CompositeHandler(auth_handlers) if auth_handlers else CompositeHandler()
 
     @property
     def handler(self) -> CompositeHandler:
@@ -144,31 +148,31 @@ class SharedNTMixin(ABC):
 
     @property
     def onFirstConnect(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def onLastDisconnect(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def on_open(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def on_post(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def put(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def rpc(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def on_close(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     ## Alternative PEP 8 comaptible handler decorators
     # @property
@@ -265,7 +269,7 @@ class SharedNTMixin(ABC):
 
         # Check if we need special handling for array data
         if wrap_for_array and is_scalararray(nttype):
-            assert isinstance(instance, BaseScalarRule | BaseGatherableRule)
+            assert isinstance(instance, BaseScalarRule | BaseGatherableRule)  # noqa: S101
             composed_instance = ComposeableRulesHandler(ScalarToArrayWrapperRule(instance))
         else:
             composed_instance = ComposeableRulesHandler(instance)

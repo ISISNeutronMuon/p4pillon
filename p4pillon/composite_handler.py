@@ -8,18 +8,20 @@ The ordered dictionary also controls the order in which the handlers are called.
 from __future__ import annotations
 
 from collections import OrderedDict
-
-from p4p import Value
-from p4p.server import ServerOperation
+from typing import TYPE_CHECKING
 
 from p4pillon.server.raw import Handler, SharedPV
 
+if TYPE_CHECKING:
+    from p4p import Value
+    from p4p.server import ServerOperation
 
-class HandlerException(Exception):
+
+class HandlerError(Exception):
     """Exception raised for errors in the handler operations."""
 
 
-class AbortHandlerException(HandlerException):
+class AbortHandlerError(HandlerError):
     """Exception raised to abort the current operation in the handler."""
 
     def __init__(self, message: str = "Operation aborted"):
@@ -38,7 +40,7 @@ class CompositeHandler(Handler, OrderedDict):
 
     def open(self, value: Value):
         """Open all handlers in the composite handler."""
-        for _name, handler in self.items():
+        for handler in self.values():
             handler.open(value)
 
     def put(self, pv: SharedPV, op: ServerOperation):
@@ -49,10 +51,10 @@ class CompositeHandler(Handler, OrderedDict):
 
         errmsg = None
 
-        for _name, handler in self.items():
+        for handler in self.values():
             try:
                 handler.put(pv, op)
-            except AbortHandlerException as e:
+            except AbortHandlerError as e:  # noqa: PERF203 -- per-item error handling around I/O, breaks on first failure
                 errmsg = e.message
                 break
 
@@ -63,7 +65,7 @@ class CompositeHandler(Handler, OrderedDict):
             op.done(error=errmsg)
 
     def post(self, pv: SharedPV, value: Value):
-        for _name, handler in self.items():
+        for handler in self.values():
             handler.post(pv, value)
 
     def rpc(self, pv: SharedPV, op: ServerOperation):
@@ -72,7 +74,7 @@ class CompositeHandler(Handler, OrderedDict):
         for handler in self.values():
             try:
                 handler.rpc(pv, op)
-            except AbortHandlerException as e:
+            except AbortHandlerError as e:  # noqa: PERF203 -- per-item error handling around I/O, breaks on first failure
                 errmsg = e.message
                 break
 

@@ -3,6 +3,7 @@ Demonstration of implementing a custom Rule
 """
 
 import logging
+from typing import ClassVar
 
 from p4p import Value
 from p4p.server import Server
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class IMatchRule(BaseRule):
     name = "imatch"
-    fields = ["alarm"]
+    fields: ClassVar[list[str] | None] = ["alarm"]
 
     def __init__(self, imatch: int | None = None):
         self._imatch = imatch

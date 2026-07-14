@@ -87,16 +87,41 @@ line-length = 120
 
 [tool.ruff.lint]
 extend-select = [
-  "UP",    # pyupgrade
-  "I",     # isort
-  "B",     # flake8-bugbear
+  "ARG",   # flake8-unused-arguments
   "ASYNC", # flake8-async
+  "B",     # flake8-bugbear
+  "C4",    # flake8-comprehensions
+  "EM",    # flake8-errmsg
+  "I",     # isort
+  "LOG",   # flake8-logging
+  "N",     # pep8-naming
+  "PERF",  # perflint
+  "PT",    # flake8-pytest-style
+  "PTH",   # flake8-use-pathlib
+  "RET",   # flake8-return
+  "RUF",   # ruff-specific rules
+  "S",     # flake8-bandit
   "SIM",   # flake8-simplify
+  "T20",   # flake8-print
+  "TC",    # flake8-type-checking
+  "TRY",   # tryceratops
+  "UP",    # pyupgrade
 ]
-# Not yet enabled due to a backlog of pre-existing violations: RUF, ARG, N, C4, PTH
 ignore = [
   "B024", # Several base classes (BaseRule, Handler, Server) intentionally define
   "B027", # only optional, overridable hook methods with no required abstract methods.
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# onFirstConnect/onLastDisconnect are mandated by the p4p Handler protocol and
+# cannot be renamed to snake_case.
+"p4pillon/composite_handler.py" = ["N802"]
+"p4pillon/server/raw.py" = ["N802"]
+"p4pillon/sharednt.py" = ["N802"]
+"tests/unit/test_composite_handler.py" = ["N802"]
+# assert is the standard way to make test assertions.
+"tests/**" = ["S101"]
+# Examples are demo scripts meant to print output to the console for the user running them.
+"examples/**" = ["T201"]
 
 
