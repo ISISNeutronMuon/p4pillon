@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import numpy
 import pytest
+from p4p import Type, Value
 from p4p.nt import NTScalar
 
 from p4pillon.definitions import AlarmSeverity
@@ -73,6 +74,57 @@ class TestTimestamp:
         result = rule.post_rule(old_state, new_state)
 
         assert result is RulesFlow.CONTINUE
+
+    def test_is_applicable_no_changes(self):
+        rule = TimestampRule()
+
+        nt = NTScalar("d")
+        new_state = nt.wrap(0)
+        new_state.unmark()
+
+        assert new_state.changedSet() == set()
+        assert rule.is_applicable(new_state) is False
+
+    def test_is_applicable_no_timestamp_field(self):
+        rule = TimestampRule()
+
+        type_for_test = Type([("value", "d")], id="epics:nt/NTScalar")
+        new_state = Value(type_for_test, {"value": 0})
+
+        assert "timeStamp" not in new_state
+        assert rule.is_applicable(new_state) is False
+
+    def test_is_applicable_with_timestamp_field(self):
+        rule = TimestampRule()
+
+        nt = NTScalar("d")
+        new_state = nt.wrap(0)
+
+        assert rule.is_applicable(new_state) is True
+
+    @pytest.mark.xfail(
+        reason="p4p _wrap bug workaround in TimestampRule.init_rule — see comment in timestamp_rule.py",
+        strict=True,
+    )
+    @patch("time.time", return_value=999.999)
+    def test_init_rule_preserves_caller_supplied_timestamp(self, _):
+        rule = TimestampRule()
+
+        nt = NTScalar("d")
+        old_state = nt.wrap(0)
+        new_state = nt.wrap(0)
+
+        # Caller explicitly supplies their own timestamp, distinct from the mocked time.time()
+        new_state["timeStamp.secondsPastEpoch"] = 123
+        new_state["timeStamp.nanoseconds"] = 456000000
+
+        overwrite_unmarked(old_state, new_state)
+
+        result = rule.init_rule(new_state)
+
+        assert result is RulesFlow.CONTINUE
+        assert new_state["timeStamp.secondsPastEpoch"] == 123
+        assert new_state["timeStamp.nanoseconds"] == 456000000
 
 
 class TestControl:
@@ -165,7 +217,7 @@ class TestControl:
             ("i", 1, 0, "minStep", 1),
             ("i", 6, 5, "control limit exceeded", 2),
             ("ad", [2, 2, 2], [2, 2, 2], ["", "", ""], 1),
-            ("ad", [1, 1, 1], [0, 0, 0], ["minStep", "minStep", "minStep"], 3),
+            ("ad", [1, 1, 1], [0, 0, 0], ["minStep", "minStep", "minStep"], 1),
             (
                 "ad",
                 [6, 6, 6],
@@ -174,7 +226,7 @@ class TestControl:
                 2,
             ),
             ("ai", [2, 2, 2], [2, 2, 2], ["", "", ""], 1),
-            ("ai", [1, 1, 1], [0, 0, 0], ["minStep", "minStep", "minStep"], 3),
+            ("ai", [1, 1, 1], [0, 0, 0], ["minStep", "minStep", "minStep"], 1),
             (
                 "ai",
                 [6, 6, 6],
@@ -213,7 +265,7 @@ class TestControl:
 
             if not numpy.array_equal(new_value, expected_value):
                 assert len(caplog.records) == 9
-                for item in zip(expected_log, caplog.records[expected_log_index:3:]):
+                for item in zip(expected_log, caplog.records[expected_log_index::3], strict=True):
                     assert item[0] in item[1].getMessage()
 
     @pytest.mark.parametrize(

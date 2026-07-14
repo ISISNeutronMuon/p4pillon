@@ -210,20 +210,26 @@ class SharedPV(_SharedPV, ABC):
         def open(self, value):
             _log.debug("OPEN %s %s", self._pv, value)
             try:
-                self._pv._exec(None, self._real.open, value)
+                open_fn = self._real.open
             except AttributeError:
                 pass
+            else:
+                self._pv._exec(None, open_fn, value)
 
         def post(self, value):
             _log.debug("POST %s %s", self._pv, value)
             try:
-                self._pv._exec(None, self._real.post, self._pv, value)
+                post_fn = self._real.post
             except AttributeError:
                 pass
+            else:
+                self._pv._exec(None, post_fn, self._pv, value)
 
         def close(self):
             _log.debug("CLOSE %s", self._pv)
             try:
-                self._pv._exec(None, self._real.close, self._pv)
+                close_fn = self._real.close
             except AttributeError:
                 pass
+            else:
+                self._pv._exec(None, close_fn, self._pv)

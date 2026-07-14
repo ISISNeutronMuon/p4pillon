@@ -1,7 +1,3 @@
-## Notes
-# Consider removing `[tool.hatch.metadata] allow-direct-references = true` when 
-# the dependency on the p4p fork is no longer needed.
-
 [project]
 name = "p4pillon"
 dynamic = ["version"]
@@ -10,17 +6,16 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "p4p>=4.2.1",
-    "pyyaml>=6.0.2",
+    "pyyaml>=6.0.3",
 ]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
   "Environment :: Console",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: BSD License",
   "Programming Language :: Python",
   "Typing :: Typed"
 ]
-license = {text = "BSD-3-Clause"}
+license = "BSD-3-Clause"
 keywords = ["pva", "pvaccess", "p4p", "epics"]
 authors = [
   {name = "Ivan Finch", email = "ivan.finch@stfc.ac.uk"},
@@ -33,17 +28,24 @@ maintainers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/epics-base/p4p"
+Homepage = "https://github.com/ISISNeutronMuon/p4pillon"
+Repository = "https://github.com/ISISNeutronMuon/p4pillon"
+Issues = "https://github.com/ISISNeutronMuon/p4pillon/issues"
+Documentation = "https://isisneutronmuon.github.io/p4pillon/"
 
-[project.optional-dependencies]
+[dependency-groups]
 test = [
-  "ruff>=0.12",
-  "coverage>7.9",
-  "pytest>=8.4",
+  "ruff>=0.15.21",
+  "coverage>=7.15.1",
+  "pytest>=9.1.1",
 ]
 dist = [
-    "build>=1.2.2.post1",
+    "build>=1.5.1",
     "twine>=6.1.0",
+]
+dev = [
+  {include-group = "test"},
+  {include-group = "dist"},
 ]
 
 ## Build system configuration
@@ -64,8 +66,11 @@ source = "vcs"
 version_scheme = "no-guess-dev"
 
 ## Testing configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.coverage.run]
-source = ["."]
+source = ["p4pillon"]
 
 [tool.coverage.report]
 show_missing = true
@@ -80,8 +85,16 @@ line-length = 120
 
 [tool.ruff.lint]
 extend-select = [
-  "UP",  # pyupgrade
-  "I", # isort
+  "UP",    # pyupgrade
+  "I",     # isort
+  "B",     # flake8-bugbear
+  "ASYNC", # flake8-async
+  "SIM",   # flake8-simplify
+]
+# Not yet enabled due to a backlog of pre-existing violations: RUF, ARG, N, C4, PTH
+ignore = [
+  "B024", # Several base classes (BaseRule, Handler, Server) intentionally define
+  "B027", # only optional, overridable hook methods with no required abstract methods.
 ]
 
 

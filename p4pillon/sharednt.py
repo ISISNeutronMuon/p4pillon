@@ -38,7 +38,7 @@ def is_type_subset(fullset: Type, subset: Type) -> bool:
     """Check if the subset is a part of the fullset."""
 
     # For now we only support looking one level deep
-    test = all(x in fullset.keys() for x in subset.keys())
+    test = all(x in fullset for x in subset)
     if test:
         pass
     else:
@@ -122,10 +122,7 @@ class SharedNT(SharedPV, ABC):
 
     def _setup_auth_handlers(self, auth_handlers) -> CompositeHandler:
         """If an auth_handler has been given then configure a CompositeHandler with it."""
-        if auth_handlers:
-            handler = CompositeHandler(auth_handlers)
-        else:
-            handler = CompositeHandler()
+        handler = CompositeHandler(auth_handlers) if auth_handlers else CompositeHandler()
         return handler
 
     @property

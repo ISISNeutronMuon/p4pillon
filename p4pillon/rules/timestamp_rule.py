@@ -42,10 +42,7 @@ class TimestampRule(BaseRule):
             return False
 
         # Check if there is a timeStamp field to update!
-        if "timeStamp" not in newpvstate.keys():
-            return False
-
-        return True
+        return "timeStamp" in newpvstate
 
     @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:

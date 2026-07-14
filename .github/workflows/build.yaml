@@ -17,16 +17,17 @@ on:
 jobs:
   lint:
     name: Use Ruff to perform linting, formatting, and other code quality tests
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v3
     - uses: actions/setup-python@v5
       with:
         python-version: "3.x"
-    - run: pip install .[test]
-    - run: | 
-        ruff check --no-fix
-        ruff format --diff
+    - run: uv sync --group test
+    - run: |
+        uv run ruff check --no-fix
+        uv run ruff format --diff
 
   test:
     name: Run tests on multiple Python versions
@@ -40,23 +41,20 @@ jobs:
     continue-on-error: true
     steps:
     - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v3
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
-      run: |
-        pip install .[test]
-        PIP_PATH=$(which pip)
+      run: uv sync --group test --python ${{ matrix.python-version }}
     - name: Run tests
-      run: |
-        PYTHON_PATH=$(which python)
-        $PYTHON_PATH -m coverage run --source=. -m pytest tests/
+      run: uv run coverage run -m pytest
     - name: Gather coverage statistics
       if: ${{ always() }}
       run: |
-        coverage report -m
-        coverage xml
+        uv run coverage report -m
+        uv run coverage xml
     - name: Upload pytest test results
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
@@ -68,7 +66,7 @@ jobs:
 
   build:
     name: Build distribution 📦
-    needs: 
+    needs:
     - test
     #if: github.ref == 'refs/heads/main' # Only build dist on main
     runs-on: ubuntu-latest
@@ -76,15 +74,15 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0 # Needed to fetch the tags
+    - uses: astral-sh/setup-uv@v3
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.x"
     - name: Install build tools
-      run: >-
-        pip install .[dist]
+      run: uv sync --group dist
     - name: Build a binary wheel and a source tarball
-      run: python -m build
+      run: uv run python -m build
     - name: Store the distribution packages
       uses: actions/upload-artifact@v4
       with:

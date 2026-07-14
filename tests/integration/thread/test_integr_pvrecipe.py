@@ -59,11 +59,11 @@ def test_configs(pvname, yaml_server, pv_config, ctx):
     assert pv_state.get("descriptor", "") == pv_config.get("description", "")
 
     if pv_is_numeric:
-        if "display" in pv_config.keys():
+        if "display" in pv_config:
             assert_correct_display_config(pv_state, pv_config)
-        if "control" in pv_config.keys():
+        if "control" in pv_config:
             assert_correct_control_config(pv_state, pv_config)
-        if "valueAlarm" in pv_config.keys():
+        if "valueAlarm" in pv_config:
             assert_correct_alarm_config(pv_state, pv_config)
 
     else:
