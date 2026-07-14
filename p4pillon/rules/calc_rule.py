@@ -2,15 +2,24 @@
 Rule to implement calc record functionality.
 """
 
-import ast
+from __future__ import annotations
+
 import logging
-import math as m  # noqa: F401
+import math as m
+from typing import TYPE_CHECKING, Any
 
 from p4p import Value
+from simpleeval import ModuleWrapper, SimpleEval
 
 from .rules import BaseScalarRule, RulesFlow, SupportedNTTypes
 
+if TYPE_CHECKING:
+    from p4pillon.server.server import Server
+
 logger = logging.getLogger(__name__)
+
+# Attributes of the math module that calc expressions are permitted to call, e.g. "m.sin(pv[0])".
+_ALLOWED_MATH_ATTRS = frozenset(name for name in dir(m) if not name.startswith("_"))
 
 
 class CalcRule(BaseScalarRule):
@@ -29,36 +38,36 @@ class CalcRule(BaseScalarRule):
                     dependent PV is updated.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         super().__init__()
-        self._variables = []
+        self._variables: list[str] = []
         self._calc_str: str = ""
         self.set_calc(calc=kwargs)
 
     name = "calc"
-    nttypes = [SupportedNTTypes.ALL]
-    fields = []
-    add_automatically = False
+    nttypes: list[SupportedNTTypes] | None = [SupportedNTTypes.ALL]
+    fields: list[str] | None = []
+    add_automatically: bool = False
 
     class MonitorCB:
         """
         The MonitorCB class is used to provide call back methods for subscribing to Context.monitor
         """
 
-        def __init__(self, server, pv_name):
+        def __init__(self, server: Server, pv_name: str) -> None:
             """
             This class is used within  rule to provide a call back method for Context.monitor
             The rule_method is the method that the call back will pass the value on to.
             """
-            self._server = server
-            self._pv_name = pv_name
+            self._server: Server = server
+            self._pv_name: str = pv_name
 
-        def cb(self, v: Value):
+        def cb(self, v: Value) -> None:
             """This callback "cb" is part of the context.monitor() functionality.
             See https://epics-base.github.io/p4p/client.html#monitor for further information."""
             self._server.put_pv_value(self._pv_name, {})
 
-    def set_calc(self, calc: dict) -> None:
+    def set_calc(self, calc: dict[str, Any]) -> None:
         """
         Define the calculation to be performed.
         The required argument calc is a dictionary with the following keys:
@@ -68,18 +77,19 @@ class CalcRule(BaseScalarRule):
             self._calc_str = calc["calc_str"]
 
         if "variables" in calc:
-            if type(calc["variables"]) is list:
-                self._variables = calc["variables"]
-            if type(calc["variables"]) is str:
-                self._variables = [calc["variables"]]
+            variables = calc["variables"]
+            if isinstance(variables, list):
+                self._variables = variables
+            elif isinstance(variables, str):
+                self._variables = [variables]
 
         if "server" in calc:
-            self._server = calc["server"]
+            self._server: Server = calc["server"]
 
         if "pv_name" in calc:
-            self._pv_name = calc["pv_name"]
+            self._pv_name: str = calc["pv_name"]
 
-    def init_rule(self, value: Value, **kwargs):
+    def init_rule(self, newpvstate: Value) -> RulesFlow:
         """
         Method to initialise monitor call backs for the variables to be monitored.
         This should be added as an on start method when creating the pv.
@@ -92,18 +102,20 @@ class CalcRule(BaseScalarRule):
         ):
             logger.error("calc rule not initialised correctly")
             raise ValueError
-        logger.debug(f"value is {value}, calc is {self._calc_str}, variables are {self._variables}")
+        logger.debug(f"value is {newpvstate}, calc is {self._calc_str}, variables are {self._variables}")
 
         self._subs = []
         for pv in self._variables:
             temp_monitor = self.MonitorCB(self._server, self._pv_name)
             self._subs.append(self._server._ctxt.monitor(pv, temp_monitor.cb))
 
-    def get_variables(self):
+        return RulesFlow.CONTINUE
+
+    def get_variables(self) -> list[Any] | None:
         """
         Return a list of the current values of the pvs in self._variables
         """
-        pvs = []
+        pvs: list[Any] = []
 
         for pv_name in self._variables:
             try:
@@ -114,7 +126,7 @@ class CalcRule(BaseScalarRule):
                 pvs.append(val)
             except Exception:
                 # If there's an error getting the value of a pv return None
-                logging.error("Failed to get pv %s", pv_name)
+                logging.exception("Failed to get pv %s", pv_name)
                 return None
 
         return pvs
@@ -135,8 +147,7 @@ class CalcRule(BaseScalarRule):
         if pv is None:
             return RulesFlow.ABORT
 
-        node = ast.parse(self._calc_str, mode="eval")
-
-        newpvstate["value"] = eval(compile(node, "<string>", "eval"))
+        evaluator = SimpleEval(names={"pv": pv, "m": ModuleWrapper(m, allowed_attrs=_ALLOWED_MATH_ATTRS)})
+        newpvstate["value"] = evaluator.eval(self._calc_str)
 
         return ret_val
