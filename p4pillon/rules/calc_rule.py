@@ -113,7 +113,7 @@ class CalcRule(BaseScalarRule):
                     logging.error("Failed to get pv %s", pv_name)
                     return None
                 pvs.append(val)
-            except Exception:
+            except Exception:  # noqa: PERF203 -- per-item error handling around I/O, returns on first failure
                 # If there's an error getting the value of a pv return None
                 logging.exception("Failed to get pv %s", pv_name)
                 return None

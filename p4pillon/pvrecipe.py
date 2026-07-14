@@ -136,9 +136,7 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
             + f" Config settings are:\n {self.config_settings} \n Initial value:\n {self.initial_value}\n"
         )
 
-        kwargs = {}
-        for name, config in self.rule_configs.items():
-            kwargs[name] = config
+        kwargs = dict(self.rule_configs)
 
         logger.debug(debug_str)
 
