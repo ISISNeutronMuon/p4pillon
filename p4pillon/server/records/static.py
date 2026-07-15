@@ -1,6 +1,6 @@
 """`StaticRecordProvider`: the eager path, building every "<name>.<FIELD>"
 sub-PV up front when a base PV is `add()`-ed. See `.dynamic` for the lazy,
-registry-driven alternative, `.server` for `IOCRecordServer` (which uses
+registry-driven alternative, `.server` for `IOCMimicServer` (which uses
 `.dynamic`, not this module, for its plain-dict shorthand), and the
 `p4pillon.server.records` package docstring for the overall rationale.
 """

@@ -1,7 +1,7 @@
 """Tests for `p4pillon.server.records`: `infer_rtyp`/`build_record_fields`
 (the field-value logic shared by both providers), `StaticRecordProvider`
-(the eager path), `DynamicRecordFields`/`IOCRecordProvider` (the lazy,
-registry-driven path), and `IOCRecordServer` (the plain-dict shorthand).
+(the eager path), `DynamicRecordFields`/`IOCMimicProvider` (the lazy,
+registry-driven path), and `IOCMimicServer` (the plain-dict shorthand).
 Thread-flavored coverage is the default; the `*Asyncio` classes at the
 bottom only re-check flavor-specific concerns already covered for the
 thread flavor elsewhere in this file.
@@ -16,14 +16,15 @@ from p4p.client.asyncio import Context as AsyncContext
 from p4p.client.thread import Context, TimeoutError
 from p4p.nt import NTNDArray, NTScalar, NTTable
 from p4p.server import DynamicProvider, Server
+from p4p.server.asyncio import SharedPV as RawAsyncSharedPV
 
 from p4pillon.server.asyncio import SharedPV as AsyncSharedPV
 from p4pillon.server.records import (
     FIELD_NAMES,
     STRING_FIELDS,
     DynamicRecordFields,
-    IOCRecordProvider,
-    IOCRecordServer,
+    IOCMimicProvider,
+    IOCMimicServer,
     RecordFieldOverrides,
     StaticRecordProvider,
     build_record_fields,
@@ -420,21 +421,21 @@ class TestStaticRecordProvider:
                 c.get("EXAMPLE:STR.MDEL", timeout=0.2)
 
 
-class TestIOCRecordServer:
-    """`IOCRecordServer`: gives a plain `{name: pv}` dict `providers=` entry
+class TestIOCMimicServer:
+    """`IOCMimicServer`: gives a plain `{name: pv}` dict `providers=` entry
     "<name>.<FIELD>" sub-PVs too, via the lazy path, without disturbing
     entries that aren't a plain dict."""
 
     def test_dict_provider_gets_field_pvs(self):
         # Plain p4p.server.Server treats a bare dict as shorthand for a plain
         # StaticProvider (base PV only, no "<name>.<FIELD>" sub-PVs) --
-        # IOCRecordServer should instead also serve "<name>.<FIELD>" for it,
+        # IOCMimicServer should instead also serve "<name>.<FIELD>" for it,
         # via a DynamicRecordFields-backed DynamicProvider built alongside
         # the (otherwise untouched) dict, with no other code changes.
         pvs = {"EXAMPLE:PV": _pv()}
 
         with (
-            IOCRecordServer(providers=[pvs], isolate=True) as s,
+            IOCMimicServer(providers=[pvs], isolate=True) as s,
             Context("pva", conf=s.conf(), useenv=False) as c,
         ):
             assert c.get("EXAMPLE:PV") == 1.234
@@ -450,7 +451,7 @@ class TestIOCRecordServer:
         explicit.add("EXPLICIT:PV", _pv())
 
         with (
-            IOCRecordServer(providers=[explicit], isolate=True) as s,
+            IOCMimicServer(providers=[explicit], isolate=True) as s,
             Context("pva", conf=s.conf(), useenv=False) as c,
         ):
             assert c.get("EXPLICIT:PV.RTYP") == "ai"
@@ -461,23 +462,23 @@ class TestIOCRecordServer:
         explicit.add("EXPLICIT:PV", _pv())
 
         with (
-            IOCRecordServer(providers=[pvs, explicit], isolate=True) as s,
+            IOCMimicServer(providers=[pvs, explicit], isolate=True) as s,
             Context("pva", conf=s.conf(), useenv=False) as c,
         ):
             assert c.get("EXAMPLE:PV.RTYP") == "ai"
             assert c.get("EXPLICIT:PV.RTYP") == "ai"
 
     def test_ioc_record_provider_passed_directly(self):
-        # An IOCRecordProvider isn't itself a single provider (it holds a
+        # An IOCMimicProvider isn't itself a single provider (it holds a
         # StaticProvider + DynamicProvider pair, see its own docstring) --
-        # IOCRecordServer should unpack it automatically, so passing it bare
+        # IOCMimicServer should unpack it automatically, so passing it bare
         # works the same as spreading it via *base.providers.
-        base = IOCRecordProvider("base")
+        base = IOCMimicProvider("base")
         base.add("EXAMPLE:PV", _pv(), dtyp_choices=["Soft Channel", "Raw Soft Channel"])
         pvs = {"EXAMPLE:PV2": _pv()}
 
         with (
-            IOCRecordServer(providers=[base, pvs], isolate=True) as s,
+            IOCMimicServer(providers=[base, pvs], isolate=True) as s,
             Context("pva", conf=s.conf(), useenv=False) as c,
         ):
             assert c.get("EXAMPLE:PV") == 1.234
@@ -591,13 +592,13 @@ class TestDynamicRecordFields:
                 assert c.get("EXAMPLE:PV7.DESC") == "second"
 
 
-class TestIOCRecordProvider:
-    """`IOCRecordProvider`: the incrementally-mutable `add()`/`remove()`
+class TestIOCMimicProvider:
+    """`IOCMimicProvider`: the incrementally-mutable `add()`/`remove()`
     counterpart to `StaticRecordProvider`, backed by `DynamicRecordFields`
     (the lazy path) instead of building sub-PVs eagerly."""
 
     def setup_method(self, _method):
-        self.P = IOCRecordProvider("test")
+        self.P = IOCMimicProvider("test")
 
     def test_add_creates_registry_entry_and_live_get(self):
         self.P.add("PV:NAME", _pv(), valtype="d")
@@ -818,15 +819,19 @@ class TestDynamicRecordFieldsAsyncio:
             with pytest.raises(asyncio.TimeoutError):
                 await asyncio.wait_for(c.get("EXAMPLE:PV3.NOSUCHFIELD"), timeout=0.2)
 
-    def test_pv_factory_rejects_asyncio_flavor(self):
+    @pytest.mark.parametrize("async_pv_class", [AsyncSharedPV, RawAsyncSharedPV])
+    def test_pv_factory_rejects_asyncio_flavor(self, async_pv_class):
         # Caught eagerly at construction time -- see the pv_factory docstring for
-        # why an asyncio-flavored pv_factory can never work here.
+        # why an asyncio-flavored pv_factory can never work here. Checked against
+        # both p4pillon.server.asyncio.SharedPV (AsyncSharedPV) and the raw p4p
+        # class it subclasses, so rejection doesn't depend on going through
+        # p4pillon's own subclass.
         registry = {"EXAMPLE:PV3": {"valtype": "s"}}
-        with pytest.raises(ValueError, match="is not safe for DynamicRecordFields"):
-            DynamicRecordFields(registry, pv_factory=AsyncSharedPV)
+        with pytest.raises(TypeError, match="is not safe for DynamicRecordFields"):
+            DynamicRecordFields(registry, pv_factory=async_pv_class)
 
-        class SubclassedAsyncPV(AsyncSharedPV):
+        class SubclassedAsyncPV(async_pv_class):
             pass
 
-        with pytest.raises(ValueError, match="is not safe for DynamicRecordFields"):
+        with pytest.raises(TypeError, match="is not safe for DynamicRecordFields"):
             DynamicRecordFields(registry, pv_factory=SubclassedAsyncPV)

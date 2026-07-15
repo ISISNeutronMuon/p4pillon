@@ -1,4 +1,4 @@
-"""`DynamicRecordFields`/`IOCRecordProvider`: the lazy, registry-driven
+"""`DynamicRecordFields`/`IOCMimicProvider`: the lazy, registry-driven
 path, building each "<name>.<FIELD>" sub-PV on demand as clients connect
 rather than eagerly for every record up front. See `.static` for the eager
 `StaticRecordProvider` alternative, and the `p4pillon.server.records` package
@@ -25,13 +25,18 @@ from .fields import (
     _validate_fields,
 )
 
-__all__ = ("DynamicRecordFields", "IOCRecordProvider")
+__all__ = ("DynamicRecordFields", "IOCMimicProvider")
 
 
 class DynamicRecordFields:
     """A `~p4p.server.DynamicProvider` handler serving "<name>.<FIELD>" for base PV
     names known to a `registry`, building each field PV lazily on demand rather than
-    eagerly for every record up front (unlike `~p4pillon.server.records.StaticRecordProvider`). ::
+    eagerly for every record up front (unlike `~p4pillon.server.records.StaticRecordProvider`).
+
+    Most callers should use `IOCMimicProvider` instead, which manages this
+    registry for you via `add()`/`remove()` -- see its docstring for an
+    example. Construct `DynamicRecordFields` directly only when building the
+    registry by hand: ::
 
         from p4p.server import DynamicProvider
         from p4pillon.server.records import DynamicRecordFields
@@ -107,7 +112,7 @@ class DynamicRecordFields:
         return _field_shared_pv(value, self._pv_factory)
 
 
-class IOCRecordProvider(_KeysContainerMixin):
+class IOCMimicProvider(_KeysContainerMixin):
     """An incrementally-mutable `add()`/`remove()` counterpart to
     `~p4pillon.server.records.StaticRecordProvider`, backed by
     `DynamicRecordFields` (the lazy, registry-driven path) instead of
@@ -115,12 +120,12 @@ class IOCRecordProvider(_KeysContainerMixin):
 
         from p4p.nt import NTScalar
         from p4pillon.server.thread import SharedPV
-        from p4pillon.server.records import IOCRecordProvider, IOCRecordServer
+        from p4pillon.server.records import IOCMimicProvider, IOCMimicServer
 
-        provider = IOCRecordProvider("example")
+        provider = IOCMimicProvider("example")
         provider.add("EXAMPLE:PV", SharedPV(nt=NTScalar("d"), initial=1.234))
 
-        with IOCRecordServer(providers=[provider]):
+        with IOCMimicServer(providers=[provider]):
             ...
 
     Unlike `StaticRecordProvider`, this class is not itself a single
@@ -128,7 +133,7 @@ class IOCRecordProvider(_KeysContainerMixin):
     one of each internally (a `StaticProvider` for the base PVs added via
     `add()`, and a `DynamicProvider` wrapping the `DynamicRecordFields`
     registry `add()`/`remove()` maintain), exposed together as `providers`.
-    `IOCRecordServer` unpacks that pair automatically, as above. Passing
+    `IOCMimicServer` unpacks that pair automatically, as above. Passing
     `provider` to plain `~p4p.server.Server` instead needs unpacking it
     yourself: ``Server(providers=[*provider.providers])``.
 
@@ -158,9 +163,9 @@ class IOCRecordProvider(_KeysContainerMixin):
     ) -> None:
         self._static = _StaticProvider(name)
         self._registry: dict[str, RegistryEntry] = {}
-        # DynamicRecordFields stores this dict by reference, so add()/remove()
-        # mutating self._registry is exactly what testChannel()/makeChannel()
-        # see on the next client connection -- no separate sync step needed.
+        # DynamicRecordFields keeps this dict by reference, so add()/remove()
+        # mutations are visible to testChannel()/makeChannel() immediately --
+        # no separate sync step needed.
         self._dynamic = _anonymous_dynamic_provider(DynamicRecordFields(self._registry, pv_factory))
 
     @property
@@ -226,16 +231,14 @@ class IOCRecordProvider(_KeysContainerMixin):
 
 
 def _anonymous_dynamic_provider(handler: DynamicRecordFields) -> _DynamicProvider:
-    # Unlike StaticProvider, DynamicProvider requires an explicit name -- a
-    # random uuid stands in wherever the caller has none of its own to give
-    # it (both IOCRecordProvider and IOCRecordServer's plain-dict shorthand
-    # build one of these anonymously).
+    # DynamicProvider (unlike StaticProvider) requires an explicit name; a
+    # random uuid stands in for callers with none (IOCMimicProvider and
+    # IOCMimicServer's plain-dict shorthand both build one anonymously).
     return _DynamicProvider(str(uuid.uuid4()), handler)
 
 
 def _split_field_name(name: str) -> tuple[str, str | None]:
-    # Returns (basename, field) if `name` is "<basename>.<FIELD>" for a
-    # known field, else (name, None).
+    # (basename, field) for a known "<basename>.<FIELD>" name, else (name, None).
     basename, sep, field = name.rpartition(".")
     if not sep or field not in FIELD_NAMES:
         return name, None
@@ -243,17 +246,19 @@ def _split_field_name(name: str) -> tuple[str, str | None]:
 
 
 def _check_pv_factory_is_safe(pv_factory: type[_SharedPVBase]) -> None:
-    # makeChannel() always runs on the server's own I/O thread, never the
-    # thread running an asyncio event loop, so a pv_factory requiring a
-    # running loop on the calling thread (e.g. asyncio.SharedPV) can never
-    # work here. Detected via the `_requires_running_loop` trait rather than
-    # naming asyncio.SharedPV directly, so any future loop-requiring flavor
-    # is caught the same way.
-    if isinstance(pv_factory, type) and getattr(pv_factory, "_requires_running_loop", False):
+    # makeChannel() runs on the server's I/O thread, never an asyncio event
+    # loop's thread, so a pv_factory needing a running loop there (e.g.
+    # asyncio.SharedPV, or p4pillon.server.asyncio.SharedPV which subclasses
+    # it) can never work here.
+    if not isinstance(pv_factory, type):
+        return
+    from p4p.server.asyncio import SharedPV as _RawAsyncSharedPV
+
+    if issubclass(pv_factory, _RawAsyncSharedPV):
         msg = (
             f"pv_factory={pv_factory.__name__} is not safe for DynamicRecordFields: makeChannel() is "
             "always called by the server's own internal thread, never the thread "
             "running an asyncio event loop, so it can never construct one. Use "
             "p4pillon.server.thread.SharedPV (the default) instead."
         )
-        raise ValueError(msg)
+        raise TypeError(msg)

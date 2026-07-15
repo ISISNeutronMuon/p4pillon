@@ -3,7 +3,7 @@ DTYP, RTYP, and NAME, and the logic to build each field's initial `~p4p.Value`.
 
 See the `p4pillon.server.records` package docstring for the rationale behind
 each field's default. `StaticRecordProvider` (`.static`) and
-`DynamicRecordFields`/`IOCRecordProvider` (`.dynamic`) all build on the logic
+`DynamicRecordFields`/`IOCMimicProvider` (`.dynamic`) all build on the logic
 here to actually serve these as "RECORD.FIELD" sub-PVs.
 """
 
@@ -77,17 +77,13 @@ MENU_ALARM_STAT: list[str] = [
 MENU_ALARM_SEVR: list[str] = ["NO_ALARM", "MINOR", "MAJOR", "INVALID"]
 MENU_YES_NO: list[str] = ["NO", "YES"]
 
-# --- every field declared in dbCommon.dbd that has an external (gettable)
-#     representation on a real IOC.  A menu-kind field has 'choices'; every
-#     other field has 'valtype', its p4p NTScalar value type code (see
-#     documentation/values.rst).  'default' gives the value dbCommon.dbd's
-#     own initial() implies (or the type's zero value, where none is
-#     declared), absent a per-PV override.  DTYP, RTYP and NAME are handled
-#     separately since none of them follow this pattern.
-#
-# link fields (DBF_INLINK/DBF_OUTLINK/DBF_FWDLINK: TSEL, SDIS, FLNK) are
-# exposed as their textual link specification (valtype 's'), same as pvxs
-# does (see ioc/channel.cpp).
+# Every field declared in dbCommon.dbd with an external (gettable) IOC
+# representation. A menu-kind field has 'choices'; others have 'valtype'
+# (p4p NTScalar type code, see documentation/values.rst) and 'default'
+# (dbCommon.dbd's initial(), or the type's zero value). DTYP/RTYP/NAME don't
+# follow this pattern and are handled separately. Link fields (TSEL, SDIS,
+# FLNK) are exposed as their textual link spec (valtype 's'), same as pvxs
+# (see ioc/channel.cpp).
 
 COMMON_FIELDS: dict[str, dict[str, Any]] = {
     "ASG": {"valtype": "s", "default": ""},
@@ -198,7 +194,7 @@ RecordFieldOverrides = TypedDict(
     total=False,
 )
 RecordFieldOverrides.__doc__ = """Shape of the `fields` override dict accepted by
-`build_record_fields`, `StaticRecordProvider.add`, and `IOCRecordProvider.add`.
+`build_record_fields`, `StaticRecordProvider.add`, and `IOCMimicProvider.add`.
 Every key is optional; a present key's value is a raw value for scalar-kind
 fields, or a choice name (str) for menu-kind fields including DTYP and RTYP.
 An unrecognized key is ignored and emits a `UserWarning` (see `_validate_fields`).
@@ -279,9 +275,8 @@ def _menu_pv(choices: list[str], default_name: str, override: str | None) -> Val
 
 
 def _scalar_pv(valtype: str, default: Any, override: Any) -> Value:
-    # default/override are whatever Python-native type valtype's NTScalar
-    # wraps (str, int, float, bool, ...) -- inherently dynamic, not worth a
-    # union that has to track every valtype this ever supports.
+    # default/override's type depends on valtype (str, int, float, bool, ...)
+    # -- not worth a union that has to track every valtype this supports.
     return _scalar_nt(valtype).wrap(default if override is None else override)
 
 
@@ -298,11 +293,10 @@ def _raise_rtyp_not_inferrable(desc: str) -> NoReturn:
 
 
 def _raw_current_or_none(pv: _SharedPVBase) -> Value | None:
-    # Best-effort raw Value of pv's live current(), for when pv.nt is None.
-    # None means "unknown": not open()'d yet, current() itself failed, or
-    # current() returned something we can't actually trace back to a real
-    # Value (e.g. a hand-rolled unwrap= with no `.raw`).
-    # Shared by _check_rtyp_inferrable and _description_of_pv.
+    # Best-effort raw Value of pv's live current(), used when pv.nt is None.
+    # None means "unknown" (not open()'d yet, current() failed, or an
+    # unwrap= with no .raw) -- shared by _check_rtyp_inferrable and
+    # _description_of_pv.
     try:
         current = pv.current()
     except Exception:
@@ -314,7 +308,6 @@ def _raw_current_or_none(pv: _SharedPVBase) -> Value | None:
 
 
 def _description_of_pv(pv: _SharedPVBase) -> str:
-    # Snapshot of pv's display.description, or "" if absent.
     nt = getattr(pv, "nt", None)
     if nt is not None and "display.description" not in nt.type:
         return ""
@@ -326,15 +319,15 @@ def _description_of_pv(pv: _SharedPVBase) -> str:
 
 
 def _check_rtyp_inferrable(pv: _SharedPVBase) -> None:
-    # pv.nt tells us the PV's actual type with no further access, when set.
+    # pv.nt already gives the type -- skip the current()-based fallback below.
     nt = getattr(pv, "nt", None)
     if nt is not None:
         if not isinstance(nt, NTScalar):
             _raise_rtyp_not_inferrable(f"a {type(nt).__name__}-backed PV")
         return
 
-    # pv.nt is None -- fall back to classifying the live Value's structure.
-    # Unavailable current() is treated as NTType.UNKNOWN, i.e. never rejected.
+    # pv.nt unset -- classify the live Value's structure instead; an
+    # unavailable current() counts as NTType.UNKNOWN (never rejected).
     raw = _raw_current_or_none(pv)
     # id_nttype_type (not id_nttype) deliberately: id_nttype's Value-dispatch
     # branch reads `value.type` as a property, but p4p.wrapper.Value.type is

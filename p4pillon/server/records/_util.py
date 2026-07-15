@@ -9,7 +9,7 @@ class _KeysContainerMixin:
     """Implements `__contains__`/`__iter__`/`__len__` against `_keys()`, for
     providers whose only enumeration primitive is a `.keys()`-like call --
     p4p's `StaticProvider` (which both `StaticRecordProvider` and
-    `IOCRecordProvider` are backed by) exposes no dunders of its own.
+    `IOCMimicProvider` are backed by) exposes no dunders of its own.
     """
 
     def _keys(self) -> Collection[str]:
