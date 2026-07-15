@@ -19,8 +19,8 @@ from p4p.server.thread import SharedPV as _ThreadSharedPV  # noqa: E402
 
 class SharedPV(_ThreadSharedPV):
     # A real subclass rather than a bare re-export of p4p.server.thread.SharedPV,
-    # matching p4pillon.server.asyncio.SharedPV -- see that module's comment
-    # for why patching an attribute onto the shared p4p class isn't used instead.
+    # matching p4pillon.server.asyncio.SharedPV -- needed as a base class for
+    # further mixins (e.g. p4pillon.thread.sharednt.SharedNT).
     pass
 
 
