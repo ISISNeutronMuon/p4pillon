@@ -26,6 +26,7 @@ from p4pillon.server.records import (
     IOCMimicProvider,
     IOCMimicServer,
     RecordFieldOverrides,
+    RegistryEntry,
     StaticRecordProvider,
     build_record_fields,
     infer_rtyp,
@@ -143,7 +144,8 @@ class TestBuildRecordFields:
 
     def test_unknown_fields_key_warns_but_does_not_raise(self):
         with pytest.warns(UserWarning, match="DESK"):
-            built = build_record_fields("PV:NAME", "d", fields={"ASG": "hello", "DESK": "typo"})
+            # Deliberate "DESK" typo asserts the UserWarning; ty flags it against RecordFieldOverrides.
+            built = build_record_fields("PV:NAME", "d", fields={"ASG": "hello", "DESK": "typo"})  # ty: ignore[invalid-argument-type, invalid-key]
         assert built["ASG"]["value"] == "hello"
         assert "DESK" not in built
 
@@ -496,19 +498,20 @@ class TestDynamicRecordFields:
         # otherwise inspected until (if ever) a client connects to that
         # specific record's fields -- validated eagerly here instead so the
         # typo is caught regardless of whether a client ever asks.
+        # Deliberate "DESK" typo (asserts UserWarning) makes this an invalid RegistryEntry for ty.
         registry = {"EXAMPLE:PV3": {"valtype": "s", "fields": {"DESK": "typo"}}}
         with pytest.warns(UserWarning, match="DESK"):
-            DynamicRecordFields(registry)
+            DynamicRecordFields(registry)  # ty: ignore[invalid-argument-type]
 
     def test_no_warning_for_valid_fields(self):
-        registry = {"EXAMPLE:PV3": {"valtype": "s", "fields": {"DESC": "hello"}}}
+        registry: dict[str, RegistryEntry] = {"EXAMPLE:PV3": {"valtype": "s", "fields": {"DESC": "hello"}}}
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             DynamicRecordFields(registry)
 
     def test_live_get(self):
         base = {"EXAMPLE:PV3": SharedPV(nt=NTScalar("s"), initial="hello")}
-        registry = {"EXAMPLE:PV3": {"valtype": "s"}}
+        registry: dict[str, RegistryEntry] = {"EXAMPLE:PV3": {"valtype": "s"}}
         field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
 
         with (
@@ -535,7 +538,7 @@ class TestDynamicRecordFields:
 
     def test_adel_mdel_reachable_for_numeric_valtype(self):
         base = {"EXAMPLE:PV4": SharedPV(nt=NTScalar("l"), initial=42)}
-        registry = {"EXAMPLE:PV4": {"valtype": "l", "fields": {"ADEL": 3, "MDEL": 1}}}
+        registry: dict[str, RegistryEntry] = {"EXAMPLE:PV4": {"valtype": "l", "fields": {"ADEL": 3, "MDEL": 1}}}
         field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
 
         with (
@@ -551,7 +554,7 @@ class TestDynamicRecordFields:
         # re-read per makeChannel() call; 'fields'={"DESC": ...} is ignored,
         # same as StaticRecordProvider.
         base = {"EXAMPLE:PV5": SharedPV(nt=NTScalar("d"), initial=1.0)}
-        registry = {
+        registry: dict[str, RegistryEntry] = {
             "EXAMPLE:PV5": {"valtype": "d", "description": "snapshot description", "fields": {"DESC": "ignored"}}
         }
         field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
@@ -565,7 +568,7 @@ class TestDynamicRecordFields:
 
     def test_desc_default_empty_without_registry_description(self):
         base = {"EXAMPLE:PV6": SharedPV(nt=NTScalar("d"), initial=1.0)}
-        registry = {"EXAMPLE:PV6": {"valtype": "d"}}
+        registry: dict[str, RegistryEntry] = {"EXAMPLE:PV6": {"valtype": "d"}}
         field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
 
         with (
@@ -579,7 +582,7 @@ class TestDynamicRecordFields:
         # *next* connect (still just a snapshot, not a live subscription --
         # see RegistryEntry's docstring).
         base = {"EXAMPLE:PV7": SharedPV(nt=NTScalar("d"), initial=1.0)}
-        registry = {"EXAMPLE:PV7": {"valtype": "d", "description": "first"}}
+        registry: dict[str, RegistryEntry] = {"EXAMPLE:PV7": {"valtype": "d", "description": "first"}}
         field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
 
         with Server(providers=[base, field_provider], isolate=True) as s:
@@ -667,7 +670,8 @@ class TestIOCMimicProvider:
 
     def test_unknown_fields_key_warns_at_add_time(self):
         with pytest.warns(UserWarning, match="DESK"):
-            self.P.add("PV:NAME", _pv(), fields={"DESK": "typo"})
+            # Deliberate "DESK" typo asserts the UserWarning; ty flags it against RecordFieldOverrides.
+            self.P.add("PV:NAME", _pv(), fields={"DESK": "typo"})  # ty: ignore[invalid-argument-type, invalid-key]
 
     def test_desc_is_snapshot_taken_at_add_time(self):
         # No live PV reference held -- a later pv.post() changing
@@ -805,7 +809,7 @@ class TestDynamicRecordFieldsAsyncio:
         # and client here are asyncio-flavored -- see DynamicRecordFields' pv_factory
         # docstring.
         base = {"EXAMPLE:PV3": _async_pv("s", "hello")}
-        registry = {"EXAMPLE:PV3": {"valtype": "s"}}
+        registry: dict[str, RegistryEntry] = {"EXAMPLE:PV3": {"valtype": "s"}}
         field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
 
         with (
@@ -826,7 +830,7 @@ class TestDynamicRecordFieldsAsyncio:
         # both p4pillon.server.asyncio.SharedPV (AsyncSharedPV) and the raw p4p
         # class it subclasses, so rejection doesn't depend on going through
         # p4pillon's own subclass.
-        registry = {"EXAMPLE:PV3": {"valtype": "s"}}
+        registry: dict[str, RegistryEntry] = {"EXAMPLE:PV3": {"valtype": "s"}}
         with pytest.raises(TypeError, match="is not safe for DynamicRecordFields"):
             DynamicRecordFields(registry, pv_factory=async_pv_class)
 

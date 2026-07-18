@@ -6,7 +6,7 @@ docstring for the overall rationale.
 """
 
 import uuid
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 
 from p4p.server import DynamicProvider as _DynamicProvider
 from p4p.server import StaticProvider as _StaticProvider
@@ -62,14 +62,16 @@ class DynamicRecordFields:
 
     def __init__(
         self,
-        registry: dict[str, RegistryEntry],
+        registry: Mapping[str, RegistryEntry],
         pv_factory: type[_SharedPVBase] | None = None,
     ) -> None:
         if pv_factory is not None:
             _check_pv_factory_is_safe(pv_factory)
         for name, entry in registry.items():
             _validate_fields(entry.get("fields") or {}, name)
-        self._registry: dict[str, RegistryEntry] = registry
+        # Read-only here: only .get() is ever called (testChannel/makeChannel).
+        # IOCMimicProvider passes its own dict and mutates that by reference.
+        self._registry: Mapping[str, RegistryEntry] = registry
         self._pv_factory: type[_SharedPVBase] | None = pv_factory
 
     def testChannel(self, name: str) -> bool:  # noqa: N802 - mandated by the p4p DynamicProvider protocol
