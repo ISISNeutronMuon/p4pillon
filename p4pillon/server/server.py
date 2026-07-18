@@ -42,7 +42,10 @@ class Server(ABC):
 
         self._running = False
 
-        self._ctxt = Server._context("pva")
+        # self._context, not Server._context: the flavored subclasses
+        # override _context, and hard-binding the base attribute would
+        # build a raw p4p.client.raw.Context instead.
+        self._ctxt = self._context("pva")
 
     def start(self) -> None:
         """Start the Server"""

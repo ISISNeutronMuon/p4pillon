@@ -3,14 +3,15 @@ Regression tests verifying that the thread/asyncio "variants" of SharedNT,
 pvrecipe, and Server are genuinely distinct and don't leak global state
 into one another.
 
-The SharedNT/Server._context checks run in a fresh subprocess, since their
-correctness depends on import order/global state that earlier-imported test
-modules in the same pytest session may have already disturbed.
+The import-order and Server._context checks run in a fresh subprocess, since
+their correctness depends on import order/global state that earlier-imported
+test modules in the same pytest session may have already disturbed.
 """
 
 import subprocess
 import sys
 
+import pytest
 from p4p.server.asyncio import SharedPV as AsyncioSharedPV
 from p4p.server.thread import SharedPV as ThreadSharedPV
 
@@ -24,22 +25,15 @@ def _run(script: str) -> subprocess.CompletedProcess:
 
 def test_asyncio_sharednt_is_not_the_thread_sharednt():
     """asyncio and thread SharedNT must be distinct classes, each deriving
-    from its own flavour's real p4p SharedPV."""
-    script = """
-from p4pillon.asyncio.sharednt import SharedNT as AsyncioSharedNT
-from p4pillon.thread.sharednt import SharedNT as ThreadSharedNT
-from p4p.server.asyncio import SharedPV as AsyncioSharedPV
-from p4p.server.thread import SharedPV as ThreadSharedPV
-assert AsyncioSharedNT is not ThreadSharedNT, (
-    'asyncio and thread SharedNT resolved to the same class object')
-assert issubclass(AsyncioSharedNT, AsyncioSharedPV), (
-    'asyncio SharedNT does not derive from p4p asyncio SharedPV')
-assert issubclass(ThreadSharedNT, ThreadSharedPV), (
-    'thread SharedNT does not derive from p4p thread SharedPV')
-print('OK')
-"""
-    result = _run(script)
-    assert result.returncode == 0, result.stdout + result.stderr
+    from its own flavour's real p4p SharedPV. Class identity is fixed at
+    class-creation time under the inheritance design, so unlike the
+    import-order tests below this needs no subprocess."""
+    from p4pillon.asyncio.sharednt import SharedNT as AsyncioSharedNT
+    from p4pillon.thread.sharednt import SharedNT as ThreadSharedNT
+
+    assert AsyncioSharedNT is not ThreadSharedNT, "asyncio and thread SharedNT resolved to the same class object"
+    assert issubclass(AsyncioSharedNT, AsyncioSharedPV), "asyncio SharedNT does not derive from p4p asyncio SharedPV"
+    assert issubclass(ThreadSharedNT, ThreadSharedPV), "thread SharedNT does not derive from p4p thread SharedPV"
 
 
 def test_thread_pvrecipe_builds_thread_sharedpv():
@@ -63,6 +57,53 @@ async def test_asyncio_pvrecipe_builds_asyncio_sharedpv():
 
     assert isinstance(pv, AsyncioSharedPV)
     assert not isinstance(pv, ThreadSharedPV)
+
+
+def test_unflavored_pvrecipe_fails_loudly():
+    """The base-module recipes are not bound to a concurrency flavor, and
+    must refuse to build a PV rather than silently constructing a raw-flavored
+    one (which would run put/rpc handlers on PVA network threads with none of
+    the flavors' serialization)."""
+    from p4pillon.pvrecipe import PVScalarRecipe
+
+    with pytest.raises(TypeError, match=r"thread\.pvrecipe"):
+        PVScalarRecipe(PVTypes.DOUBLE, "test", 1.0).create_pv()
+
+
+def test_handler_hooks_survive_p4p_imported_first():
+    """Regression test for the former monkey-patch architecture: the patch of
+    p4p.server.raw.SharedPV silently did nothing if p4p.server.thread/asyncio
+    had already been imported, so the open()/post()/close() handler callbacks
+    never fired. With HandlerHooksMixin composed by ordinary inheritance,
+    import order must not matter."""
+    script = """
+import p4p.server.thread   # imported BEFORE p4pillon -- used to defeat the patch
+import p4p.server.asyncio
+from p4p.nt import NTScalar
+from p4pillon.server.raw import HandlerHooksMixin
+from p4pillon.server.thread import SharedPV
+
+calls = []
+class H:
+    def open(self, value):
+        calls.append('open')
+    def post(self, pv, value):
+        calls.append('post')
+    def close(self, pv):
+        calls.append('close')
+
+pv = SharedPV(handler=H(), nt=NTScalar('d'), initial=5.0)
+pv.post(6.0)
+pv.close()
+assert calls == ['open', 'post', 'close'], f'hooks did not all fire: {calls}'
+
+from p4pillon.server.asyncio import SharedPV as AsyncSharedPV
+assert issubclass(SharedPV, HandlerHooksMixin)
+assert issubclass(AsyncSharedPV, HandlerHooksMixin)
+print('OK')
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_base_server_context_not_polluted_by_variant_import():

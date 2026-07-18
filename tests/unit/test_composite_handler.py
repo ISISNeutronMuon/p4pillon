@@ -91,7 +91,7 @@ class TestCompositeHandler(unittest.TestCase):
         self.comp.put(self.pv, self.op)
         assert self.h1.calls[0][0] == "put"
         assert self.h2.calls[0][0] == "put"
-        self.op.done.assert_called_once_with()
+        self.op.done.assert_called_once_with(error=None)
 
     def test_put_abort_exception(self):
         def abort_put(_pv, _op):
