@@ -1,4 +1,7 @@
+import asyncio
+
 import numpy
+import pytest
 import pytest_asyncio
 from p4p.nt import NTNDArray, NTScalar
 
@@ -78,4 +81,32 @@ class TestNoDoubleWrapOfInitialValue:
         pv = SharedPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))
         pv.post(numpy.ones((4, 4)))
         assert numpy.array_equal(numpy.asarray(pv.current()).flatten(), numpy.ones(16))
+        pv.close()
+
+
+class TestAsyncioPostDeferred:
+    """On the asyncio flavor ``post_deferred`` marshals the post onto the PV's
+    loop, returning a `concurrent.futures.Future`. It is both the off-loop
+    escape hatch and the flavor-neutral name for deferring a post (e.g. a
+    fan-out to another PV)."""
+
+    async def test_applies_value_on_loop(self):
+        pv = SharedPV(nt=NTScalar("d"))
+        pv.open(0.0)
+        # Called on the loop, the post is scheduled for the next iteration;
+        # awaiting the Future yields control so it can run.
+        await asyncio.wrap_future(pv.post_deferred(4.0))
+        assert pv.current() == 4.0
+        pv.close()
+
+    async def test_propagates_exception(self):
+        class Boom(Handler):
+            def post(self, _pv, _value):
+                msg = "boom"
+                raise RuntimeError(msg)
+
+        pv = SharedPV(handler=Boom(), nt=NTScalar("d"))
+        pv.open(0.0)
+        with pytest.raises(RuntimeError, match="boom"):
+            await asyncio.wrap_future(pv.post_deferred(1.0))
         pv.close()

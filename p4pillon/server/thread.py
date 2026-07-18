@@ -4,9 +4,11 @@
 """
 
 from collections.abc import Callable
+from concurrent.futures import Future
 from typing import Any
 
 from p4p.server.thread import SharedPV as _ThreadSharedPV
+from p4p.util import WorkQueue
 
 from p4pillon.server.raw import Handler, HandlerHooksMixin
 
@@ -20,6 +22,48 @@ class SharedPV(HandlerHooksMixin, _ThreadSharedPV):
     the per-PV lock, a read-modify-write against ``pv.current()`` from
     inside a handler is atomic.
     """
+
+    # Set by p4p.server.thread.SharedPV.__init__ (the PV's own work queue).
+    _queue: WorkQueue
+
+    def post_deferred(self, value: Any, **kwargs: Any) -> Future[None]:
+        """Enqueue a `post` onto this PV's own work queue, returning a
+        `concurrent.futures.Future` that resolves once it has run there;
+        wrapping and handler exceptions propagate through it.
+
+        Unlike `post`, which runs synchronously on the caller's thread and
+        holds ``_hook_lock`` across the whole hook, ``post_deferred`` hands
+        the work to the queue. That lets a handler fan a change out to
+        *another* PV (``other.post_deferred(v)``) without nesting that PV's
+        lock inside its own -- the lock order forbidden by
+        `~p4pillon.server.raw.HandlerHooksMixin` -- and keeps a failure in
+        the deferred post from aborting the caller's own post: it surfaces on
+        the returned Future instead.
+
+        This is the thread-flavor counterpart of the asyncio flavor's
+        `~p4pillon.server.asyncio.SharedPV.post_deferred` (there, marshalling
+        onto the event loop); both return a `concurrent.futures.Future`, so a
+        handler can defer a post the same way regardless of flavor.
+        """
+        fut: Future[None] = Future()
+
+        # Mirrors asyncio post_deferred: post() is synchronous, so a plain
+        # queued callback suffices, and every exception is routed to the
+        # Future rather than logged-and-swallowed by the queue's _on_queue.
+        def _post() -> None:
+            if not fut.set_running_or_notify_cancel():
+                return
+            try:
+                self.post(value, **kwargs)
+            except BaseException as exc:
+                fut.set_exception(exc)
+                if not isinstance(exc, Exception):
+                    raise
+            else:
+                fut.set_result(None)
+
+        self._queue.push(_post)
+        return fut
 
     def _exec(self, op: Any, fn: Callable[..., Any], *args: Any) -> None:
         """Run ``fn`` on the PV's work queue under ``_hook_lock``, so
