@@ -24,7 +24,7 @@ class SharedPV(HandlerHooksMixin, _AsyncioSharedPV):
     **Threading:** serialization here comes from event-loop affinity rather
     than cross-thread locking: put/rpc handlers run on the PV's event loop,
     so open() and post() must be called from that loop too (a call from any
-    other thread raises `RuntimeError`; use `post_threadsafe` instead). A
+    other thread raises `RuntimeError`; use `post_deferred` instead). A
     cross-thread lock could block the event loop, and a coroutine put
     handler would escape it at its first ``await`` anyway. close() is not
     affinity-checked (shutdown paths legitimately run off-loop); the mixin's
@@ -43,7 +43,7 @@ class SharedPV(HandlerHooksMixin, _AsyncioSharedPV):
         if running is not self.loop:
             msg = (
                 f"{what}() on an asyncio SharedPV must be called from its own event loop; "
-                "use post_threadsafe() from other threads"
+                "use post_deferred() from other threads"
             )
             raise RuntimeError(msg)
 
@@ -55,11 +55,19 @@ class SharedPV(HandlerHooksMixin, _AsyncioSharedPV):
             self._assert_loop_affinity(what)
         return self._hook_lock
 
-    def post_threadsafe(self, value: Any, **kwargs: Any) -> Future[None]:
-        """post() from any thread: marshal the post onto the PV's event loop.
+    def post_deferred(self, value: Any, **kwargs: Any) -> Future[None]:
+        """Defer a `post`: marshal it onto the PV's event loop, returning a
+        `concurrent.futures.Future` that resolves once it has run there;
+        wrapping and handler exceptions propagate through it.
 
-        Returns a `concurrent.futures.Future` resolving once the post has
-        run there; wrapping and handler exceptions propagate through it.
+        This is both the off-loop escape hatch (open()/post() called from any
+        other thread raise; this is how you post from one) and the
+        flavor-neutral name a handler uses to defer a post -- e.g. to fan a
+        change out to another PV without nesting its lock. On this flavor the
+        two coincide: marshalling onto the loop *is* the deferral. The thread
+        flavor provides a matching `~p4pillon.server.thread.SharedPV.post_deferred`
+        backed by its work queue, so a handler can defer a post the same way
+        regardless of flavor.
         """
         fut: Future[None] = Future()
 

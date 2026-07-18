@@ -399,7 +399,7 @@ def _assert_loop_affinity(self, what):
     if running is not self.loop:
         raise RuntimeError(
             f"{what}() on an asyncio SharedPV must be called from its own "
-            f"event loop; use post_threadsafe() from other threads"
+            f"event loop; use post_deferred() from other threads"
         )
 ```
 
@@ -407,13 +407,13 @@ def _assert_loop_affinity(self, what):
 a loud, immediate `RuntimeError` at the exact call site that's wrong.
 
 But sometimes you genuinely *are* on another thread — a hardware polling
-thread, say — and need to update the PV. For that there's `post_threadsafe()`:
+thread, say — and need to update the PV. For that there's `post_deferred()`:
 it schedules the post onto the loop with `call_soon_threadsafe` and hands back
 a `concurrent.futures.Future` so the caller can wait for completion and receive
 any exception:
 
 ```python
-def post_threadsafe(self, value, **kwargs):
+def post_deferred(self, value, **kwargs):
     fut = concurrent.futures.Future()
     def _do():
         if not fut.set_running_or_notify_cancel():
@@ -430,7 +430,7 @@ def post_threadsafe(self, value, **kwargs):
 
 **The user-facing rule** (worth memorizing): on the asyncio flavor, call
 `post()` when your code is already on the PV's event loop (inside handlers,
-coroutines, tasks, loop callbacks); call `post_threadsafe()` when you're on any
+coroutines, tasks, loop callbacks); call `post_deferred()` when you're on any
 other thread. When in doubt, call `post()` — if it's wrong, the affinity check
 tells you immediately and names the alternative. Never wait on the returned
 Future from the loop thread itself: that blocks the very loop that must run the
@@ -560,30 +560,41 @@ Thread 2:  in pv_b.post → pv_a.post   holds B, wants A     → deadlock
 Both threads wait forever. And note how easy this is to introduce by accident:
 each handler looks locally reasonable; the deadlock only exists in the *pair*.
 
-### Safe pattern for the thread flavor: defer onto the other PV's executor
+### Safe pattern for the thread flavor: `post_deferred` onto the other PV
 
 The fix is to **stop holding PV-A's lock at the moment PV-B's lock is taken.**
 Instead of calling `pv_b.post()` inline, hand the post to *PV-B's own worker
-thread*, which will take PV-B's lock while holding nothing else:
+thread*, which will take PV-B's lock while holding nothing else. Use
+`post_deferred`:
 
 ```python
 class MirrorHandler:
     def post(self, pv, value):
         # NOT inline:  other_pv.post(derive(value))
-        other_pv._exec(None, other_pv.post, derive(value))
+        other_pv.post_deferred(derive(value))
 ```
 
-`_exec` (Section 4, Step 3) enqueues the call onto PV-B's work queue. When PV-B's
-worker later runs it, that worker holds **only** PV-B's lock — there is no A→B
-ordering edge, so the cycle above cannot form. This is the thread-flavor
-analogue of `post_threadsafe`, and it is the pattern to reach for whenever a
+`post_deferred` enqueues the post onto PV-B's work queue and returns a
+`concurrent.futures.Future`. When PV-B's worker later runs it, that worker holds
+**only** PV-B's lock — there is no A→B ordering edge, so the cycle above cannot
+form. It is the thread-flavor counterpart of the asyncio flavor's
+`post_deferred` (which marshals the post onto the loop), so a handler can fan out
+the same way regardless of flavor, and it is the pattern to reach for whenever a
 handler fans out to other PVs that themselves have handlers.
 
+> Don't hand-roll this as `other_pv._exec(None, other_pv.post, v)`.
+> `_exec(None, …)` routes through `_on_queue`, which *logs and swallows* the
+> exception, so a failed mirror post there vanishes silently — whereas
+> `post_deferred` captures it on the returned Future.
+
 The trade-off: the mirror post now runs **later**, on another thread, so you
-**don't get a synchronous readback** of PV-B inside your handler, and an
-exception raised by PV-B's post surfaces on PV-B's worker, not to your caller.
-That's the price of breaking the lock nesting — and usually a fair one, because
-a mirror rarely needs to read PV-B back mid-handler.
+**don't get a synchronous readback** of PV-B inside your handler. An exception
+raised by PV-B's post no longer reaches your caller inline — but it is **not
+lost**: it surfaces on the returned Future (`fut.result()` re-raises,
+`fut.exception()` returns it), so a fan-out failure can be logged or handled
+without ever being able to abort PV-A's own post. That's the price of breaking
+the lock nesting — and usually a fair one, because a mirror rarely needs to read
+PV-B back mid-handler.
 
 If you truly need the update to be synchronous, the only safe alternative is a
 **global ordering**: guarantee updates always flow one way (A→B, never B→A) so
@@ -592,7 +603,7 @@ posts B→A silently reintroduces the deadlock — so prefer deferral unless you
 enforce the direction structurally (as `DescMirrorHandler` does by giving its
 sub-PVs no handlers at all).
 
-### Safe pattern for the asyncio flavor: inline on the loop, `post_threadsafe` off it
+### Safe pattern for the asyncio flavor: inline on the loop, `post_deferred` off it
 
 The asyncio flavor is easier here, precisely because it has **no cross-thread
 lock** and only one thread. Inside a handler you are already on the loop thread,
@@ -609,13 +620,18 @@ class MirrorHandler:
 The only thing to respect is affinity: `post()` must be on the loop. Inside a
 handler you always are. If instead you're updating PV-B from a genuinely
 different thread (a hardware poller, a thread-pool callback), use
-`post_threadsafe()` so the post is marshalled onto the loop:
+`post_deferred()` so the post is marshalled onto the loop:
 
 ```python
-other_pv.post_threadsafe(derive(value))          # from a foreign thread
-# other_pv.post_threadsafe(derive(value)).result()  # only if you must wait —
-#                                                    # and never from the loop
+other_pv.post_deferred(derive(value))          # from a foreign thread
+# other_pv.post_deferred(derive(value)).result()  # only if you must wait —
+#                                                  # and never from the loop
 ```
+
+`post_deferred(...)` is the one spelling that works on **either** flavor — e.g.
+a handler written to be flavor-agnostic. On the asyncio flavor it marshals onto
+the loop; on the thread flavor it defers onto the work queue as above. Both
+return a `concurrent.futures.Future`.
 
 ### Putting it together
 
@@ -624,10 +640,11 @@ already holds PV-A's lock (it runs on the worker under `_exec`). So the recipe,
 whether you're in `put` or `post`:
 
 1. **Same PV?** Just call `pv.post(...)`. Always safe.
-2. **Different PV, thread flavor?** Defer: `other_pv._exec(None, other_pv.post, new_value)`.
+2. **Different PV, thread flavor?** Defer: `other_pv.post_deferred(new_value)`.
 3. **Different PV, asyncio flavor, and you're in a handler?** Call
-   `other_pv.post(...)` inline — you're on the loop.
-4. **Different PV from a foreign thread (asyncio)?** `other_pv.post_threadsafe(...)`.
+   `other_pv.post(...)` inline — you're on the loop — or `post_deferred(...)`
+   for the flavor-neutral spelling.
+4. **Different PV from a foreign thread (asyncio)?** `other_pv.post_deferred(...)`.
 
 The through-line: never let PV-B's lock be taken *while you still hold PV-A's*.
 Same-PV re-entry doesn't count (one lock, re-entered); deferral and the
@@ -643,8 +660,8 @@ single-threaded loop both ensure PV-B's lock is taken with nothing else held.
 | a handler shared across PVs                         | subclass/use `CompositeHandler`, or add your own `RLock`       |
 | code updating a **thread**-flavor PV from a thread | just call `pv.post(...)` — the lock makes it safe              |
 | code updating an **asyncio** PV, on the loop        | `pv.post(...)`                                                  |
-| code updating an **asyncio** PV, off the loop       | `pv.post_threadsafe(...)`, `.result()` if you need to wait     |
-| a handler that updates a **different** PV, thread   | defer it: `other._exec(None, other.post, v)` (see §6)          |
+| code updating an **asyncio** PV, off the loop       | `pv.post_deferred(...)`, `.result()` if you need to wait       |
+| a handler that updates a **different** PV, thread   | defer it: `other.post_deferred(v)` (see §6)                    |
 | a handler that updates a **different** PV, asyncio   | `other.post(v)` inline (you're on the loop); see §6            |
 
 ### The mental model in three sentences
@@ -656,7 +673,7 @@ single-threaded loop both ensure PV-B's lock is taken with nothing else held.
    (the per-PV dispatch lock), and `CompositeHandler` adds a second re-entrant
    lock for state shared across PVs (the per-handler state lock).
 3. The asyncio flavor uses event-loop affinity instead of a lock — `post()` on
-   the loop, `post_threadsafe()` off it — and one lock-ordering rule (PV lock
+   the loop, `post_deferred()` off it — and one lock-ordering rule (PV lock
    before handler lock; never post to another PV under your handler lock) keeps
    the whole thing deadlock-free; §6 shows how to safely reach another PV from
    inside a handler despite that rule.

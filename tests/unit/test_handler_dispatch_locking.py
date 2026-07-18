@@ -10,7 +10,7 @@ Option 2 cannot -- one handler instance shared across several PVs (whose
 per-PV locks are distinct).
 
 Asyncio flavor: serialization comes from event-loop affinity instead --
-post()/open() off the loop thread raise, and post_threadsafe() marshals a
+post()/open() off the loop thread raise, and post_deferred() marshals a
 post onto the loop.
 """
 
@@ -190,7 +190,7 @@ class TestCompositeHandlerSharedAcrossPVs:
 
 
 class TestAsyncioFlavorAffinity:
-    """Asyncio flavor: loop affinity enforced, post_threadsafe() as the escape hatch."""
+    """Asyncio flavor: loop affinity enforced, post_deferred() as the escape hatch."""
 
     async def test_post_on_loop_thread_is_allowed(self):
         pv = AsyncioSharedPV(nt=NTScalar("d"), initial=1.0)
@@ -209,26 +209,26 @@ class TestAsyncioFlavorAffinity:
 
         await asyncio.get_running_loop().run_in_executor(None, worker)
         assert caught, "foreign-thread post() should have raised RuntimeError"
-        assert "post_threadsafe" in str(caught[0])
+        assert "post_deferred" in str(caught[0])
         assert pv.current() == 1.0  # the rejected post must not have stored
 
-    async def test_post_threadsafe_from_foreign_thread(self):
+    async def test_post_deferred_from_foreign_thread(self):
         pv = AsyncioSharedPV(nt=NTScalar("d"), initial=1.0)
 
         def worker() -> None:
-            pv.post_threadsafe(3.0).result(timeout=5.0)
+            pv.post_deferred(3.0).result(timeout=5.0)
 
         await asyncio.get_running_loop().run_in_executor(None, worker)
         assert pv.current() == 3.0
 
-    async def test_post_threadsafe_propagates_exceptions_to_caller(self):
+    async def test_post_deferred_propagates_exceptions_to_caller(self):
         """Wrap/rule failures must reach a waiting foreign-thread caller via
         the Future, preserving the 'poster sees the exception' semantics of
         the synchronous post() path."""
         pv = AsyncioSharedPV(nt=NTScalar("d"), initial=1.0)
 
         def worker() -> None:
-            fut = pv.post_threadsafe(object())  # unwrappable -> ValueError
+            fut = pv.post_deferred(object())  # unwrappable -> ValueError
             with pytest.raises(ValueError, match="Unable to wrap"):
                 fut.result(timeout=5.0)
 

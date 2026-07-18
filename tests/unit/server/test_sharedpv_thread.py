@@ -1,3 +1,6 @@
+from concurrent.futures import Future
+
+import pytest
 from p4p.nt import NTScalar
 
 from p4pillon.server.thread import Handler, SharedPV
@@ -51,3 +54,59 @@ class TestThreadHandler:
         self.pv.close()
         del self.handler
         del self.pv
+
+
+class TestThreadPostDeferred:
+    """``post_deferred`` enqueues a post onto the PV's own work queue and
+    returns a `concurrent.futures.Future` carrying its outcome -- the
+    thread-flavor counterpart of the asyncio flavor's ``post_deferred``."""
+
+    @staticmethod
+    def _open_pv(handler: Handler | None = None) -> SharedPV:
+        pv = SharedPV(handler=handler, nt=NTScalar("d"))
+        pv.open(0.0)
+        return pv
+
+    def test_applies_value(self):
+        pv = self._open_pv()
+        fut = pv.post_deferred(3.0)
+        assert isinstance(fut, Future)
+        assert fut.result(timeout=2) is None
+        assert pv.current() == 3.0
+        pv.close()
+
+    def test_runs_handler(self):
+        # TestThreadHandler.HandlerTest.post() doubles the value.
+        pv = self._open_pv(handler=TestThreadHandler.HandlerTest())
+        pv.post_deferred(21.0).result(timeout=2)
+        assert pv.current() == 42.0
+        pv.close()
+
+    def test_propagates_exception(self):
+        class Boom(Handler):
+            def post(self, pv, value):
+                raise RuntimeError("boom")
+
+        pv = self._open_pv(handler=Boom())
+        fut = pv.post_deferred(1.0)
+        with pytest.raises(RuntimeError, match="boom"):
+            fut.result(timeout=2)
+        pv.close()
+
+    def test_fanout_from_handler_no_deadlock(self):
+        # The motivating case: a handler on one PV defers a post to *another*
+        # PV, without ever nesting the target's lock inside its own.
+        target = self._open_pv()
+        deferred: list[Future[None]] = []
+
+        class Fanout(Handler):
+            def post(self, pv, value):
+                deferred.append(target.post_deferred(value["value"]))
+
+        source = self._open_pv(handler=Fanout())
+        source.post(7.0)
+        assert deferred, "handler should have deferred a post to the target PV"
+        deferred[0].result(timeout=2)
+        assert target.current() == 7.0
+        source.close()
+        target.close()
