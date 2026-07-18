@@ -22,7 +22,7 @@ from p4pillon.definitions import (
 )
 from p4pillon.nt import NTEnum, NTScalar
 from p4pillon.server.raw import SharedPV
-from p4pillon.sharednt import SharedNT
+from p4pillon.sharednt import SharedNTMixin
 from p4pillon.utils import time_in_seconds_and_nanoseconds
 
 NumericTypeT = TypeVar("NumericTypeT", int, Numeric)
@@ -82,8 +82,11 @@ class AlarmLimit(Generic[NumericTypeT]):
 class BasePVRecipe(Generic[SharedPvT], ABC):
     """A description of how to build a PV"""
 
-    # Overridden by thread/asyncio subclasses so build_pv() constructs the matching SharedNT.
-    _sharednt_cls: ClassVar[type] = SharedNT
+    # Set by the thread/asyncio subclasses so build_pv() constructs the
+    # matching SharedNT. Deliberately no default: an unflavored recipe would
+    # otherwise silently build a raw-flavored PV, which runs put/rpc handlers
+    # directly on PVA network threads with none of the flavors' serialization.
+    _sharednt_cls: ClassVar[type[SharedNTMixin] | None] = None
 
     pvtype: PVTypes
     description: str
@@ -132,6 +135,14 @@ class BasePVRecipe(Generic[SharedPvT], ABC):
         """
         This method is called by create_pv in the child classes after construct settings is set.
         """
+        if self._sharednt_cls is None:
+            msg = (
+                f"{type(self).__name__} from p4pillon.pvrecipe is not bound to a "
+                "concurrency flavor; use the same class from p4pillon.thread.pvrecipe "
+                "or p4pillon.asyncio.pvrecipe instead"
+            )
+            raise TypeError(msg)
+
         debug_str = (
             f"Building pv\n Construct settings are: \n {self.construct_settings} \n"
             + f" Config settings are:\n {self.config_settings} \n Initial value:\n {self.initial_value}\n"

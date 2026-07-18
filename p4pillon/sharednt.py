@@ -5,7 +5,6 @@ Wrapper to SharedPV in p4p to automatically create
 from __future__ import annotations
 
 import logging
-from abc import ABC
 from collections import OrderedDict
 from typing import Any
 
@@ -47,7 +46,7 @@ def is_type_subset(fullset: Type, subset: Type) -> bool:
     return True
 
 
-class SharedNTMixin(ABC):
+class SharedNTMixin:
     """
     SharedNTMixin adds handler functionality to support Normative Type logic
     on top of a SharedPV.

@@ -1,33 +1,35 @@
+"""Thread-flavored `SharedPV` with open()/post()/close() handler support:
+`p4p.server.thread.SharedPV` composed with
+`~p4pillon.server.raw.HandlerHooksMixin` (see that module's docstring).
 """
-Monkey patch in required changes to Handlers and SharedPVs
-"""
 
-####
-# First override the base class of p4pillon.server.thread.SharedPV with
-# p4pillon.server.raw.SharedPV. This requires us to perform the imports
-# in a very specific order, which means overriding Linter checks
-import p4p.server.raw
+from collections.abc import Callable
+from typing import Any
 
-from p4pillon.server.raw import SharedPV as _SharedPV
+from p4p.server.thread import SharedPV as _ThreadSharedPV
 
-p4p.server.raw.SharedPV = _SharedPV
+from p4pillon.server.raw import Handler, HandlerHooksMixin
 
-# pylint: disable=unused-import, wrong-import-order, wrong-import-position
-from p4p.server.thread import Handler  # noqa: E402, F401,
-from p4p.server.thread import SharedPV as _ThreadSharedPV  # noqa: E402
+__all__ = ("Handler", "SharedPV")
 
 
-class SharedPV(_ThreadSharedPV):
-    # A real subclass rather than a bare re-export of p4p.server.thread.SharedPV,
-    # matching p4pillon.server.asyncio.SharedPV -- needed as a base class for
-    # further mixins (e.g. p4pillon.thread.sharednt.SharedNT).
-    pass
+class SharedPV(HandlerHooksMixin, _ThreadSharedPV):
+    """`p4p.server.thread.SharedPV` plus the open()/post()/close() handler
+    callbacks -- see `~p4pillon.server.raw.HandlerHooksMixin` for their
+    semantics and locking. Because the C-extension store also happens under
+    the per-PV lock, a read-modify-write against ``pv.current()`` from
+    inside a handler is atomic.
+    """
 
+    def _exec(self, op: Any, fn: Callable[..., Any], *args: Any) -> None:
+        """Run ``fn`` on the PV's work queue under ``_hook_lock``, so
+        executor-side handlers serialize with the open()/post()/close() hooks.
 
-#####
-# Monkey patching the Handler is a simpler operation as it's a straight
-# substitution with our new version.
-# pylint: disable=ungrouped-imports
-from p4pillon.server.raw import Handler as _Handler  # noqa: E402
+        ``_run_locked`` is a bound method rather than a closure: _exec is the
+        dispatch funnel for every put/rpc, and the base class already packs
+        extra args into the queued partial."""
+        super()._exec(op, self._run_locked, fn, *args)
 
-Handler = _Handler  # noqa: F811
+    def _run_locked(self, fn: Callable[..., Any], *args: Any) -> None:
+        with self._hook_lock:
+            fn(*args)

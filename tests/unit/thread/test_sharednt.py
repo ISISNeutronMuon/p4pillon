@@ -1,8 +1,9 @@
 import pytest
+from p4p.server.thread import SharedPV as ThreadSharedPV
 
 from p4pillon.nt import NTEnum, NTScalar
 from p4pillon.server.raw import (
-    SharedPV,  # Confusingly the monkey-patching means that this is the common base class of SharedPV and SharedNT
+    HandlerHooksMixin,  # carries the open()/post()/close() handler-hook support every SharedNT flavor needs
 )
 from p4pillon.thread.sharednt import SharedNT
 
@@ -23,7 +24,8 @@ def testntscalar_thread_create(pvtype, expected_handlername):
 
     assert set(testpv.handler.keys()) == set(expected_handlername)
     assert len(testpv.handler) == len(expected_handlername)
-    assert issubclass(SharedNT, SharedPV)
+    assert issubclass(SharedNT, HandlerHooksMixin)
+    assert issubclass(SharedNT, ThreadSharedPV)
 
 
 def testntenum_thread_create():
@@ -31,4 +33,5 @@ def testntenum_thread_create():
 
     assert len(testpv.handler) == 3
     assert list(testpv.handler.keys()) == ["alarm", "alarmNTEnum", "timestamp"]
-    assert issubclass(SharedNT, SharedPV)
+    assert issubclass(SharedNT, HandlerHooksMixin)
+    assert issubclass(SharedNT, ThreadSharedPV)
