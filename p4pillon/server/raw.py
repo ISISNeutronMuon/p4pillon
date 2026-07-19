@@ -14,6 +14,8 @@ whereas inheritance is immune to import order.
 
 import threading
 from abc import ABC
+from collections.abc import Callable
+from concurrent.futures import Future
 from contextlib import AbstractContextManager
 from typing import Any
 
@@ -165,6 +167,37 @@ class HandlerHooksMixin:
             # Bypass p4p.server.raw.SharedPV.post(), which would wrap() v a
             # second time.
             _RawSharedPV.post(self, v)
+
+    def _deferred_post(
+        self,
+        schedule: Callable[[Callable[[], None]], Any],
+        value: Any,
+        kwargs: dict[str, Any],
+    ) -> Future[None]:
+        """Shared machinery for both flavors' ``post_deferred``: build a
+        single-shot callback that runs ``self.post(value, **kwargs)`` and routes
+        its result (or exception) to a returned `~concurrent.futures.Future`,
+        then hand that callback to ``schedule`` to run on the flavor's own
+        executor (the thread flavor's work queue, the asyncio flavor's event
+        loop). Each flavor supplies only ``schedule``, so the cancel/exception
+        semantics live in one place and can't drift between the two.
+        """
+        fut: Future[None] = Future()
+
+        def _post() -> None:
+            if not fut.set_running_or_notify_cancel():
+                return
+            try:
+                self.post(value, **kwargs)
+            except BaseException as exc:
+                fut.set_exception(exc)
+                if not isinstance(exc, Exception):
+                    raise
+            else:
+                fut.set_result(None)
+
+        schedule(_post)
+        return fut
 
     def close(self, destroy: bool = False, **kwargs: Any) -> Any:
         """Close PV, disconnecting any clients.
