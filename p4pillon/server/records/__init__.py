@@ -27,10 +27,21 @@ Field defaults are taken from EPICS Base wherever it defines one:
    no initial() is declared.
  - RTYP has no single correct default (a plain p4p PV isn't really any
    EPICS record type), so it is *inferred* from the base PV's NTScalar
-   value type code via `infer_rtyp` (e.g. valtype='d' suggests "ai").
-   Non-scalar PVs (`~p4p.nt.NTTable`, `~p4p.nt.NTNDArray`, ...) have no
-   plausible guess; `StaticRecordProvider.add`/`IOCMimicProvider.add` reject
-   these unless 'fields' gives 'RTYP' explicitly.
+   value type code via `infer_rtyp` (e.g. valtype='d' suggests "ai", a
+   64-bit integer 'l'/'L' suggests "int64in" rather than "longin", whose
+   DBF_LONG VAL would truncate it). An
+   NTEnum-backed PV infers "mbbi" -- the multi-state binary *input* record,
+   whose DBF_ENUM VAL (a 0-15 index into up to 16 named states ZRST-FFST) is
+   the same index+choices shape as an NTEnum, and the input side matching
+   how the scalar guesses already lean ('?'->bi, not bo). Other non-scalar
+   PVs (`~p4p.nt.NTTable`, `~p4p.nt.NTNDArray`, ...) have no plausible guess:
+   they map to no single record type -- in a real IOC they'd be a Q:group,
+   which exposes no dbCommon fields at all. Such a PV is therefore served on
+   its own, with *no* "<name>.<FIELD>" sub-PVs (as with
+   ``record_fields=False``), rather than rejected -- unless 'fields' gives
+   'RTYP' explicitly, which opts it into record treatment. (The low-level
+   `build_record_fields` builder still raises for such a PV, since its job is
+   to return the fields dict; it's the providers that choose to omit them.)
  - DTYP's choices are inherently per-record-type (they mirror whichever
    device supports were built for it), so unlike the other menu fields
    there is no real global default list -- 'dtyp_choices' falls back to
@@ -44,15 +55,20 @@ Field defaults are taken from EPICS Base wherever it defines one:
    `~p4pillon.server.records.fields._field_applies`), defaulting to 0.
  - DESC always mirrors the base PV's own `display.description` sub-field
    (present only when built with e.g. ``NTScalar(..., display=True)``) --
-   like NAME, it isn't settable via 'fields'. Every path takes just a
-   one-time snapshot of it (at `add()` time, or per `makeChannel()` call for
-   `DynamicRecordFields`); later `display.description` changes aren't
-   tracked automatically. Both `StaticRecordProvider` and `IOCMimicProvider`
-   have a `set_desc_record` method to update it explicitly afterward --
-   `StaticRecordProvider`'s pushes the update live to any already-open
-   connection, while `IOCMimicProvider`'s only affects *new* connections,
-   since the lazy path keeps no live PV reference. Absent a
-   display.description field entirely, DESC is always "".
+   like NAME, it isn't settable via 'fields'. The eager path
+   (`StaticRecordProvider`) takes a one-time snapshot at `add()` time;
+   later `display.description` changes aren't tracked -- call
+   `set_desc_record` to push an update explicitly. The lazy path
+   (`IOCMimicProvider`, and `IOCMimicServer`'s plain-dict shorthand) keeps
+   a weak reference to the base PV and re-reads `display.description` on
+   every `makeChannel()` call, so *new* connections track it automatically
+   (already-open connections never update). Both `StaticRecordProvider` and
+   `IOCMimicProvider` also have a `set_desc_record` method to set DESC
+   explicitly -- `StaticRecordProvider`'s pushes the update live to any
+   already-open connection, while `IOCMimicProvider`'s affects only new
+   connections and stops the automatic tracking for that record (the
+   explicit value wins from then on). Absent a display.description field
+   entirely, DESC is always "".
 Any of these except DESC (see above) can be overridden via the 'fields' dict
 accepted by `build_record_fields`, `StaticRecordProvider.add`, and
 `IOCMimicProvider.add`, e.g. {"SCAN": "1 second", "RTYP": "ai"}.

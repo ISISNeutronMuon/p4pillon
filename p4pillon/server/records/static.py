@@ -14,8 +14,10 @@ from ._util import _KeysContainerMixin
 from .fields import (
     RecordFieldOverrides,
     _field_shared_pv,
+    _flavor_matched_pv_factory,
     _resolve_valtype_and_description,
     _scalar_nt,
+    _should_serve_record_fields,
     build_record_fields,
 )
 
@@ -49,8 +51,11 @@ class StaticRecordProvider(_KeysContainerMixin, StaticProvider):
     field's default, and `~p4pillon.server.records.build_record_fields` for the meaning
     of `dtyp_choices` and `fields`.
 
-    Each "<name>.<FIELD>" sub-PV is built using ``type(pv)``, so it
-    automatically matches the base PV's own concurrency model.
+    Each "<name>.<FIELD>" sub-PV is built with the plain p4pillon SharedPV
+    class matching the base PV's concurrency flavor (thread or asyncio) --
+    deliberately not ``type(pv)`` itself, so a base PV with its own handlers
+    (e.g. a `~p4pillon.thread.sharednt.SharedNT`) doesn't pass those on to
+    its sub-PVs, which stay read-only.
 
     DESC/DESC$ are seeded from the base PV's ``display.description`` at
     `add()` time and not tracked afterward; call `set_desc_record` to push
@@ -80,25 +85,42 @@ class StaticRecordProvider(_KeysContainerMixin, StaticProvider):
                             ``NTScalar('d')`` -> ``valtype='d'``); only used to
                             infer a default RTYP, so it needn't be exact if RTYP
                             is overridden.  Left as `None`, it's inferred from
-                            `pv.nt` when that's an NTScalar, else falls back to
-                            ``'d'``.
+                            `pv.nt` when that's an NTScalar (or NTEnum -> mbbi),
+                            else falls back to ``'d'``.
 
-        See `~p4pillon.server.records.build_record_fields` for `dtyp_choices`,
-        `fields`, and how RTYP inference is rejected for a non-scalar `pv`.
+        A `pv` whose RTYP can't be inferred (a non-scalar, non-enum
+        `~p4p.nt.NTNDArray`/`~p4p.nt.NTTable`/... -> a Q:group in a real IOC) and
+        which is given no explicit ``fields={'RTYP': ...}`` is served on its own,
+        with no "<name>.<FIELD>" sub-PVs -- the same as ``record_fields=False``,
+        mirroring an IOC serving a group (no dbCommon fields), rather than raising.
+
+        See `~p4pillon.server.records.build_record_fields` for `dtyp_choices` and
+        `fields`.
         """
-        super().add(name, pv)
+        if record_fields and not _should_serve_record_fields(pv, fields):
+            # Not record-like, and no explicit fields={'RTYP'} to opt in: serve
+            # the base PV alone, as with record_fields=False (see the docstring).
+            record_fields = False
+
         if not record_fields:
+            super().add(name, pv)
             return
 
+        # Validate and build everything *before* the first super().add() --
+        # a failure (e.g. a bad menu choice) must not leave the base PV
+        # half-added with no sub-PVs.
         valtype, description = _resolve_valtype_and_description(pv, valtype)
         built = build_record_fields(
             name, valtype, dtyp_choices=dtyp_choices, fields=fields, pv=pv, description=description
         )
-        field_pvs: dict[str, _SharedPVBase] = {}
-        for fieldname, value in built.items():
-            field_pv = _field_shared_pv(value, type(pv))
+        pv_factory = _flavor_matched_pv_factory(pv)
+        field_pvs: dict[str, _SharedPVBase] = {
+            fieldname: _field_shared_pv(value, pv_factory) for fieldname, value in built.items()
+        }
+
+        super().add(name, pv)
+        for fieldname, field_pv in field_pvs.items():
             super().add(f"{name}.{fieldname}", field_pv)
-            field_pvs[fieldname] = field_pv
         self._field_pvs[name] = field_pvs
 
     def set_desc_record(self, name: str, description: str) -> None:

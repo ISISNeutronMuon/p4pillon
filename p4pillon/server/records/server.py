@@ -7,14 +7,15 @@ dict's base PVs are served by whatever `~p4p.server.StaticProvider`
 `p4pillon.server.records` package docstring for the overall rationale.
 """
 
+import weakref
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from p4p.server import DynamicProvider as _DynamicProvider
 from p4p.server import Server as _Server
 
-from .dynamic import DynamicRecordFields, _anonymous_dynamic_provider
-from .fields import RegistryEntry, _resolve_valtype_and_description
+from .dynamic import DynamicRecordFields, IOCMimicProvider, _anonymous_dynamic_provider
+from .fields import RegistryEntry, _resolve_valtype_and_description, _should_serve_record_fields
 
 if TYPE_CHECKING:
     from p4p.server.raw import SharedPV as _SharedPVBase
@@ -42,9 +43,19 @@ def _dynamic_fields_provider(provider: object) -> _DynamicProvider | None:
     mapping = cast("Mapping[str, _SharedPVBase]", provider)
     registry: dict[str, RegistryEntry] = {}
     for name, pv in mapping.items():
+        if not _should_serve_record_fields(pv, None):
+            # Not record-like: the base PV is still served (by Server's own
+            # StaticProvider for the dict), just with no sub-PVs, as an IOC
+            # serves a Q:group. This path has no fields= override, so unlike
+            # the two add() methods it can only skip, never opt one in.
+            continue
         valtype, description = _resolve_valtype_and_description(pv, None)
-        registry[name] = {"valtype": valtype, "description": description}
-    return _anonymous_dynamic_provider(DynamicRecordFields(registry))
+        # 'pv_ref' lets DESC track the base PV's display.description live for
+        # new connections; 'description' remains as the fallback snapshot.
+        # See RegistryEntry's docstring.
+        registry[name] = {"valtype": valtype, "description": description, "pv_ref": weakref.ref(pv)}
+    # No record-like entries -> no field provider to add at all.
+    return _anonymous_dynamic_provider(DynamicRecordFields(registry)) if registry else None
 
 
 class IOCMimicServer(_Server):
@@ -64,22 +75,23 @@ class IOCMimicServer(_Server):
             ...  # "DEV:PV00.RTYP", "DEV:PV00.SCAN", etc. are now servable too
 
     Each dict entry's sub-PVs get `DynamicRecordFields`'s defaults: `valtype`
-    inferred from the base PV, DESC seeded as a one-time snapshot of
-    `display.description` (with no way to reach the registry built here
-    afterward to call `set_desc_record`, unlike `IOCMimicProvider`), and no
-    `dtyp_choices`/`fields` overrides. See `DynamicRecordFields` and
-    `IOCMimicProvider`'s docstrings for the rest of the lazy path's
-    limitations (sub-PV flavor, `pvlist` visibility, etc.), which apply here
-    too.
+    inferred from the base PV, DESC tracking the base PV's
+    `display.description` automatically for new connections (re-read per
+    connection via a weak reference, so a later ``pv.post()`` changing it is
+    reflected -- there is no `set_desc_record` here, unlike
+    `IOCMimicProvider`), and no `dtyp_choices`/`fields` overrides. See
+    `DynamicRecordFields` and `IOCMimicProvider`'s docstrings for the rest of
+    the lazy path's limitations (sub-PV flavor, `pvlist` visibility, etc.),
+    which apply here too.
 
     An `IOCMimicProvider` instance can also be passed directly, same as a
     plain dict or a `StaticRecordProvider`: `IOCMimicServer` unpacks it into
     its `.providers` pair automatically, so ``providers=[base, pvs]`` works
     the same as ``providers=[*base.providers, pvs]``.
 
-    For DESC updates after add(), per-PV overrides, matching sub-PV flavor to
-    an asyncio base PV, or `pvlist` visibility, build a `StaticRecordProvider`
-    explicitly and pass that instead of a dict. Entries that aren't a plain
+    For explicit DESC overrides, per-PV `fields` overrides, matching sub-PV
+    flavor to an asyncio base PV, or `pvlist` visibility, build a
+    `StaticRecordProvider` explicitly and pass that instead of a dict. Entries that aren't a plain
     dict or an `IOCMimicProvider` are passed through to `~p4p.server.Server`
     unchanged, with no extra "<name>.<FIELD>" handling added.
     """
@@ -93,12 +105,13 @@ class IOCMimicServer(_Server):
         wrapped: list[Any] = []
         for entry in providers:
             provider, order = entry if isinstance(entry, tuple) else (entry, None)
-            sub_providers = getattr(provider, "providers", None)
-            if isinstance(sub_providers, tuple):
-                # Already backed by its own provider pair (e.g. IOCMimicProvider's
-                # static + DynamicRecordFields pair) -- unpack it rather than treat
-                # it as one provider or a dict.
-                wrapped.extend(_with_order(sub_provider, order) for sub_provider in sub_providers)
+            if isinstance(provider, IOCMimicProvider):
+                # Backed by its own static + DynamicRecordFields provider pair
+                # -- unpack it rather than treat it as one provider or a dict.
+                # An isinstance check, not duck typing on a `.providers`
+                # attribute: any other provider that happens to carry one must
+                # be passed through to p4p.server.Server untouched.
+                wrapped.extend(_with_order(sub_provider, order) for sub_provider in provider.providers)
                 continue
             wrapped.append(_with_order(provider, order))
             fields_provider = _dynamic_fields_provider(provider)

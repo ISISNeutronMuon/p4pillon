@@ -59,6 +59,25 @@ async def test_asyncio_pvrecipe_builds_asyncio_sharedpv():
     assert not isinstance(pv, ThreadSharedPV)
 
 
+def test_records_asyncio_probe_does_not_disable_hooks():
+    """The former monkey-patch could even be defeated by p4pillon itself:
+    p4pillon.server.records.dynamic._check_pv_factory_is_safe imports
+    p4p.server.asyncio directly, which used to freeze the unpatched base
+    class if it ran before p4pillon.server.asyncio was first imported."""
+    script = """
+from p4pillon.server.records.dynamic import _check_pv_factory_is_safe
+class Dummy:
+    pass
+_check_pv_factory_is_safe(Dummy)
+from p4pillon.server.asyncio import SharedPV
+from p4pillon.server.raw import HandlerHooksMixin
+assert issubclass(SharedPV, HandlerHooksMixin)
+print('OK')
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_unflavored_pvrecipe_fails_loudly():
     """The base-module recipes are not bound to a concurrency flavor, and
     must refuse to build a PV rather than silently constructing a raw-flavored

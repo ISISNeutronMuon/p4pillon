@@ -20,13 +20,30 @@ Defaults follow [EPICS Base](https://docs.epics-controls.org/projects/base/en/la
 
 - **menu fields** (`SCAN`, `PINI`, `STAT`, `SEVR`, …) start at the same choice a
   freshly initialised record would have;
-- **`RTYP`** is *inferred* from the base PV's value type — verified: a double
-  infers `ai`, an integer infers `longin`. Non-scalar PVs (tables, images) have
-  no sensible guess and must be given an explicit `RTYP`;
+- **`RTYP`** is *inferred* from the base PV's value type (the full mapping is in
+  the table below). The guess always picks the *input*-side record type — `ai`
+  not `ao`, `bi` not `bo`, `mbbi` not `mbbo` — since a served PV is fundamentally
+  a value to read; pass an explicit `RTYP` to choose otherwise. Non-scalar PVs
+  (tables, images) have no sensible guess: they are served on their own with
+  *no* sub-PVs — as a real IOC serves a group — unless you supply an explicit
+  `RTYP`;
 - **`DTYP`** defaults to `Soft Channel`;
 - **`DESC`** mirrors the base PV's `display.description`;
 - **`ADEL`/`MDEL`** (deadbands) appear only for the numeric scalar record types
   that really have them.
+
+The full value-type → `RTYP` mapping:
+
+| Base PV value type | Inferred `RTYP` |
+| --- | --- |
+| `double` / `float` | `ai` |
+| 8-, 16-, or 32-bit integer | `longin` |
+| 64-bit integer | `int64in` (holds the full 64 bits; a `longin`'s 32-bit `VAL` would truncate) |
+| boolean | `bi` |
+| string | `stringin` |
+| array (any element type) | `waveform` |
+| `NTEnum` (a value chosen from a labelled list) | `mbbi` |
+| anything else (`NTTable`, `NTNDArray`, …) | *none* — the base PV is served alone, unless you supply an explicit `RTYP` to force record treatment |
 
 Every string-valued field is *also* servable with a `$` suffix
 (`EXAMPLE:PV.DESC$`), mirroring the IOC long-string convention. In pvAccess this
@@ -101,7 +118,7 @@ difference has real consequences:
 | Sub-PVs built | on first client connect | up front, at `add()` |
 | Visible in `pvlist` / channel-list | **no** | **yes** |
 | Sub-PV concurrency flavor | always thread `SharedPV` | matches the base PV's flavor |
-| `DESC` tracks later `display.description` changes | for *new* connections (re-read per connect) | one-time snapshot, unless you attach a `DescMirrorHandler` |
+| `DESC` tracks later `display.description` changes | for *new* connections (re-read per connect) | one-time snapshot (call `set_desc_record` to push an update) |
 | `set_desc_record` pushes to already-open connections | no (new connections only) | yes |
 
 Choose `StaticRecordProvider` when you need sub-PVs to show up in a

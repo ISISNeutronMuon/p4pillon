@@ -225,8 +225,9 @@ object at the same time** — the exact race-condition setup from Section 1.3.
 Who calls `pv.post()` from another thread? Plenty of real code:
 
 - a scan loop updating values on its own timer thread,
-- one PV's handler updating a *different* PV (e.g. p4pillon's `set_desc_record`
-  and `DescMirrorHandler`),
+- one PV's handler updating a *different* PV (e.g. a value-mirroring or
+  aggregation handler, or p4pillon's `set_desc_record` posting to a record's
+  DESC sub-PV),
 - any application background thread.
 
 ---
@@ -492,9 +493,9 @@ handler lock (handler-then-PV), inverting the order and risking the classic
 two-thread cycle. Posting back to the *same* PV is fine — both locks are
 re-entrant, so the same thread just re-enters them.
 
-(p4pillon's own `DescMirrorHandler` is safe today because the sub-PVs it posts
-to have no handlers of their own, so no second handler lock is involved. If
-that ever changes, this rule is what to check.)
+(A handler that posts only to sub-PVs with no handlers of their own is safe on
+this count -- no second handler lock is involved. If that ever changes, this
+rule is what to check.)
 
 ---
 
@@ -601,8 +602,8 @@ If you truly need the update to be synchronous, the only safe alternative is a
 **global ordering**: guarantee updates always flow one way (A→B, never B→A) so
 no reverse edge can exist. This is correct but brittle — one future handler that
 posts B→A silently reintroduces the deadlock — so prefer deferral unless you can
-enforce the direction structurally (as `DescMirrorHandler` does by giving its
-sub-PVs no handlers at all).
+enforce the direction structurally (e.g. by giving the target sub-PVs no
+handlers at all, so no reverse edge can exist).
 
 ### Safe pattern for the asyncio flavor: inline on the loop, `post_deferred` off it
 

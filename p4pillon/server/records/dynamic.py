@@ -6,6 +6,7 @@ docstring for the overall rationale.
 """
 
 import uuid
+import weakref
 from collections.abc import Collection, Mapping
 
 from p4p.server import DynamicProvider as _DynamicProvider
@@ -18,10 +19,11 @@ from .fields import (
     RecordFieldOverrides,
     RegistryEntry,
     _build_one_field,
-    _check_rtyp_inferrable,
     _field_applies,
     _field_shared_pv,
+    _resolve_registry_description,
     _resolve_valtype_and_description,
+    _should_serve_record_fields,
     _validate_fields,
 )
 
@@ -68,24 +70,30 @@ class DynamicRecordFields:
         if pv_factory is not None:
             _check_pv_factory_is_safe(pv_factory)
         for name, entry in registry.items():
-            _validate_fields(entry.get("fields") or {}, name)
+            _validate_fields(entry.get("fields") or {}, name, entry.get("dtyp_choices"))
         # Read-only here: only .get() is ever called (testChannel/makeChannel).
         # IOCMimicProvider passes its own dict and mutates that by reference.
         self._registry: Mapping[str, RegistryEntry] = registry
         self._pv_factory: type[_SharedPVBase] | None = pv_factory
+
+    def _lookup(self, name: str) -> tuple[str, str, RegistryEntry] | None:
+        # (basename, field, entry) when `name` is a "<basename>.<FIELD>" for
+        # a basename known to the registry and a field that applies to its
+        # valtype; None otherwise. Shared by testChannel()/makeChannel().
+        basename, field = _split_field_name(name)
+        if field is None:
+            return None
+        entry = self._registry.get(basename)
+        if entry is None or not _field_applies(field, entry["valtype"]):
+            return None
+        return basename, field, entry
 
     def testChannel(self, name: str) -> bool:  # noqa: N802 - mandated by the p4p DynamicProvider protocol
         """Whether `name` is a "<basename>.<FIELD>" for a `basename` known to
         `registry` and a `field` that applies to its `valtype`. Part of the
         `~p4p.server.DynamicProvider` handler protocol.
         """
-        basename, field = _split_field_name(name)
-        if field is None:
-            return False
-        entry = self._registry.get(basename)
-        if entry is None:
-            return False
-        return _field_applies(field, entry["valtype"])
+        return self._lookup(name) is not None
 
     def makeChannel(  # noqa: N802 - mandated by the p4p DynamicProvider protocol
         self,
@@ -97,19 +105,17 @@ class DynamicRecordFields:
         initial value is the same regardless of which client connects. Part
         of the `~p4p.server.DynamicProvider` handler protocol.
         """
-        basename, field = _split_field_name(name)
-        if field is None:
+        found = self._lookup(name)
+        if found is None:
             return None
-        entry = self._registry.get(basename)
-        if entry is None or not _field_applies(field, entry["valtype"]):
-            return None
+        basename, field, entry = found
         value = _build_one_field(
             field,
             basename,
             entry["valtype"],
             entry.get("dtyp_choices"),
             entry.get("fields") or {},
-            entry.get("description") or "",
+            _resolve_registry_description(entry),
         )
         return _field_shared_pv(value, self._pv_factory)
 
@@ -143,14 +149,16 @@ class IOCMimicProvider(_KeysContainerMixin):
     behaviour everywhere the lazy path can support it, but a few things
     `StaticRecordProvider` supports work differently or not at all here:
 
-     - `set_desc_record` only updates the snapshot new connections see --
-       there's no live channel here to `post()` an update to an
-       already-open connection.
+     - DESC tracks the base PV's ``display.description`` automatically for
+       *new* connections (each `makeChannel()` re-reads it via a weak
+       reference stored by `add()`); `set_desc_record` replaces that with an
+       explicit value, again for new connections only -- there's no live
+       channel here to `post()` an update to an already-open connection.
      - Every sub-PV is built lazily on first client connection, using
        whichever `pv_factory` this was constructed with -- never matched to
-       the base PV's own flavor the way `StaticRecordProvider` matches
-       ``type(pv)``, and a `~p4pillon.server.asyncio.SharedPV` `pv_factory`
-       is rejected outright (see `DynamicRecordFields`).
+       the base PV's own flavor the way `StaticRecordProvider` does, and a
+       `~p4pillon.server.asyncio.SharedPV` `pv_factory` is rejected outright
+       (see `DynamicRecordFields`).
      - Sub-PVs don't appear in a plain channel-list query (e.g. the
        `pvlist` tool) -- `DynamicProvider` maintains no enumerable name list.
 
@@ -192,32 +200,47 @@ class IOCMimicProvider(_KeysContainerMixin):
         builds them from lazily. See `StaticRecordProvider.add` for every
         parameter's meaning.
         """
-        self._static.add(name, pv)
+        fields = fields or {}
+        if record_fields and not _should_serve_record_fields(pv, fields):
+            # Not record-like and no explicit override: serve the base PV alone,
+            # as with record_fields=False (see StaticRecordProvider.add).
+            record_fields = False
+
         if not record_fields:
+            self._static.add(name, pv)
             return
 
+        # Validate *before* the static add() -- a failure (e.g. a bad menu
+        # choice) must not leave the base PV served with add() having raised.
         valtype, description = _resolve_valtype_and_description(pv, valtype)
+        _validate_fields(fields, name, dtyp_choices)
 
-        fields = fields or {}
-        _validate_fields(fields, name)
-        if fields.get("RTYP") is None:
-            _check_rtyp_inferrable(pv)
-
+        self._static.add(name, pv)
         self._registry[name] = {
             "valtype": valtype,
             "dtyp_choices": dtyp_choices,
             "fields": fields,
+            # 'description' is only the add()-time fallback; 'pv_ref' lets
+            # makeChannel() re-read display.description live per connection
+            # (see _resolve_registry_description). Weak so the registry never
+            # extends the base PV's lifetime beyond the StaticProvider's own
+            # strong reference.
             "description": description,
+            "pv_ref": weakref.ref(pv),
         }
 
     def set_desc_record(self, name: str, description: str) -> None:
-        """Update the DESC/DESC$ snapshot for `name`, picked up by any *new*
-        connection from this point on (see the class docstring).
+        """Override DESC/DESC$ for `name` with an explicit value, picked up
+        by any *new* connection from this point on (see the class docstring).
+        This also stops DESC tracking the base PV's ``display.description``
+        for `name` -- the explicit override wins from here onward.
 
         :raises KeyError: if `name` was never added, or was added with
                           `record_fields=False`.
         """
-        self._registry[name]["description"] = description
+        entry = self._registry[name]
+        entry["description"] = description
+        entry.pop("pv_ref", None)
 
     def remove(self, name: str) -> None:
         """Remove a PV, and stop offering its "<name>.<FIELD>" sub-PVs to

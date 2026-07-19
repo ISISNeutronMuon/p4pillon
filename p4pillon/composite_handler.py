@@ -61,11 +61,17 @@ class CompositeHandler(Handler, OrderedDict):
         """As `_dispatch`, but stop at the first `AbortHandlerError` and
         return its message (None if no handler aborted)."""
         with self._lock:
-            for handler in self.values():
-                try:
-                    getattr(handler, hook)(pv, op)
-                except AbortHandlerError as e:  # noqa: PERF203 -- per-item error handling, breaks on first failure
-                    return e.message
+            return self._dispatch_abortable_locked(hook, pv, op)
+
+    def _dispatch_abortable_locked(self, hook: str, pv: SharedPV, op: ServerOperation) -> str | None:
+        """`_dispatch_abortable`'s body, assuming the handler lock is already
+        held -- `put` calls this directly under the lock it already holds
+        across the following `pv.post()`, avoiding a redundant re-entry."""
+        for handler in self.values():
+            try:
+                getattr(handler, hook)(pv, op)
+            except AbortHandlerError as e:  # noqa: PERF203 -- per-item error handling, breaks on first failure
+                return e.message
         return None
 
     def open(self, value: Value):
@@ -78,7 +84,7 @@ class CompositeHandler(Handler, OrderedDict):
             return
 
         with self._lock:
-            errmsg = self._dispatch_abortable("put", pv, op)
+            errmsg = self._dispatch_abortable_locked("put", pv, op)
 
             # pv.post() safely re-enters this lock; it must stay inside so
             # the handler rules and the store are one atomic unit.

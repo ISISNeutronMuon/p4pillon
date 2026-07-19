@@ -9,13 +9,16 @@ here to actually serve these as "RECORD.FIELD" sub-PVs.
 
 import functools
 import warnings
-from typing import Any, NoReturn, TypedDict
+from typing import TYPE_CHECKING, Any, NoReturn, TypedDict
 
 from p4p import Value
 from p4p.server.raw import SharedPV as _SharedPVBase
 
 from p4pillon.nt import NTEnum, NTScalar
 from p4pillon.nt.identify import NTType, id_nttype_type
+
+if TYPE_CHECKING:
+    import weakref
 
 __all__ = (
     "COMMON_FIELDS",
@@ -209,13 +212,20 @@ class RegistryEntry(_RegistryEntryRequired, total=False):
     """Shape of each value in the `registry` dict passed to `DynamicRecordFields`.
     Only 'valtype' is required; 'dtyp_choices', 'fields', and 'description'
     are optional, same as the corresponding `build_record_fields` parameters.
-    'description' is re-read on every `makeChannel()` call, so a hand-built
-    registry can update it in place; see the package docstring's DESC note.
+
+    DESC is resolved per `makeChannel()` call: from the base PV's live
+    ``display.description`` when 'pv_ref' (a `weakref.ref` to the base PV) is
+    present and still alive, else from 'description'. `IOCMimicProvider.add`
+    and `IOCMimicServer`'s plain-dict shorthand set 'pv_ref' so DESC tracks
+    the base PV automatically for new connections; a hand-built registry can
+    instead update 'description' in place. See the package docstring's DESC
+    note.
     """
 
     dtyp_choices: list[str] | None
     fields: RecordFieldOverrides
     description: str
+    pv_ref: "weakref.ref[_SharedPVBase]"
 
 
 # NTScalar type codes for which ADEL/MDEL are meaningful -- a plain numeric
@@ -235,9 +245,23 @@ def _field_applies(fieldname: str, valtype: str) -> bool:
     return True
 
 
+# Sentinel `valtype` for an NTEnum-backed PV: unlike a scalar there's no p4p
+# value-type code, so this marker is threaded through the valtype pipeline
+# (`_infer_valtype_of_pv` -> registry/build_record_fields) purely to select the
+# enum RTYP default and to keep ADEL/MDEL from applying (it's not a numeric
+# code; see `_ADEL_MDEL_VALTYPES`/`_field_applies`).
+_ENUM_VALTYPE = "enum"
+
+
 def infer_rtyp(valtype: str) -> str:
-    """Guess a plausible RTYP from an NTScalar value type code. See the
-    package docstring's RTYP note for when this is used."""
+    """Guess a plausible RTYP from an NTScalar value type code, or from the
+    `_ENUM_VALTYPE` sentinel for an NTEnum-backed PV. See the package
+    docstring's RTYP note for when this is used."""
+    if valtype == _ENUM_VALTYPE:
+        # mbbi (multi-state binary *input*): its DBF_ENUM VAL is the same
+        # index+choices shape as an NTEnum, and the input side matches the
+        # scalar leans ('d'->ai, not ao). See the package docstring's RTYP note.
+        return "mbbi"
     if valtype[:1] == "a":
         return "waveform"
     if valtype == "s":
@@ -246,23 +270,35 @@ def infer_rtyp(valtype: str) -> str:
         return "bi"
     if valtype in ("f", "d"):
         return "ai"
-    return "longin"  # b, B, h, H, i, I, l, L
+    if valtype in ("l", "L"):
+        # 64-bit: longin's VAL is DBF_LONG (32-bit) and would truncate, so use
+        # int64in (VAL DBF_INT64), matching pvxs (ioc/typeutils.cpp). Its
+        # ADEL/MDEL, like longin's, keep 'l'/'L' in _ADEL_MDEL_VALTYPES.
+        return "int64in"
+    return "longin"  # b, B, h, H, i, I -- all fit DBF_LONG without loss
 
 
 def _infer_valtype_of_pv(pv: _SharedPVBase) -> str | None:
-    """The NTScalar value type code `pv` was built with, or `None` if it
-    can't be determined without guessing (`pv.nt` unset or not an NTScalar)
-    -- callers should then require an explicit `valtype`."""
+    """The NTScalar value type code `pv` was built with, the `_ENUM_VALTYPE`
+    sentinel for an NTEnum-backed PV, or `None` if it can't be determined
+    without guessing (`pv.nt` unset/non-scalar and no enum structure) --
+    callers should then require an explicit `valtype`."""
     nt = getattr(pv, "nt", None)
     if isinstance(nt, NTScalar):
         return nt.type["value"]
+    if isinstance(nt, NTEnum):
+        return _ENUM_VALTYPE
+    if nt is not None:
+        # Some other declared NT (NTTable/NTNDArray/...): no scalar code, and
+        # not RTYP-inferrable anyway (see _check_rtyp_inferrable).
+        return None
+    # pv.nt unset (e.g. a hand-built Value with no nt=): recognise an enum
+    # structurally, mirroring _check_rtyp_inferrable's fallback. A hand-built
+    # scalar keeps the historical 'd' default applied by the caller.
+    raw = _raw_current_or_none(pv)
+    if raw is not None and id_nttype_type(raw.type()) == NTType.NTENUM:
+        return _ENUM_VALTYPE
     return None
-
-
-# Every menu-kind field shares one NTEnum schema ('choices' is a data value,
-# not a type parameter); scalar-kind fields reuse a handful of NTScalar
-# valtypes. Cached rather than rebuilt per field/PV/connection.
-_menu_nt = NTEnum()
 
 
 @functools.cache
@@ -271,7 +307,11 @@ def _scalar_nt(valtype: str) -> NTScalar:
 
 
 def _menu_pv(choices: list[str], default_name: str, override: str | None) -> Value:
-    return _menu_nt.wrap(default_name if override is None else override, choices=choices)
+    # A fresh NTEnum per call, not a shared module-level instance: unlike
+    # NTScalar, NTEnum is stateful (wrap() caches value.choices on the
+    # instance for unwrap()), and this runs both on user threads (add()) and
+    # the server's I/O thread (DynamicRecordFields.makeChannel()).
+    return NTEnum().wrap(default_name if override is None else override, choices=choices)
 
 
 def _scalar_pv(valtype: str, default: Any, override: Any) -> Value:
@@ -280,11 +320,14 @@ def _scalar_pv(valtype: str, default: Any, override: Any) -> Value:
     return _scalar_nt(valtype).wrap(default if override is None else override)
 
 
-# infer_rtyp() has no plausible guess for anything but a scalar or scalar
-# array. Classified via p4pillon.nt.identify's structural NT classifier
-# (used elsewhere in the codebase too) rather than a second, hand-maintained
-# ID-to-NT-flavor mapping.
-_SCALAR_LIKE_NT_TYPES: frozenset[NTType] = frozenset((NTType.NTSCALAR, NTType.NTSCALARARRAY, NTType.UNKNOWN))
+# The NT flavors infer_rtyp() has a plausible guess for: a scalar, scalar
+# array, or enum (NTEnum -> mbbi); anything else (NTTable, NTNDArray, ...) needs
+# an explicit RTYP. Classified via p4pillon.nt.identify's structural NT
+# classifier (used elsewhere in the codebase too) rather than a second,
+# hand-maintained ID-to-NT-flavor mapping.
+_RTYP_INFERRABLE_NT_TYPES: frozenset[NTType] = frozenset(
+    (NTType.NTSCALAR, NTType.NTSCALARARRAY, NTType.NTENUM, NTType.UNKNOWN)
+)
 
 
 def _raise_rtyp_not_inferrable(desc: str) -> NoReturn:
@@ -318,29 +361,83 @@ def _description_of_pv(pv: _SharedPVBase) -> str:
     return raw.get("display.description", "") or ""
 
 
-def _check_rtyp_inferrable(pv: _SharedPVBase) -> None:
+def _rtyp_inferrable(pv: _SharedPVBase) -> bool:
+    """Whether `infer_rtyp` has a plausible RTYP for `pv`'s NT flavor: True for
+    an NTScalar/NTScalarArray/NTEnum (or an unclassifiable hand-built Value,
+    treated as scalar-like), False for a structural NT (NTTable, NTNDArray, ...)
+    that corresponds to no single EPICS record type.
+
+    A provider serving a False PV omits its record fields entirely -- the base
+    PV is still served, mirroring how a real IOC serves a Q:group (which exposes
+    no dbCommon fields) -- unless an explicit ``fields={'RTYP': ...}`` opts it
+    into record treatment. The strict `build_record_fields` builder instead
+    raises for such a PV (see `_check_rtyp_inferrable`).
+    """
     # pv.nt already gives the type -- skip the current()-based fallback below.
     nt = getattr(pv, "nt", None)
     if nt is not None:
-        if not isinstance(nt, NTScalar):
-            _raise_rtyp_not_inferrable(f"a {type(nt).__name__}-backed PV")
-        return
+        return isinstance(nt, (NTScalar, NTEnum))
 
     # pv.nt unset -- classify the live Value's structure instead; an
-    # unavailable current() counts as NTType.UNKNOWN (never rejected).
+    # unavailable current() counts as NTType.UNKNOWN (treated as inferrable).
     raw = _raw_current_or_none(pv)
     # id_nttype_type (not id_nttype) deliberately: id_nttype's Value-dispatch
     # branch reads `value.type` as a property, but p4p.wrapper.Value.type is
     # a *method* -- passing a raw Value there silently misclassifies it. Call
     # raw.type() ourselves and classify the resulting Type instead.
     nttype = id_nttype_type(raw.type()) if raw is not None else NTType.UNKNOWN
-    if nttype not in _SCALAR_LIKE_NT_TYPES:
-        _raise_rtyp_not_inferrable(f"a {nttype.name}-shaped PV")
+    return nttype in _RTYP_INFERRABLE_NT_TYPES
 
 
-def _validate_fields(fields: RecordFieldOverrides, name: str) -> None:
-    # Shared by build_record_fields and DynamicRecordFields.__init__ so a
-    # typo'd key warns the same way regardless of entry point.
+def _check_rtyp_inferrable(pv: _SharedPVBase) -> None:
+    # Strict builder-level guard: a direct `build_record_fields` caller asking
+    # to build fields for a non-record PV with no explicit RTYP gets a clear
+    # error (it can't invent one). The providers instead pre-check
+    # `_rtyp_inferrable` and simply omit the fields, so this only fires for a
+    # direct caller.
+    if _rtyp_inferrable(pv):
+        return
+    nt = getattr(pv, "nt", None)
+    if nt is not None:
+        _raise_rtyp_not_inferrable(f"a {type(nt).__name__}-backed PV")
+    raw = _raw_current_or_none(pv)
+    nttype = id_nttype_type(raw.type()) if raw is not None else NTType.UNKNOWN
+    _raise_rtyp_not_inferrable(f"a {nttype.name}-shaped PV")
+
+
+def _should_serve_record_fields(pv: _SharedPVBase, fields: RecordFieldOverrides | None) -> bool:
+    """Whether a base PV should be given "<name>.<FIELD>" sub-PVs: yes when its
+    RTYP is inferrable, or an explicit ``fields={'RTYP': ...}`` opts a
+    non-record-like PV (NTTable/NTNDArray/... -> a Q:group, no dbCommon fields)
+    into record treatment. Shared by the eager (`.static`) and lazy (`.dynamic`,
+    `.server`) providers' add paths so the two can't diverge -- see the package
+    docstring's RTYP note."""
+    if fields and fields.get("RTYP") is not None:
+        return True
+    return _rtyp_inferrable(pv)
+
+
+def _dtyp_choices(dtyp_choices: list[str] | None) -> list[str]:
+    """DTYP's menu choices: the caller-supplied list, or the ``["Soft Channel"]``
+    default (a plain p4p PV's implicit device support) when none is given."""
+    return list(dtyp_choices) if dtyp_choices else ["Soft Channel"]
+
+
+def _menu_choices_for(fieldname: str, dtyp_choices: list[str] | None) -> list[str] | None:
+    """The valid choice names for a menu-kind field, or `None` for a
+    scalar-kind (or unknown) field name."""
+    if fieldname == "DTYP":
+        return _dtyp_choices(dtyp_choices)
+    spec = COMMON_FIELDS.get(fieldname)
+    if spec is not None and "choices" in spec:
+        return spec["choices"]
+    return None
+
+
+def _validate_fields(fields: RecordFieldOverrides, name: str, dtyp_choices: list[str] | None = None) -> None:
+    # Shared by build_record_fields, DynamicRecordFields.__init__, and
+    # IOCMimicProvider.add so a typo'd key warns (and a bad menu choice
+    # raises) the same way regardless of entry point.
     unknown = fields.keys() - FIELD_NAMES
     if unknown:
         warnings.warn(
@@ -348,6 +445,18 @@ def _validate_fields(fields: RecordFieldOverrides, name: str) -> None:
             f"{sorted(unknown)!r}; ignored. See FIELD_NAMES for valid names.",
             stacklevel=3,
         )
+    for fieldname, override in fields.items():
+        if override is None:
+            continue
+        choices = _menu_choices_for(fieldname, dtyp_choices)
+        if choices is not None and override not in choices:
+            # Without this, the typo would surface much later as NTEnum.assign's
+            # fallback int() parse -- "invalid literal for int() with base 0".
+            msg = (
+                f"fields override {fieldname}={override!r} for {name!r} is not a valid "
+                f"choice name; expected one of {choices!r}."
+            )
+            raise ValueError(msg)
 
 
 def _build_one_field(
@@ -363,7 +472,7 @@ def _build_one_field(
         return _build_one_field(fieldname[:-1], name, valtype, dtyp_choices, fields, description)
 
     if fieldname == "DTYP":
-        choices = list(dtyp_choices) if dtyp_choices else ["Soft Channel"]
+        choices = _dtyp_choices(dtyp_choices)
         return _menu_pv(choices, choices[0], fields.get("DTYP"))
 
     if fieldname == "RTYP":
@@ -404,7 +513,8 @@ def build_record_fields(
     how each default is chosen.
 
     :param str name: The base PV name (used verbatim as the NAME field's value).
-    :param str valtype: NTScalar value type code of the base PV, used to infer a
+    :param str valtype: NTScalar value type code of the base PV (or the
+                        ``_ENUM_VALTYPE`` sentinel for an NTEnum), used to infer a
                         default RTYP (see `infer_rtyp`).
     :param list dtyp_choices: Menu choices for DTYP.  Defaults to ``["Soft Channel"]``.
     :param dict fields: Per-field overrides.  A raw value for scalar-kind fields,
@@ -419,7 +529,7 @@ def build_record_fields(
              directly as a `~p4p.server.thread.SharedPV`'s ``initial=``.
     """
     fields = fields or {}
-    _validate_fields(fields, name)
+    _validate_fields(fields, name, dtyp_choices)
     if pv is not None and fields.get("RTYP") is None:
         # pv is None from DynamicRecordFields.makeChannel() (no live PV to
         # check). Checked once here, not per-field -- pv.current() isn't free.
@@ -443,6 +553,38 @@ def _default_pv_factory() -> type[_SharedPVBase]:
 
 def _field_shared_pv(value: Value, pv_factory: type[_SharedPVBase] | None = None) -> _SharedPVBase:
     return (pv_factory or _default_pv_factory())(initial=value)
+
+
+def _flavor_matched_pv_factory(pv: _SharedPVBase) -> type[_SharedPVBase]:
+    """The p4pillon SharedPV class matching `pv`'s concurrency flavor (thread
+    vs asyncio), for building "<name>.<FIELD>" sub-PVs.
+
+    Deliberately NOT ``type(pv)``: a concrete subclass like
+    `~p4pillon.thread.sharednt.SharedNT` attaches its own rule handlers in
+    ``__init__``, which would make every sub-PV built from it client-writable
+    (CompositeHandler.put accepts puts) and timestamp-rewritten -- the
+    opposite of the read-only mirror these fields are documented to be. Only
+    the concurrency flavor is matched.
+    """
+    from p4p.server.asyncio import SharedPV as _RawAsyncioSharedPV
+
+    if isinstance(pv, _RawAsyncioSharedPV):
+        from p4pillon.server.asyncio import SharedPV as _AsyncioSharedPV
+
+        return _AsyncioSharedPV
+    return _default_pv_factory()
+
+
+def _resolve_registry_description(entry: RegistryEntry) -> str:
+    """The DESC value for a `RegistryEntry`: the base PV's live
+    ``display.description`` when 'pv_ref' is present and alive, else the
+    'description' snapshot. See `RegistryEntry`'s docstring."""
+    pv_ref = entry.get("pv_ref")
+    if pv_ref is not None:
+        pv = pv_ref()
+        if pv is not None:
+            return _description_of_pv(pv)
+    return entry.get("description") or ""
 
 
 def _resolve_valtype_and_description(pv: _SharedPVBase, valtype: str | None) -> tuple[str, str]:

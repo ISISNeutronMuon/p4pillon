@@ -13,8 +13,8 @@ import warnings
 import numpy
 import pytest
 from p4p.client.asyncio import Context as AsyncContext
-from p4p.client.thread import Context, TimeoutError
-from p4p.nt import NTNDArray, NTScalar, NTTable
+from p4p.client.thread import Context, RemoteError, TimeoutError
+from p4p.nt import NTEnum, NTNDArray, NTScalar, NTTable
 from p4p.server import DynamicProvider, Server
 from p4p.server.asyncio import SharedPV as RawAsyncSharedPV
 
@@ -31,7 +31,9 @@ from p4pillon.server.records import (
     build_record_fields,
     infer_rtyp,
 )
+from p4pillon.server.records.fields import _ENUM_VALTYPE
 from p4pillon.server.thread import SharedPV
+from p4pillon.thread.sharednt import SharedNT
 
 
 class TestInferRtyp:
@@ -44,6 +46,20 @@ class TestInferRtyp:
         assert infer_rtyp("i") == "longin"
         assert infer_rtyp("ad") == "waveform"
         assert infer_rtyp("?") == "bi"
+
+    def test_infer_rtyp_int_widths(self):
+        # 8/16/32-bit ints fit longin's DBF_LONG VAL, but 64-bit 'l'/'L' would
+        # truncate there, so they infer the dedicated int64in record (DBF_INT64).
+        for code in ("b", "B", "h", "H", "i", "I"):
+            assert infer_rtyp(code) == "longin"
+        assert infer_rtyp("l") == "int64in"
+        assert infer_rtyp("L") == "int64in"
+
+    def test_infer_rtyp_enum(self):
+        # An NTEnum-backed PV (index into named choices) has no scalar valtype
+        # code; the _ENUM_VALTYPE sentinel maps to mbbi, the multi-state binary
+        # input record whose DBF_ENUM VAL is the same index+choices shape.
+        assert infer_rtyp(_ENUM_VALTYPE) == "mbbi"
 
 
 class TestBuildRecordFields:
@@ -154,6 +170,35 @@ class TestBuildRecordFields:
             warnings.simplefilter("error")
             build_record_fields("PV:NAME", "d", fields={"DESC": "hello", "RTYP": "waveform"})
 
+    def test_invalid_menu_choice_raises_with_valid_choices_listed(self):
+        # A typo'd choice name used to surface as NTEnum.assign's int()
+        # fallback -- "invalid literal for int() with base 0" -- rather than
+        # anything naming the field or the valid choices.
+        with pytest.raises(ValueError, match=r"SCAN.*'1 second'"):
+            build_record_fields("PV:NAME", "d", fields={"SCAN": "2 seconds"})
+
+        # DTYP is validated against dtyp_choices (or its default list).
+        with pytest.raises(ValueError, match=r"DTYP.*'Soft Channel'"):
+            build_record_fields("PV:NAME", "d", fields={"DTYP": "Raw Soft Channel"})
+        built = build_record_fields(
+            "PV:NAME", "d", dtyp_choices=["Soft Channel", "Raw Soft Channel"], fields={"DTYP": "Raw Soft Channel"}
+        )
+        assert built["DTYP"]["value.index"] == 1
+
+    def test_raises_for_non_record_pv_without_explicit_rtyp(self):
+        # The low-level builder still refuses a non-record PV (NTNDArray/NTTable/
+        # ...) with no explicit RTYP: its job is to return the fields dict, so it
+        # can't invent an RTYP. (The *providers* instead pre-check and omit the
+        # fields entirely -- see test_non_record_nt_served_without_fields.)
+        img = SharedPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))
+        with pytest.raises(ValueError, match="Cannot infer RTYP"):
+            build_record_fields("PV:NAME", "d", pv=img)
+
+        # An explicit RTYP override builds fine (it's what opts a group into
+        # record treatment through the providers too).
+        built = build_record_fields("PV:NAME", "d", pv=img, fields={"RTYP": "waveform"})
+        assert built["RTYP"]["value"] == "waveform"
+
 
 class TestRecordFieldOverridesTyping:
     """Drift guard keeping the hand-written `RecordFieldOverrides` TypedDict
@@ -170,6 +215,10 @@ class TestRecordFieldOverridesTyping:
 
 def _pv(valtype="d", initial=1.234):
     return SharedPV(nt=NTScalar(valtype), initial=initial)
+
+
+def _enum_pv(choices=("OFF", "ON"), index=0):
+    return SharedPV(nt=NTEnum(), initial={"index": index, "choices": list(choices)})
 
 
 def _pv_with_description(description=None, valtype="d", initial=1.234):
@@ -217,6 +266,18 @@ class TestStaticRecordProvider:
         with Server(providers=[self.P], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
             assert c.get("PV:NAME.RTYP") == "ai"
 
+    def test_enum_pv_infers_mbbi_rtyp(self):
+        # An NTEnum-backed PV is accepted without an explicit RTYP and infers
+        # "mbbi" (see infer_rtyp). ADEL/MDEL don't apply -- mbbi's VAL is a
+        # DBF_ENUM index, not a plain numeric scalar.
+        self.P.add("ENUM:PV", _enum_pv())
+        keys = set(self.P)
+        assert "ENUM:PV.ADEL" not in keys
+        assert "ENUM:PV.MDEL" not in keys
+
+        with Server(providers=[self.P], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            assert c.get("ENUM:PV.RTYP") == "mbbi"
+
     def test_valtype_defaults_to_d_when_not_inferrable(self):
         # A hand-built PV (no nt=) has no pv.nt to infer from -- falls back
         # to 'd', same as before this default became conditional.
@@ -249,13 +310,41 @@ class TestStaticRecordProvider:
         self.P.remove("PV:NAME")  # must not raise despite ADEL/MDEL never having been added
         assert list(self.P) == []
 
-    def _check_rtyp_required_for(self, name, make_img, make_tbl):
-        # infer_rtyp() has no plausible guess for a structural PV.  Rejected
-        # without an explicit RTYP override, accepted with one.
-        with pytest.raises(ValueError, match="Cannot infer RTYP"):
-            self.P.add(f"EXAMPLE:{name}_IMG", make_img(), valtype="d")
-        with pytest.raises(ValueError, match="Cannot infer RTYP"):
-            self.P.add(f"EXAMPLE:{name}_TBL", make_tbl(), valtype="d")
+    def test_failed_add_leaves_provider_unchanged(self):
+        # add() must validate before serving anything: a raising add() (e.g. a
+        # bad menu choice) must not leave the base PV added with no sub-PVs.
+        with pytest.raises(ValueError, match="SCAN"):
+            self.P.add("PV:NAME", _pv(), fields={"SCAN": "2 seconds"})
+        assert list(self.P) == []
+
+    def test_sharednt_base_gets_plain_readonly_sub_pvs(self):
+        # Regression: sub-PVs used to be built with type(pv) itself; for a
+        # SharedNT base that gave every "<name>.<FIELD>" sub-PV the base PV's
+        # own rule handlers (CompositeHandler with put support), silently
+        # making the nominally read-only fields client-writable and
+        # timestamp-rewritten. Only the concurrency *flavor* is matched now.
+        base = SharedNT(nt=NTScalar("d"), initial=1.0)
+        self.P.add("EXAMPLE:NT", base, valtype="d")
+
+        for field_pv in self.P._field_pvs["EXAMPLE:NT"].values():
+            assert type(field_pv) is SharedPV
+
+        with Server(providers=[self.P], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            with pytest.raises(RemoteError):
+                c.put("EXAMPLE:NT.ASG", "written by client")
+            assert c.get("EXAMPLE:NT.ASG") == ""
+
+    def _check_non_record_served_without_fields(self, name, make_img, make_tbl):
+        # infer_rtyp() has no plausible guess for a structural PV (NTNDArray/
+        # NTTable/... -> a Q:group in a real IOC): the base PV is served with no
+        # "<name>.<FIELD>" sub-PVs, unless an explicit RTYP override opts it in.
+        self.P.add(f"EXAMPLE:{name}_IMG", make_img(), valtype="d")
+        assert f"EXAMPLE:{name}_IMG" in self.P
+        assert f"EXAMPLE:{name}_IMG.RTYP" not in self.P
+
+        self.P.add(f"EXAMPLE:{name}_TBL", make_tbl(), valtype="d")
+        assert f"EXAMPLE:{name}_TBL" in self.P
+        assert f"EXAMPLE:{name}_TBL.RTYP" not in self.P
 
         self.P.add(f"EXAMPLE:{name}_IMG2", make_img(), valtype="d", fields={"RTYP": "waveform"})
         assert f"EXAMPLE:{name}_IMG2.RTYP" in self.P
@@ -263,7 +352,7 @@ class TestStaticRecordProvider:
         self.P.add(f"EXAMPLE:{name}_TBL2", make_tbl(), valtype="d", fields={"RTYP": "waveform"})
         assert f"EXAMPLE:{name}_TBL2.RTYP" in self.P
 
-    def test_rtyp_required_for_non_scalar_nt(self):
+    def test_non_record_nt_served_without_fields(self):
         # Detected via pv.nt (set by SharedPV(nt=...)) rather than the
         # 'valtype' string, which can't distinguish an NTNDArray/NTTable-backed
         # PV from an NTScalar one.
@@ -273,17 +362,17 @@ class TestStaticRecordProvider:
         def tbl():
             return SharedPV(nt=NTTable(columns=[("A", "d")]), initial=[{"A": 1.0}])
 
-        self._check_rtyp_required_for("NT", img, tbl)
+        self._check_non_record_served_without_fields("NT", img, tbl)
 
-    def test_rtyp_required_for_hand_built_non_scalar_value(self):
-        # Same as test_rtyp_required_for_non_scalar_nt, but for a PV built
+    def test_non_record_hand_built_value_served_without_fields(self):
+        # Same as test_non_record_nt_served_without_fields, but for a PV built
         # directly from a plain Value (no nt=) -- pv.nt is never set for
         # this, so detection instead falls back to the Value's own
         # structure ID (see _struct_id_of_current).
         img_value = NTNDArray().wrap(numpy.zeros((4, 4)))
         table_value = NTTable(columns=[("A", "d")]).wrap([{"A": 1.0}])
 
-        self._check_rtyp_required_for(
+        self._check_non_record_served_without_fields(
             "HAND", lambda: SharedPV(initial=img_value), lambda: SharedPV(initial=table_value)
         )
 
@@ -305,10 +394,13 @@ class TestStaticRecordProvider:
         self.P.add("EXAMPLE:FASTSCALAR", scalar_pv, valtype="d")
         assert scalar_pv.current_calls == 0
 
+        # A non-record NTNDArray is served base-only (no fields) -- still
+        # resolved from pv.nt alone, without an expensive current() probe.
         ndarray_pv = _CountingCurrentPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))
-        with pytest.raises(ValueError, match="Cannot infer RTYP"):
-            self.P.add("EXAMPLE:FASTIMG", ndarray_pv, valtype="d")
+        self.P.add("EXAMPLE:FASTIMG", ndarray_pv, valtype="d")
         assert ndarray_pv.current_calls == 0
+        assert "EXAMPLE:FASTIMG" in self.P
+        assert "EXAMPLE:FASTIMG.RTYP" not in self.P
 
     def test_rtyp_check_tolerates_non_value_unwrap(self):
         # Regression test: a hand-rolled unwrap= can return anything, with no
@@ -444,6 +536,39 @@ class TestIOCMimicServer:
             assert c.get("EXAMPLE:PV.RTYP") == "ai"
             assert c.get("EXAMPLE:PV.SCAN").choice == "Passive"
 
+    def test_dict_provider_desc_tracks_base_pv(self):
+        # The dict shorthand stores a weak reference per entry, so DESC
+        # follows the base PV's display.description for new connections --
+        # there is no set_desc_record on this path (see the class docstring).
+        pv = _pv_with_description("first")
+
+        with IOCMimicServer(providers=[{"EXAMPLE:PV": pv}], isolate=True) as s:
+            with Context("pva", conf=s.conf(), useenv=False) as c:
+                assert c.get("EXAMPLE:PV.DESC") == "first"
+
+            pv.post({"value": 2.0, "display": {"description": "second"}})
+
+            with Context("pva", conf=s.conf(), useenv=False) as c:
+                assert c.get("EXAMPLE:PV.DESC") == "second"
+
+    def test_provider_with_providers_attribute_is_not_unpacked(self):
+        # Only a real IOCMimicProvider is unpacked into its provider pair;
+        # any other provider merely carrying a tuple-valued `.providers`
+        # attribute must be passed through to p4p.server.Server untouched
+        # (the former duck-typed check would hand p4p the tuple's elements
+        # -- here two bare object()s -- as providers).
+        class ProviderWithProvidersAttr(StaticRecordProvider):
+            providers = (object(), object())
+
+        p = ProviderWithProvidersAttr("attr")
+        p.add("EXAMPLE:PV", _pv())
+
+        with (
+            IOCMimicServer(providers=[p], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            assert c.get("EXAMPLE:PV.RTYP") == "ai"
+
     def test_non_dict_providers_pass_through_unchanged(self):
         # A provider name string and an already-constructed provider instance
         # (including an explicit StaticRecordProvider) aren't dicts -- must be
@@ -469,6 +594,46 @@ class TestIOCMimicServer:
         ):
             assert c.get("EXAMPLE:PV.RTYP") == "ai"
             assert c.get("EXPLICIT:PV.RTYP") == "ai"
+
+    def test_dict_provider_skips_fields_for_non_inferrable_nt(self):
+        # A non-record-like base PV (NTNDArray/NTTable/...) is served through the
+        # dict shorthand with no "<name>.<FIELD>" sub-PVs -- as an IOC serves a
+        # Q:group -- rather than defaulting to 'd' or raising. A record-like PV
+        # in the same dict still gets its fields.
+        pvs = {
+            "EXAMPLE:IMG": SharedPV(nt=NTNDArray(), initial=numpy.zeros((4, 4))),
+            "EXAMPLE:SCALAR": _pv(),
+        }
+        with (
+            IOCMimicServer(providers=[pvs], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            # both base PVs are served
+            assert c.get("EXAMPLE:IMG") is not None
+            assert c.get("EXAMPLE:SCALAR") == 1.234
+            # the NDArray gets no record fields; the scalar still does
+            with pytest.raises(TimeoutError):
+                c.get("EXAMPLE:IMG.RTYP", timeout=0.2)
+            assert c.get("EXAMPLE:SCALAR.RTYP") == "ai"
+
+    def test_dict_provider_all_non_inferrable_adds_no_field_provider(self):
+        # If no dict entry is record-like, no DynamicProvider is built at all
+        # (an empty registry -> None from _dynamic_fields_provider).
+        pvs = {"EXAMPLE:IMG": SharedPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))}
+        with IOCMimicServer(providers=[pvs], isolate=True) as s:
+            assert s._field_providers == []
+
+    def test_dict_provider_enum_infers_mbbi_rtyp(self):
+        # An NTEnum is inferrable through the dict shorthand too (valtype
+        # resolves to the _ENUM_VALTYPE sentinel, not the 'd' fallback): RTYP
+        # is mbbi and no ADEL/MDEL sub-PV is served.
+        with (
+            IOCMimicServer(providers=[{"ENUM:PV": _enum_pv()}], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            assert c.get("ENUM:PV.RTYP") == "mbbi"
+            with pytest.raises(TimeoutError):
+                c.get("ENUM:PV.ADEL", timeout=0.2)
 
     def test_ioc_record_provider_passed_directly(self):
         # An IOCMimicProvider isn't itself a single provider (it holds a
@@ -507,6 +672,13 @@ class TestDynamicRecordFields:
         registry: dict[str, RegistryEntry] = {"EXAMPLE:PV3": {"valtype": "s", "fields": {"DESC": "hello"}}}
         with warnings.catch_warnings():
             warnings.simplefilter("error")
+            DynamicRecordFields(registry)
+
+    def test_invalid_menu_choice_raises_eagerly_at_construction(self):
+        # Same eager validation as the unknown-key warning above: caught at
+        # construction time, not when (if ever) a client connects.
+        registry = {"EXAMPLE:PV3": {"valtype": "d", "fields": {"SCAN": "2 seconds"}}}
+        with pytest.raises(ValueError, match=r"SCAN.*'1 second'"):
             DynamicRecordFields(registry)
 
     def test_live_get(self):
@@ -653,15 +825,29 @@ class TestIOCMimicProvider:
         ):
             assert c.get("PV:NAME.RTYP") == "ai"
 
-    def test_rtyp_not_inferrable_raises_at_add_time(self):
-        # Same eager check build_record_fields()/StaticRecordProvider.add() do
-        # -- unlike DynamicRecordFields' own registry-only constructor, add()
-        # has the live pv here and so can check inferrability up front,
-        # rather than only failing (or silently misbehaving) once a client
-        # first connects to the RTYP sub-PV.
+    def test_enum_pv_infers_mbbi_rtyp(self):
+        # An NTEnum is inferrable (unlike NTTable/NTNDArray): accepted with no
+        # explicit RTYP and reported as mbbi (see infer_rtyp).
+        self.P.add("ENUM:PV", _enum_pv())
+        assert self.P._registry["ENUM:PV"]["valtype"] == _ENUM_VALTYPE
+
+        with (
+            Server(providers=[*self.P.providers], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            assert c.get("ENUM:PV.RTYP") == "mbbi"
+            # mbbi's VAL is a DBF_ENUM index, not a plain numeric scalar
+            with pytest.raises(TimeoutError):
+                c.get("ENUM:PV.ADEL", timeout=0.2)
+
+    def test_non_record_nt_served_without_fields(self):
+        # A non-record PV (NTTable/NTNDArray/... -> a Q:group in a real IOC) is
+        # served on its own with no registry entry (hence no "<name>.<FIELD>"
+        # sub-PVs), the same as StaticRecordProvider.add, rather than raising.
         table_pv = SharedPV(nt=NTTable(columns=[("A", "d")]), initial=[{"A": 1.0}])
-        with pytest.raises(ValueError, match="RTYP"):
-            self.P.add("TBL:PV", table_pv)
+        self.P.add("TBL:PV", table_pv)
+        assert list(self.P) == ["TBL:PV"]  # base PV served
+        assert "TBL:PV" not in self.P._registry  # no record fields
 
     def test_rtyp_not_inferrable_accepts_explicit_override(self):
         table_pv = SharedPV(nt=NTTable(columns=[("A", "d")]), initial=[{"A": 1.0}])
@@ -673,9 +859,25 @@ class TestIOCMimicProvider:
             # Deliberate "DESK" typo asserts the UserWarning; ty flags it against RecordFieldOverrides.
             self.P.add("PV:NAME", _pv(), fields={"DESK": "typo"})  # ty: ignore[invalid-argument-type, invalid-key]
 
-    def test_desc_is_snapshot_taken_at_add_time(self):
-        # No live PV reference held -- a later pv.post() changing
-        # display.description is never reflected (see the class docstring).
+    def test_failed_add_leaves_provider_unchanged(self):
+        # add() must validate before serving anything: a raising add() (e.g. a
+        # bad menu choice) must not leave the base PV served with no registry
+        # entry.
+        with pytest.raises(ValueError, match="SCAN"):
+            self.P.add("PV:NAME", _pv(), fields={"SCAN": "2 seconds"})
+        assert list(self.P) == []
+        assert "PV:NAME" not in self.P._registry
+
+    def test_invalid_menu_choice_raises_at_add_time(self):
+        with pytest.raises(ValueError, match=r"SCAN.*'1 second'"):
+            self.P.add("PV:NAME", _pv(), fields={"SCAN": "2 seconds"})
+        assert list(self.P) == []
+
+    def test_desc_tracks_base_pv_for_new_connections(self):
+        # add() stores a weak reference to the base PV, and makeChannel()
+        # re-reads display.description per connection -- so a later pv.post()
+        # changing it IS reflected, but only for *new* connections (an
+        # already-open sub-PV channel keeps the value it connected with).
         pv = _pv_with_description("hello")
         self.P.add("PV:NAME", pv, valtype="d")
 
@@ -686,7 +888,7 @@ class TestIOCMimicProvider:
             pv.post({"value": 1.234, "display": {"description": "changed"}})
 
             with Context("pva", conf=s.conf(), useenv=False) as c:
-                assert c.get("PV:NAME.DESC") == "hello"  # still the add()-time snapshot
+                assert c.get("PV:NAME.DESC") == "changed"
 
     def test_remove_cleans_up_base_and_registry(self):
         self.P.add("PV:NAME", _pv(), valtype="d")
@@ -710,9 +912,12 @@ class TestIOCMimicProvider:
         assert self.P.providers == (self.P._static, self.P._dynamic)
 
     def test_set_desc_record_updates_registry_for_new_connections_only(self):
-        # No live PV reference here (unlike StaticRecordProvider) -- an
-        # already-open connection keeps the snapshot taken when it connected;
-        # only a *new* connection picks up the update.
+        # No live sub-PV channel here (unlike StaticRecordProvider) -- an
+        # already-open connection keeps the value it connected with; only a
+        # *new* connection picks up the update. The explicit override also
+        # wins over the base PV's own display.description ("initial
+        # description" throughout) and any later change to it: it stops the
+        # automatic tracking for this record.
         pv = _pv_with_description("initial description")
         self.P.add("PV:NAME", pv, valtype="d")
 
@@ -723,6 +928,8 @@ class TestIOCMimicProvider:
                 self.P.set_desc_record("PV:NAME", "updated description")
 
                 assert c.get("PV:NAME.DESC") == "initial description"
+
+            pv.post({"value": 1.234, "display": {"description": "post-override change"}})
 
             with Context("pva", conf=s.conf(), useenv=False) as c:
                 assert c.get("PV:NAME.DESC") == "updated description"
@@ -764,32 +971,27 @@ class TestStaticRecordProviderAsyncio:
 
     async def test_mixed_pv_flavors(self):
         # A single StaticRecordProvider can mix thread- and asyncio-flavored base
-        # PVs; each record's own "<name>.<FIELD>" sub-PVs are built using
-        # that same PV's class (type(pv)), so they automatically use the
-        # same concurrency model rather than a single flavor for the whole
-        # provider.
-        thread_instances = []
-        async_instances = []
-
+        # PVs; each record's own "<name>.<FIELD>" sub-PVs are built with the
+        # plain p4pillon SharedPV class of the matching concurrency flavor --
+        # deliberately NOT type(pv) itself, so a concrete subclass (e.g. one
+        # with its own handlers, like SharedNT) is never propagated to the
+        # sub-PVs (see test_sharednt_base_gets_plain_readonly_sub_pvs).
         class TrackedThreadPV(SharedPV):
-            def __init__(self, **kw):
-                super().__init__(**kw)
-                thread_instances.append(self)
+            pass
 
         class TrackedAsyncPV(AsyncSharedPV):
-            def __init__(self, **kw):
-                super().__init__(**kw)
-                async_instances.append(self)
+            pass
 
         p = StaticRecordProvider("test")
         p.add("EXAMPLE:THREAD", TrackedThreadPV(nt=NTScalar("d"), initial=1.234), valtype="d")
         p.add("EXAMPLE:ASYNC", TrackedAsyncPV(nt=NTScalar("d"), initial=2.345), valtype="d")
 
-        # one base PV plus one per field, all of the matching flavor
-        assert len(thread_instances) == 1 + len(FIELD_NAMES)
-        assert len(async_instances) == 1 + len(FIELD_NAMES)
-        assert all(isinstance(pv, SharedPV) for pv in thread_instances)
-        assert all(isinstance(pv, AsyncSharedPV) for pv in async_instances)
+        thread_fields = p._field_pvs["EXAMPLE:THREAD"]
+        async_fields = p._field_pvs["EXAMPLE:ASYNC"]
+        assert set(thread_fields) == FIELD_NAMES
+        assert set(async_fields) == FIELD_NAMES
+        assert all(type(f) is SharedPV for f in thread_fields.values())
+        assert all(type(f) is AsyncSharedPV for f in async_fields.values())
 
         with Server(providers=[p], isolate=True) as s, AsyncContext("pva", conf=s.conf(), useenv=False) as c:
             assert (await c.get("EXAMPLE:THREAD")) == 1.234
