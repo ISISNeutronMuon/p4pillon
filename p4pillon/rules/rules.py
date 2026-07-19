@@ -10,7 +10,6 @@ from __future__ import annotations
 import itertools
 import logging
 from abc import ABC, abstractmethod
-from copy import deepcopy
 from enum import IntEnum, auto
 from functools import wraps
 from typing import TYPE_CHECKING, Any, ClassVar  # Hack to type hint number types
@@ -18,7 +17,7 @@ from typing import TYPE_CHECKING, Any, ClassVar  # Hack to type hint number type
 from p4p import Type, Value
 from p4p.server.raw import ServOpWrap
 
-from p4pillon.nt.identify import NTType
+from p4pillon.nt.identify import NTType, id_nttype
 from p4pillon.utils import overwrite_marked
 
 if TYPE_CHECKING:
@@ -204,6 +203,13 @@ class BaseRule(ABC):
     Rule requires constructor settings to function it must set this to False.
     """
 
+    run_last: ClassVar[bool] = False
+    """
+    Signals that this Rule must be ordered after every other handler in the
+    CompositeHandler, including user handlers. The timestamp rule sets this so
+    the stored value carries the time it was finalised.
+    """
+
     # Often we want to make the fields associated with a rule readonly for put
     # operations, e.g. a put operation should not be able to change the limits
     # of a valueAlarm rule. The combination of listing fields controlled by the
@@ -214,7 +220,26 @@ class BaseRule(ABC):
     def __init__(self, **kwargs):
         pass
 
-    # TODO: Consider using lru_cache but be aware of https://rednafi.com/python/lru_cache_on_methods/
+    @classmethod
+    def applies_to(cls, nttype: Type) -> bool:
+        """Setup-time test: should this Rule be attached to a PV of this Type?
+
+        Evaluated once, when the PV is built, to decide whether the Rule is
+        added to the CompositeHandler at all. It considers only the Rule's
+        declared `nttypes` and `fields` against the PV's static `Type`. This is
+        distinct from `is_applicable`, which is the per-operation runtime check
+        against a concrete `Value`.
+        """
+        # `nttypes` restricts the Rule to particular Normative Types. An empty
+        # list (or one including SupportedNTTypes.ALL) means "any type".
+        if cls.nttypes and SupportedNTTypes.ALL not in cls.nttypes and id_nttype(nttype) not in cls.nttypes:
+            return False
+
+        # Every field the Rule declares must be present in the Type's structure.
+        return not cls.fields or all(field in nttype for field in cls.fields)
+
+    # Not cached: a fresh mutable Value arrives per operation, so there are no
+    # cache hits, and lru_cache on a method would leak self.
     def is_applicable(self, newpvstate: Value) -> bool:
         """Test whether the Rule should be applied."""
 
@@ -228,9 +253,9 @@ class BaseRule(ABC):
 
         # Then check if any of the fields required are changed
         # If they aren't changed then the rule shouldn't have anything to do!
-        test_fields = deepcopy(self.fields)
-        if "value" not in test_fields:
-            test_fields.append("value")
+        # `self.fields` is a list of strings; build a fresh list rather than
+        # deep-copying, and never mutate `self.fields` in place.
+        test_fields = self.fields if "value" in self.fields else [*self.fields, "value"]
 
         return any(newpvstate.changed(x) for x in test_fields)
 

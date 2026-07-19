@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from p4p import Value
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+def as_raw(value: Any) -> Value:
+    """Return the underlying raw `Value` of an NT-wrapped value, tolerating
+    values that are not wrapped.
+
+    An NT-typed value (e.g. the `ntwrappercommon` returned by
+    `op.value()`/`pv.current()` for a normative type) carries its underlying
+    `p4p.Value` on a `.raw` attribute; a hand-built (non-NT) Type is already a
+    plain `Value` with no `.raw`, so it is returned unchanged. This never
+    raises, unlike a bare `.raw` access.
+    """
+    return getattr(value, "raw", value)
 
 
 def time_in_seconds_and_nanoseconds(timestamp: float) -> tuple[int, int]:

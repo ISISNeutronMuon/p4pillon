@@ -131,10 +131,6 @@ class TestTimestamp:
 
         assert rule.is_applicable(new_state) is True
 
-    @pytest.mark.xfail(
-        reason="p4p _wrap bug workaround in TimestampRule.init_rule — see comment in timestamp_rule.py",
-        strict=True,
-    )
     @patch("time.time", return_value=999.999)
     def test_init_rule_preserves_caller_supplied_timestamp(self, mock_time):  # noqa: ARG002 - mock only needed to prevent real time.time() being used
         rule = TimestampRule()

@@ -12,6 +12,7 @@ from collections import OrderedDict
 from typing import TYPE_CHECKING
 
 from p4pillon.server.raw import Handler, SharedPV
+from p4pillon.utils import as_raw
 
 if TYPE_CHECKING:
     from p4p import Value
@@ -89,7 +90,15 @@ class CompositeHandler(Handler, OrderedDict):
             # pv.post() safely re-enters this lock; it must stay inside so
             # the handler rules and the store are one atomic unit.
             if errmsg is None:
-                pv.post(op.value())
+                # Post the raw Value, not the unwrapped op.value(). For an
+                # NT-typed PV op.value() is an ntwrappercommon carrying a
+                # `.timestamp`; re-wrapping it in pv.post() runs
+                # NTScalar.wrap -> _annotate, which re-marks timeStamp as
+                # changed even when the client only touched `value` (see
+                # TimestampRule.init_rule). Posting `.raw` keeps the client's
+                # own changed-set intact. as_raw() falls back to op.value()
+                # itself for a hand-built (non-NT) Type, which has no unwrapper.
+                pv.post(as_raw(op.value()))
 
         # op.done() touches no handler state, so it runs outside the lock.
         # error=None is the success case, matching rpc() below.

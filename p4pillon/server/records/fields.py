@@ -16,6 +16,7 @@ from p4p.server.raw import SharedPV as _SharedPVBase
 
 from p4pillon.nt import NTEnum, NTScalar
 from p4pillon.nt.identify import NTType, id_nttype_type
+from p4pillon.utils import as_raw
 
 if TYPE_CHECKING:
     import weakref
@@ -346,7 +347,7 @@ def _raw_current_or_none(pv: _SharedPVBase) -> Value | None:
         return None
     # p4p's own NT wrappers guarantee `.raw` is a real Value; a hand-rolled
     # unwrap= makes no such promise (see test_rtyp_check_tolerates_non_value_unwrap).
-    raw = getattr(current, "raw", current)
+    raw = as_raw(current)
     return raw if isinstance(raw, Value) else None
 
 

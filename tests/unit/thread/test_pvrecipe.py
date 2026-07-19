@@ -68,16 +68,8 @@ def test_ntscalar_display(pvtype, display_config, expected_values):
 @pytest.mark.parametrize(
     ("pvtype", "time_val"),
     [
-        pytest.param(
-            PVTypes.INTEGER,
-            123.456,
-            marks=pytest.mark.xfail,
-        ),  # Issue with _wrap preventing timestamp setting
-        pytest.param(
-            PVTypes.DOUBLE,
-            123.456,
-            marks=pytest.mark.xfail,
-        ),  # Issue with _wrap preventing timestamp setting
+        (PVTypes.INTEGER, 123.456),
+        (PVTypes.DOUBLE, 123.456),
         (PVTypes.INTEGER, None),
         (PVTypes.DOUBLE, None),
     ],

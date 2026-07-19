@@ -21,6 +21,7 @@ class TimestampRule(BaseRule):
     name = "timestamp"
     nttypes: ClassVar[list[SupportedNTTypes] | None] = [SupportedNTTypes.ALL]
     fields: ClassVar[list[str] | None] = ["timeStamp"]
+    run_last: ClassVar[bool] = True  # timeStamp must be stamped after all other rules/handlers
 
     type = SupportedNTTypes.ALL
 
@@ -42,14 +43,16 @@ class TimestampRule(BaseRule):
         """Update the timeStamp of a PV"""
 
         seconds, nanoseconds = time_in_seconds_and_nanoseconds(time.time())
-        # TODO: there's a bug in the _wrap which means that timestamps are always marked as changed
-        #       Fix this when that bug is fixed.
-        # if "timeStamp.secondsPastEpoch" not in newpvstate.changedSet():
-        if True:
+        # Stamp the current time only into a timeStamp component the caller did
+        # not set themselves; a caller-provided timeStamp is preserved. This
+        # relies on the changed-set faithfully reflecting the caller's intent:
+        # CompositeHandler.put posts the raw client Value (not the unwrapped
+        # op.value()), so timeStamp is only marked changed here when the client
+        # actually set it, not as a re-wrap artefact.
+        if "timeStamp.secondsPastEpoch" not in newpvstate.changedSet():
             logger.debug("using secondsPastEpoch from time.time()")
             newpvstate["timeStamp.secondsPastEpoch"] = seconds
-        # if "timeStamp.nanoseconds" not in newpvstate.changedSet():
-        if True:
+        if "timeStamp.nanoseconds" not in newpvstate.changedSet():
             newpvstate["timeStamp.nanoseconds"] = nanoseconds
             logger.debug("using nanoseconds from time.time()")
 

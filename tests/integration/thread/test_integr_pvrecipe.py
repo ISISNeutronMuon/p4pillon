@@ -13,12 +13,15 @@ from pathlib import Path
 import pytest
 import yaml
 from helpers import put_different_value_scalar, put_metadata
+from p4p import Type, Value
 from p4p._p4p import RemoteError
 from p4p.client.thread import Context
+from p4p.nt import NTScalar
 
 from p4pillon.definitions import PVTypes
 from p4pillon.thread.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
 from p4pillon.thread.server import Server
+from p4pillon.thread.sharednt import SharedNT
 from tests.integration.thread.assertions import (
     assert_correct_alarm_config,
     assert_correct_control_config,
@@ -431,3 +434,56 @@ class TestControl:
         timestamp = time.time()
         ctx.put(pvname, [*test_list, put_val])
         assert_value_changed(pvname, [*test_list, expected_val], timestamp, ctx)
+
+
+class TestValueOnlyPutStampsFreshTimestamp:
+    """A value-only client put must land a *fresh* server timestamp and apply
+    the value, for both NT-typed PVs and hand-built (non-NT) structured types.
+
+    These exercise the put path where the value is re-applied via
+    ``pv.post(op.value())``: for an NT type ``op.value()`` is an unwrapped
+    value carrying ``.raw``, while for a hand-built Type it is a plain ``Value``
+    with no ``.raw``. Both must be processed without error and re-stamped.
+    """
+
+    # A structured Type with a timeStamp field but a non-NT id, so the client
+    # receives it un-unwrapped (ctx.get returns a raw Value, not an ntwrapper).
+    _HAND_BUILT_TYPE = Type(
+        [
+            ("value", "d"),
+            ("timeStamp", ("S", "time_t", [("secondsPastEpoch", "l"), ("nanoseconds", "i")])),
+        ],
+        id="hand:built/Custom",
+    )
+
+    @staticmethod
+    def _read_value_and_seconds(pvname: str, ctx: Context) -> tuple[float, int]:
+        state = ctx.get(pvname)
+        raw = state.raw if hasattr(state, "raw") else state
+        return raw["value"], raw["timeStamp.secondsPastEpoch"]
+
+    def test_nt_type(self, basic_server: Server, ctx: Context):
+        pvname = "TEST:PUTTS:NT"
+        basic_server.add_pv(pvname, SharedNT(nt=NTScalar("d"), initial=0.0))
+        basic_server.start()
+
+        before = int(time.time())
+        ctx.put(pvname, 7.0)
+        time.sleep(0.1)
+
+        value, seconds = self._read_value_and_seconds(pvname, ctx)
+        assert value == 7.0
+        assert seconds >= before
+
+    def test_hand_built_type(self, basic_server: Server, ctx: Context):
+        pvname = "TEST:PUTTS:HB"
+        basic_server.add_pv(pvname, SharedNT(initial=Value(self._HAND_BUILT_TYPE, {"value": 1.0})))
+        basic_server.start()
+
+        before = int(time.time())
+        ctx.put(pvname, 7.0)
+        time.sleep(0.1)
+
+        value, seconds = self._read_value_and_seconds(pvname, ctx)
+        assert value == 7.0
+        assert seconds >= before
