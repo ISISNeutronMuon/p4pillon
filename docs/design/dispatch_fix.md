@@ -7,7 +7,7 @@ event loops). We build up just enough of that background to understand what
 was broken and why the fix works.
 
 Read it top to bottom the first time; later you can jump straight to
-[The fix](#the-fix).
+[The fix](#4-the-fix).
 
 ---
 
@@ -193,7 +193,8 @@ single PV. Good.
 ### Regime 2: open / post / close — run on the *caller's* thread
 
 The `open`, `post`, and `close` hooks are different. They are p4pillon
-additions (from p4p PR #172), and they run **synchronously on whatever thread
+additions (implemented by p4pillon itself, not the underlying p4p), and they run
+**synchronously on whatever thread
 called `pv.open()` / `pv.post()` / `pv.close()`**. They are *not* pushed onto
 the executor.
 
