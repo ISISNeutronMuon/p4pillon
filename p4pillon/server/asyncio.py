@@ -13,12 +13,12 @@ from p4pillon.server.raw import SharedPV as _SharedPV
 p4p.server.raw.SharedPV = _SharedPV
 
 # pylint: disable=unused-import, wrong-import-order, wrong-import-position
-from p4p.server.thread import Handler, SharedPV  # noqa: E402, F401,
+from p4p.server.thread import Handler, SharedPV  # noqa: F401,
 
 #####
 # Monkey patching the Handler is a simpler operation as it's a straight
 # substitution with our new version.
 # pylint: disable=ungrouped-imports
-from p4pillon.server.raw import Handler as _Handler  # noqa: E402
+from p4pillon.server.raw import Handler as _Handler
 
 Handler = _Handler  # noqa: F811
