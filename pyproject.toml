@@ -38,7 +38,7 @@ Repository = "https://github.com/epics-base/p4p"
 [project.optional-dependencies]
 test = [
   "ruff>=0.16.1",
-  "coverage>7.15.2",
+  "coverage>=7.15.2",
   "pytest>=9.1.1",
 ]
 dist = [
