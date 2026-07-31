@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from abc import ABC
 from collections import OrderedDict
-from typing import Any
+from typing import Any, ClassVar
 
 from p4p import Type, Value
 
@@ -53,7 +53,7 @@ class SharedNT(SharedPV, ABC):
     functionality to support Normative Type logic.
     """
 
-    registered_handlers: list[type[BaseRule]] = [
+    _DEFAULT_HANDLERS: ClassVar[list[type[BaseRule]]] = [
         AlarmRule,
         ControlRule,
         AlarmNTEnumRule,
@@ -70,8 +70,7 @@ class SharedNT(SharedPV, ABC):
         registered_handlers: list[type[BaseRule]] | None = None,
         **kwargs,
     ):
-        if registered_handlers:
-            self.registered_handlers = registered_handlers
+        self.registered_handlers: list[type[BaseRule]] = registered_handlers if registered_handlers is not None else list(self._DEFAULT_HANDLERS)
 
         # Create a CompositeHandler. If there is no user supplied handler, and this is not
         # an NT type then it won't do anything. Unfortunately, an empty CompositeHandler

@@ -5,6 +5,7 @@ Rule to implement calc record functionality.
 import ast
 import logging
 import math as m  # noqa: F401
+from typing import ClassVar
 
 from p4p import Value
 
@@ -36,8 +37,8 @@ class CalcRule(BaseScalarRule):
         self.set_calc(calc=kwargs)
 
     name = "calc"
-    nttypes = [SupportedNTTypes.ALL]
-    fields = []
+    nttypes: ClassVar[list] = [SupportedNTTypes.ALL]
+    fields: ClassVar[list] = []
     add_automatically = False
 
     class MonitorCB:
@@ -109,12 +110,12 @@ class CalcRule(BaseScalarRule):
             try:
                 val = self._server.get_pv_value(pv_name)
                 if val is None:
-                    logging.error("Failed to get pv %s", pv_name)
+                    logger.error("Failed to get pv %s", pv_name)
                     return None
                 pvs.append(val)
-            except Exception:
+            except (KeyError, AttributeError):
                 # If there's an error getting the value of a pv return None
-                logging.error("Failed to get pv %s", pv_name)
+                logger.error("Failed to get pv %s", pv_name)
                 return None
 
         return pvs
