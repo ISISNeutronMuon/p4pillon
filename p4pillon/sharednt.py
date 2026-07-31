@@ -38,7 +38,7 @@ def is_type_subset(fullset: Type, subset: Type) -> bool:
     """Check if the subset is a part of the fullset."""
 
     # For now we only support looking one level deep
-    test = all(x in fullset.keys() for x in subset.keys())
+    test = all(x in fullset for x in subset)
     if test:
         pass
     else:

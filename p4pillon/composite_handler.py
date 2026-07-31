@@ -38,7 +38,7 @@ class CompositeHandler(Handler, OrderedDict):
 
     def open(self, value: Value):
         """Open all handlers in the composite handler."""
-        for _name, handler in self.items():
+        for handler in self.values():
             handler.open(value)
 
     def put(self, pv: SharedPV, op: ServerOperation):
@@ -49,7 +49,7 @@ class CompositeHandler(Handler, OrderedDict):
 
         errmsg = None
 
-        for _name, handler in self.items():
+        for handler in self.values():
             try:
                 handler.put(pv, op)
             except AbortHandlerException as e:
@@ -63,7 +63,7 @@ class CompositeHandler(Handler, OrderedDict):
             op.done(error=errmsg)
 
     def post(self, pv: SharedPV, value: Value):
-        for _name, handler in self.items():
+        for handler in self.values():
             handler.post(pv, value)
 
     def rpc(self, pv: SharedPV, op: ServerOperation):
