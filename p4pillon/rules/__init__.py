@@ -12,9 +12,9 @@ from .timestamp_rule import TimestampRule
 from .value_alarm_rule import ValueAlarmRule
 
 __all__ = [
-    "BaseRule",
-    "AlarmRule",
     "AlarmNTEnumRule",
+    "AlarmRule",
+    "BaseRule",
     "CalcRule",
     "ControlRule",
     "ReadOnlyRule",

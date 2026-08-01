@@ -42,7 +42,6 @@ class Handler(_P4PHandler, ABC):
 
         :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
         """
-        pass
 
     def post(self, pv, value):
         """
@@ -51,7 +50,6 @@ class Handler(_P4PHandler, ABC):
         :param SharedPV pv: The :py:class:`SharedPV` which this Handler is associated with.
         :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
         """
-        pass
 
     def close(self, pv):
         """
@@ -59,7 +57,6 @@ class Handler(_P4PHandler, ABC):
 
         :param SharedPV pv: The :py:class:`SharedPV` which this Handler is associated with.
         """
-        pass
 
 
 class HandlerHooksMixin:

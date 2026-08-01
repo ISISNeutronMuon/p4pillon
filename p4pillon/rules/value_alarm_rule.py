@@ -4,6 +4,7 @@ Rules for the valueAlarm fields of NTScalar and NTScalarArray Normative Types.
 
 import logging
 import operator
+from typing import ClassVar
 
 from p4p import Value
 
@@ -23,7 +24,7 @@ class ValueAlarmRule(BaseGatherableRule):
     """
 
     name = "alarm_limit"
-    fields = ["alarm", "valueAlarm"]
+    fields: ClassVar[list] = ["alarm", "valueAlarm"]
     wrap_for_array = True
 
     # @property
