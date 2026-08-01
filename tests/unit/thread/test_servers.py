@@ -69,7 +69,7 @@ def test_server_start():
     test_server.start()
     assert test_server._running is True
     assert len(test_server._pvs) == 1
-    assert list(test_server._pvs)[0] == "DEV:TEST:PV:1"
+    assert next(iter(test_server._pvs)) == "DEV:TEST:PV:1"
 
 
 def test_server_stop():
@@ -101,7 +101,7 @@ def test_server_remove_pv():
 
     test_server.start()
     assert len(test_server._pvs) == 1
-    assert list(test_server._pvs)[0] == "DEV:TEST:PV:1"
+    assert next(iter(test_server._pvs)) == "DEV:TEST:PV:1"
     test_server.remove_pv("DEV:TEST:PV:1")
     assert len(test_server._pvs) == 0
     assert test_server._pvs.get("DEV:TEST:PV:1") is None

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import math as m
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from p4p import Value
 from simpleeval import ModuleWrapper, SimpleEval
@@ -45,8 +45,8 @@ class CalcRule(BaseScalarRule):
         self.set_calc(calc=kwargs)
 
     name = "calc"
-    nttypes: list[SupportedNTTypes] | None = [SupportedNTTypes.ALL]
-    fields: list[str] | None = []
+    nttypes: ClassVar[list[SupportedNTTypes] | None] = [SupportedNTTypes.ALL]
+    fields: ClassVar[list[str] | None] = []
     add_automatically: bool = False
 
     class MonitorCB:
@@ -121,12 +121,12 @@ class CalcRule(BaseScalarRule):
             try:
                 val = self._server.get_pv_value(pv_name)
                 if val is None:
-                    logging.error("Failed to get pv %s", pv_name)
+                    logger.error("Failed to get pv %s", pv_name)
                     return None
                 pvs.append(val)
             except Exception:
                 # If there's an error getting the value of a pv return None
-                logging.exception("Failed to get pv %s", pv_name)
+                logger.exception("Failed to get pv %s", pv_name)
                 return None
 
         return pvs

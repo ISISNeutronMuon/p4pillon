@@ -3,6 +3,8 @@ This rule is not part of the Normative Type specification. It provides an interf
  alarms for NTEnums.
 """
 
+from typing import ClassVar
+
 from p4p import Value
 
 from p4pillon.definitions import AlarmDict, AlarmSeverity, AlarmStatus
@@ -17,8 +19,8 @@ class AlarmNTEnumRule(AlarmRule):
     """
 
     name = "alarmNTEnum"
-    nttypes = [SupportedNTTypes.NTENUM]
-    fields = ["alarm"]
+    nttypes: ClassVar[list] = [SupportedNTTypes.NTENUM]
+    fields: ClassVar[list] = ["alarm"]
 
     def __init__(self, alarms: dict[str, AlarmDict] | None = None):
         super().__init__()

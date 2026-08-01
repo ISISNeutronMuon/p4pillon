@@ -38,7 +38,7 @@ def is_type_subset(fullset: Type, subset: Type) -> bool:
     """Check if the subset is a part of the fullset."""
 
     # For now we only support looking one level deep
-    test = all(x in fullset.keys() for x in subset.keys())
+    test = all(x in fullset for x in subset)
     if test:
         pass
     else:
@@ -53,7 +53,9 @@ class SharedNT(SharedPV, ABC):
     functionality to support Normative Type logic.
     """
 
-    registered_handlers: list[type[BaseRule]] = [
+    # Deliberately a mutable class attribute: it is the documented extension point for
+    # registering additional rules (see examples/custom_rule/public/imatch_alarm.py).
+    registered_handlers: list[type[BaseRule]] = [  # noqa: RUF012
         AlarmRule,
         ControlRule,
         AlarmNTEnumRule,
