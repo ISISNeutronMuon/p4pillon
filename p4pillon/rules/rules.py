@@ -429,8 +429,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
             if rule_flow == RulesFlow.ABORT:
                 return RulesFlow.ABORT
 
-            if rule_flow > net_rule_flow:  # Set the overall state to the worst we have encountered!
-                net_rule_flow = rule_flow
+            net_rule_flow = max(net_rule_flow, rule_flow)
 
             if isinstance(self._wrapped, BaseGatherableRule):
                 self._wrapped.gather(scalared_new_state, gathered_value)
@@ -472,8 +471,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
 
             if rule_flow == RulesFlow.ABORT:
                 return RulesFlow.ABORT
-            if rule_flow > net_rule_flow:  # Set the overall state to the worst we have encountered!
-                net_rule_flow = rule_flow
+            net_rule_flow = max(net_rule_flow, rule_flow)
 
             if isinstance(self._wrapped, BaseGatherableRule):
                 self._wrapped.gather(scalared_new_state, gathered_value)

@@ -62,6 +62,9 @@ class SharedNTMixin:
     change its base, so the base has to be chosen via inheritance instead.
     """
 
+    # Deliberately mutable: it is the documented extension point for registering
+    # additional rules (see examples/custom_rule/public/imatch_alarm.py). ClassVar
+    # marks it as class-level, and does not prevent that.
     registered_handlers: ClassVar[list[type[BaseRule]]] = [
         AlarmRule,
         ControlRule,
