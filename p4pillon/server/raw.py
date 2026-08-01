@@ -5,6 +5,7 @@ Patch in p4p PR #172 - support for open(), post(), and close() handler functions
 import logging
 from abc import ABC
 
+from p4p._p4p import SharedPV as _RawSharedPV
 from p4p.server.raw import SharedPV as _SharedPV
 
 _log = logging.getLogger(__name__)
@@ -154,7 +155,9 @@ class SharedPV(_SharedPV, ABC):
         else:
             open_fn(V)
 
-        _SharedPV.open(self, V)
+        # Call the C-extension base directly, bypassing p4p.server.raw.SharedPV.open(),
+        # which would wrap() V a second time (V is already wrapped above).
+        _RawSharedPV.open(self, V)
 
     def post(self, value, **kwargs):
         """Provide an update to the Value of this PV.
@@ -180,7 +183,9 @@ class SharedPV(_SharedPV, ABC):
         else:
             post_fn(self, V)
 
-        _SharedPV.post(self, V)
+        # Call the C-extension base directly, bypassing p4p.server.raw.SharedPV.post(),
+        # which would wrap() V a second time (V is already wrapped above).
+        _RawSharedPV.post(self, V)
 
     def close(self, destroy=False):
         """Close PV, disconnecting any clients.
