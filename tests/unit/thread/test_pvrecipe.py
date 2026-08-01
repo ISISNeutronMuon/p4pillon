@@ -294,9 +294,9 @@ def test_ntscalar_numeric_create_pv(mock_time, recipe, pvtype, with_limits, expe
 
     assert isinstance(pv._handler, CompositeHandler)
     if with_limits:
-        assert set(pv._handler.keys()) == set(["alarm", "control", "alarm_limit", "timestamp"])
+        assert set(pv._handler.keys()) == {"alarm", "control", "alarm_limit", "timestamp"}
     else:
-        assert set(pv._handler.keys()) == set(["alarm", "timestamp"])
+        assert set(pv._handler.keys()) == {"alarm", "timestamp"}
 
     assert isinstance(pv.nt, NTScalar)  # change to check the name instead?
     assert pv.isOpen() is True
@@ -338,7 +338,7 @@ def test_ntscalar_string_create_pv(mock_time, recipe, expected_value):
     pvdict = pv.current().raw.todict()
 
     assert isinstance(pv._handler, CompositeHandler)
-    assert set(pv._handler.keys()) == set(["alarm", "timestamp"])
+    assert set(pv._handler.keys()) == {"alarm", "timestamp"}
     assert isinstance(pv.nt, NTScalar)
     assert pv.isOpen() is True
     assert pv.current().timestamp == mock_time.return_value
@@ -379,7 +379,7 @@ def test_ntenum_create_pv(mock_time):
 
     assert pv.isOpen()
     assert isinstance(pv._handler, CompositeHandler)
-    assert set(pv.handler.keys()) == set(["alarm", "alarmNTEnum", "timestamp"])
+    assert set(pv.handler.keys()) == {"alarm", "alarmNTEnum", "timestamp"}
     assert pv.nt.type.getID() == "epics:nt/NTEnum:1.0"
     assert pv.isOpen() is True
     assert pv.current().timestamp == mock_time.return_value

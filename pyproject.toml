@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "p4p>=4.2.1",
-    "pyyaml>=6.0.2",
+    "pyyaml>=6.0.3",
 ]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
@@ -37,9 +37,9 @@ Repository = "https://github.com/epics-base/p4p"
 
 [project.optional-dependencies]
 test = [
-  "ruff>=0.12",
-  "coverage>7.9",
-  "pytest>=8.4",
+  "ruff>=0.16.1",
+  "coverage>=7.15.2",
+  "pytest>=9.1.1",
 ]
 dist = [
     "build>=1.2.2.post1",
