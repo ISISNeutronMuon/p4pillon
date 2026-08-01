@@ -13,6 +13,8 @@ from p4p.server import Server, StaticProvider
 from p4pillon.asyncio.pvrecipe import PVScalarRecipe
 from p4pillon.definitions import PVTypes
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_TIMEOUT = 1
 
 
@@ -28,7 +30,7 @@ class AsyncProviderWrapper:
         return (self._provider,)
 
     async def asyncSetUp(self):
-        logging.info("Async set up.")
+        logger.info("Async set up.")
 
         pvrecipe_double1 = PVScalarRecipe(PVTypes.DOUBLE, "An example double PV", 5.0)
         pvrecipe_double1.initial_value = 17.5

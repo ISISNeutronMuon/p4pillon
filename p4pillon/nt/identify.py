@@ -131,9 +131,13 @@ def matchtype(type_to_id: Type, potential_matches: NTTypeIds) -> NTType:
                         match = bool(fieldname2 in subtype_to_id and re.match(fieldspec2, subtype_to_id[fieldname2]))
 
                 # More complex type such as a Union
-                if isinstance(type_to_id[fieldname], tuple) and isinstance(fieldspec, dict) and (
-                    type_to_id[fieldname][0] == "U"  # Union
-                    or type_to_id[fieldname][0] == "aS"  # Weird hack to support NTNDArray dimensions?
+                if (
+                    isinstance(type_to_id[fieldname], tuple)
+                    and isinstance(fieldspec, dict)
+                    and (
+                        type_to_id[fieldname][0] == "U"  # Union
+                        or type_to_id[fieldname][0] == "aS"  # Weird hack to support NTNDArray dimensions?
+                    )
                 ):
                     union_dict = dict(type_to_id[fieldname][2])
                     match = union_dict == fieldspec

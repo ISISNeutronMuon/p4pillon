@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from abc import ABC
 from collections import OrderedDict
-from typing import Any, ClassVar
+from typing import Any
 
 from p4p import Type, Value
 
@@ -53,7 +53,9 @@ class SharedNT(SharedPV, ABC):
     functionality to support Normative Type logic.
     """
 
-    _DEFAULT_HANDLERS: ClassVar[list[type[BaseRule]]] = [
+    # Deliberately a mutable class attribute: it is the documented extension point for
+    # registering additional rules (see examples/custom_rule/public/imatch_alarm.py).
+    registered_handlers: list[type[BaseRule]] = [  # noqa: RUF012
         AlarmRule,
         ControlRule,
         AlarmNTEnumRule,
@@ -70,7 +72,8 @@ class SharedNT(SharedPV, ABC):
         registered_handlers: list[type[BaseRule]] | None = None,
         **kwargs,
     ):
-        self.registered_handlers: list[type[BaseRule]] = registered_handlers if registered_handlers is not None else list(self._DEFAULT_HANDLERS)
+        if registered_handlers:
+            self.registered_handlers = registered_handlers
 
         # Create a CompositeHandler. If there is no user supplied handler, and this is not
         # an NT type then it won't do anything. Unfortunately, an empty CompositeHandler

@@ -113,7 +113,7 @@ class CalcRule(BaseScalarRule):
                     logger.error("Failed to get pv %s", pv_name)
                     return None
                 pvs.append(val)
-            except (KeyError, AttributeError):
+            except Exception:  # noqa: BLE001
                 # If there's an error getting the value of a pv return None
                 logger.error("Failed to get pv %s", pv_name)
                 return None
