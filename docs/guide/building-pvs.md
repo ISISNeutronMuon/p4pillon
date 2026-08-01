@@ -35,9 +35,9 @@ pv = SharedNT(
         # alarm thresholds — the alarm field trips when value crosses these
         "valueAlarm.active": True,
         "valueAlarm.highWarningLimit": 5,
-        "valueAlarm.highWarningSeverity": 1,   # 1 = MINOR
+        "valueAlarm.highWarningSeverity": 1,  # 1 = MINOR
         "valueAlarm.highAlarmLimit": 8,
-        "valueAlarm.highAlarmSeverity": 2,     # 2 = MAJOR
+        "valueAlarm.highAlarmSeverity": 2,  # 2 = MAJOR
     },
 )
 ```
@@ -83,7 +83,7 @@ element-wise (the most severe element wins):
 
 ```python
 pv = SharedNT(
-    nt=NTScalar("ai", display=True, valueAlarm=True),   # array of int
+    nt=NTScalar("ai", display=True, valueAlarm=True),  # array of int
     initial={
         "value": [12, 11, 12, 19, 25],
         "display.description": "Forecast temperature every 3 hours",
@@ -145,7 +145,7 @@ recipe = PVScalarRecipe(PVTypes.DOUBLE, "An example double PV", initial_value=17
 recipe.set_alarm_limits(low_warning=2, high_alarm=9)
 recipe.set_control_limits(low=-10, high=100)
 
-pv = recipe.create_pv()          # -> a flavored SharedNT
+pv = recipe.create_pv()  # -> a flavored SharedNT
 ```
 
 `create_pv()` returns a fully-built `SharedNT` with `valueAlarm` and `control`

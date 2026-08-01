@@ -343,7 +343,7 @@ def _raw_current_or_none(pv: _SharedPVBase) -> Value | None:
     # _description_of_pv.
     try:
         current = pv.current()
-    except Exception:
+    except Exception:  # noqa: BLE001 - best-effort by design; any failure means "unknown"
         return None
     # p4p's own NT wrappers guarantee `.raw` is a real Value; a hand-rolled
     # unwrap= makes no such promise (see test_rtyp_check_tolerates_non_value_unwrap).

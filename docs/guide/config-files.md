@@ -43,7 +43,7 @@ from p4pillon import config_reader
 from p4pillon.thread.server import Server
 
 server = Server(prefix="")
-config_reader.parse_config_file("pvs.yaml", server)   # builds + registers each PV
+config_reader.parse_config_file("pvs.yaml", server)  # builds + registers each PV
 server.start()
 
 try:

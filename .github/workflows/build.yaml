@@ -26,6 +26,7 @@ jobs:
         python-version: "3.x"
     - run: uv sync --group test
     - run: |
+        uv run ruff --version
         uv run ruff check --no-fix
         uv run ruff format --diff
 

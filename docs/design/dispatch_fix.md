@@ -61,12 +61,14 @@ source of most of the trouble below.
 ```python
 import threading
 
+
 def worker():
     for _ in range(1000):
         print("hi")
 
+
 t = threading.Thread(target=worker)
-t.start()   # worker() now runs concurrently with the code after this line
+t.start()  # worker() now runs concurrently with the code after this line
 ```
 
 > **"But doesn't Python's GIL make threads safe?"** A common half-truth. The
@@ -103,8 +105,9 @@ timing of concurrent execution. The classic example is the lost update:
 class Counter:
     def __init__(self):
         self.total = 0
+
     def increment(self):
-        self.total = self.total + 1   # read, +1, store — NOT atomic
+        self.total = self.total + 1  # read, +1, store — NOT atomic
 ```
 
 Run `increment()` from two threads a thousand times each and you will **not**
@@ -128,8 +131,9 @@ Wrap the fragile region and the interleaving is gone:
 ```python
 lock = threading.Lock()
 
+
 def increment(self):
-    with lock:                 # acquire on enter, release on exit
+    with lock:  # acquire on enter, release on exit
         self.total = self.total + 1
 ```
 
@@ -241,10 +245,11 @@ value only ever goes up" and remembers the last value it saw:
 class Ratchet:
     def __init__(self):
         self.last = 0.0
+
     def post(self, pv, value):
-        if value < self.last:      # (A) read self.last
+        if value < self.last:  # (A) read self.last
             value.value = self.last
-        self.last = value.value    # (B) write self.last
+        self.last = value.value  # (B) write self.last
 ```
 
 Attach it to a PV. Now:
@@ -285,13 +290,13 @@ thread from running the identical sequence at the same instant:
 ```python
 # BEFORE THE FIX — no lock; any thread may run this concurrently with put/rpc
 def post(self, value, **kwargs):
-    v = self._wrap(value, **kwargs)          # wrap the value
+    v = self._wrap(value, **kwargs)  # wrap the value
 
     post_fn = getattr(self._handler, "post", None)
     if post_fn is not None:
-        post_fn(self, v)                     # run the handler hook (mutable state!)
+        post_fn(self, v)  # run the handler hook (mutable state!)
 
-    _RawSharedPV.post(self, v)               # store into the C extension
+    _RawSharedPV.post(self, v)  # store into the C extension
 ```
 
 Three unprotected steps — wrap, run handler, store — and any of them can
@@ -350,6 +355,7 @@ def _exec(self, op, fn, *args):
     def locked(*call_args):
         with self._hook_lock:
             fn(*call_args)
+
     super()._exec(op, locked, *args)
 ```
 
@@ -417,15 +423,17 @@ any exception:
 ```python
 def post_deferred(self, value, **kwargs):
     fut = concurrent.futures.Future()
+
     def _do():
         if not fut.set_running_or_notify_cancel():
             return
         try:
-            self.post(value, **kwargs)     # runs on the loop thread now
+            self.post(value, **kwargs)  # runs on the loop thread now
         except BaseException as exc:
-            fut.set_exception(exc)         # relay to the waiting caller
+            fut.set_exception(exc)  # relay to the waiting caller
         else:
             fut.set_result(None)
+
     self.loop.call_soon_threadsafe(_do)
     return fut
 ```
@@ -529,7 +537,7 @@ Updating your **own** PV is always fine:
 ```python
 class Doubler:
     def put(self, pv, op):
-        pv.post(op.value().value * 2)   # same PV — re-enters A's own RLock
+        pv.post(op.value().value * 2)  # same PV — re-enters A's own RLock
         op.done()
 ```
 
@@ -546,7 +554,7 @@ lock is still held:
 ```python
 class MirrorHandler:
     def post(self, pv, value):
-        other_pv.post(derive(value))   # ⚠️ takes B's lock under A's lock
+        other_pv.post(derive(value))  # ⚠️ takes B's lock under A's lock
 ```
 
 Mechanically this often *works*. But it takes PV-B's lock while holding PV-A's,
@@ -616,7 +624,7 @@ two posts, so the AB–BA cycle is structurally impossible:
 ```python
 class MirrorHandler:
     def post(self, pv, value):
-        other_pv.post(derive(value))   # fine: on the loop, runs atomically
+        other_pv.post(derive(value))  # fine: on the loop, runs atomically
 ```
 
 The only thing to respect is affinity: `post()` must be on the loop. Inside a
@@ -625,7 +633,7 @@ different thread (a hardware poller, a thread-pool callback), use
 `post_deferred()` so the post is marshalled onto the loop:
 
 ```python
-other_pv.post_deferred(derive(value))          # from a foreign thread
+other_pv.post_deferred(derive(value))  # from a foreign thread
 # other_pv.post_deferred(derive(value)).result()  # only if you must wait —
 #                                                  # and never from the loop
 ```

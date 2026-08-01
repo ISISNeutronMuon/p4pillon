@@ -74,7 +74,7 @@ from p4pillon.server.records import IOCMimicServer
 pvs = {"DEV:PV1": SharedPV(nt=NTScalar("d"), initial=0.0)}
 
 with IOCMimicServer(providers=[pvs]):
-    ...   # DEV:PV1, and DEV:PV1.RTYP / .SCAN / .DESC / ... are all served
+    ...  # DEV:PV1, and DEV:PV1.RTYP / .SCAN / .DESC / ... are all served
 ```
 
 Use this when the inferred defaults are fine — which is most of the time.
@@ -91,13 +91,15 @@ from p4pillon.server.records import IOCMimicProvider, IOCMimicServer
 base = IOCMimicProvider("base")
 base.add(
     "EXAMPLE:PV",
-    SharedPV(nt=NTScalar("d", display=True),
-             initial={"value": 1.234, "display": {"description": "An example ai-like record"}}),
+    SharedPV(
+        nt=NTScalar("d", display=True),
+        initial={"value": 1.234, "display": {"description": "An example ai-like record"}},
+    ),
     dtyp_choices=["Soft Channel", "Raw Soft Channel"],
     fields={"SCAN": "1 second"},
 )
 
-with IOCMimicServer(providers=[base]):     # pass it directly; the server unpacks it
+with IOCMimicServer(providers=[base]):  # pass it directly; the server unpacks it
     ...
 ```
 
