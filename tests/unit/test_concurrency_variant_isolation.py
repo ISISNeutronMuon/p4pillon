@@ -19,7 +19,9 @@ from p4pillon.definitions import PVTypes
 
 
 def _run(script: str) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+    # check=False: callers assert on returncode so the script's own output
+    # reaches the assertion message.
+    return subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False)
 
 
 def test_asyncio_sharednt_is_not_the_thread_sharednt():
