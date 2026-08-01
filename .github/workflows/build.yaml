@@ -25,6 +25,7 @@ jobs:
         python-version: "3.x"
     - run: pip install .[test]
     - run: | 
+        ruff --version
         ruff check --no-fix
         ruff format --diff
 

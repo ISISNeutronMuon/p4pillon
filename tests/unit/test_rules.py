@@ -171,7 +171,7 @@ class TestControl:
 
             if new_value != expected_value:
                 assert len(caplog.records) == 3
-                assert f"control limit exceeded, changing value to {str(expected_value)}" in str(
+                assert f"control limit exceeded, changing value to {expected_value!s}" in str(
                     caplog.records[2].getMessage()
                 )
         else:
