@@ -2,6 +2,8 @@
 Rules for the alarm and alarm_t fields of Normative Types.
 """
 
+from typing import ClassVar
+
 from .rules import BaseRule
 
 
@@ -20,4 +22,4 @@ class AlarmRule(BaseRule):
     #     return ["alarm"]
 
     name = "alarm"
-    fields = ["alarm"]
+    fields: ClassVar[list] = ["alarm"]

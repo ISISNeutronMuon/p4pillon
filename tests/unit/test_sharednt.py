@@ -113,7 +113,7 @@ def testntscalar_create_with_handlers(pvtype, expected_handlername):
         user_handlers=OrderedDict({"post1": Handler(), "post2": Handler()}),
     )
 
-    assert set(testpv.handler.keys()) == set(["pre1", "pre2", *expected_handlername, "post1", "post2", "timestamp"])
+    assert set(testpv.handler.keys()) == {"pre1", "pre2", *expected_handlername, "post1", "post2", "timestamp"}
     assert list(testpv.handler.keys())[:2] == ["pre1", "pre2"]
     assert list(testpv.handler.keys())[-3:-1] == ["post1", "post2"]
     assert len(testpv.handler) == 2 + len(expected_handlername) + 2 + 1
@@ -123,7 +123,7 @@ def testntscalar_create_with_handlers(pvtype, expected_handlername):
 def testntenum_create():
     testpv = SharedNT(nt=NTEnum(), initial={"index": 0, "choices": ["OFF", "ON"]}, alarmNTEnum={})
 
-    assert set(testpv.handler.keys()) == set(["alarm", "alarmNTEnum", "timestamp"])
+    assert set(testpv.handler.keys()) == {"alarm", "alarmNTEnum", "timestamp"}
     assert list(testpv.handler.keys())[-1] == "timestamp"
 
 
@@ -165,7 +165,7 @@ def test_init_with_value():
 
     testpv = SharedNT(initial=value_for_test)
 
-    assert set(testpv.handler.keys()) == set(["alarm", "timestamp"])
+    assert set(testpv.handler.keys()) == {"alarm", "timestamp"}
     assert len(testpv.handler) == 2
     assert list(testpv.handler.keys())[-1] == "timestamp"
 
@@ -183,7 +183,7 @@ def test_init_with_value_noid():
 
     testpv = SharedNT(initial=value_for_test)
 
-    assert set(testpv.handler.keys()) == set(["alarm", "timestamp"])
+    assert set(testpv.handler.keys()) == {"alarm", "timestamp"}
     assert len(testpv.handler) == 2
     assert list(testpv.handler.keys())[-1] == "timestamp"
 

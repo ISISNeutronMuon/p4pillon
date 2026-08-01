@@ -26,7 +26,6 @@ class Handler(ABC):
 
         :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
         """
-        pass
 
     def put(self, pv, op):
         """
@@ -47,7 +46,6 @@ class Handler(ABC):
         :param value:  A Value, or appropriate object (see nt= and wrap= of the constructor).
         :param dict options: A dictionary of configuration options.
         """
-        pass
 
     def rpc(self, pv, op):
         """
@@ -65,7 +63,6 @@ class Handler(ABC):
 
         :param SharedPV pv: The :py:class:`SharedPV` which this Handler is associated with.
         """
-        pass
 
     def onLastDisconnect(self, pv):
         """
@@ -73,7 +70,6 @@ class Handler(ABC):
 
         :param SharedPV pv: The :py:class:`SharedPV` which this Handler is associated with.
         """
-        pass
 
     def close(self, pv):
         """
@@ -81,7 +77,6 @@ class Handler(ABC):
 
         :param SharedPV pv: The :py:class:`SharedPV` which this Handler is associated with.
         """
-        pass
 
 
 class SharedPV(_SharedPV, ABC):
