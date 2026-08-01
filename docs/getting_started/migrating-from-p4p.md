@@ -29,10 +29,12 @@ pv = SharedPV(
     },
 )
 
+
 @pv.put
 def handle(pv, op):
-    pv.post(op.value())   # just store and update subscribers
+    pv.post(op.value())  # just store and update subscribers
     op.done()
+
 
 Server.forever(providers=[{"demo:pv:name": pv}])
 ```
@@ -61,7 +63,7 @@ handler — `SharedNT` supplies the store-and-timestamp behaviour itself:
 from p4p.nt import NTScalar
 from p4p.server import Server
 
-from p4pillon.thread.sharednt import SharedNT   # <-- the only import that changed
+from p4pillon.thread.sharednt import SharedNT  # <-- the only import that changed
 
 pv = SharedNT(
     nt=NTScalar("d", control=True, valueAlarm=True),

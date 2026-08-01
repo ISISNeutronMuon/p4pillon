@@ -37,7 +37,7 @@ each component **in order**. Because it is an ordered dict, you can inspect and
 reorder the components by name.
 
 ```python
-pv.handler.keys()        # names of the component handlers, in call order
+pv.handler.keys()  # names of the component handlers, in call order
 ```
 
 A `SharedNT` builds one of these for you automatically. You rarely construct a
@@ -120,9 +120,10 @@ from p4pillon.rules import AlarmRule, BaseRule, ControlRule, RulesFlow, Timestam
 from p4pillon.rules.rules import check_applicable_init
 from p4pillon.thread.sharednt import SharedNT
 
+
 class IMatchRule(BaseRule):
     name = "imatch"
-    fields: ClassVar[list[str] | None] = ["alarm", "imatch"]   # only runs if these fields exist
+    fields: ClassVar[list[str] | None] = ["alarm", "imatch"]  # only runs if these fields exist
 
     @check_applicable_init
     def init_rule(self, newpvstate: Value) -> RulesFlow:
@@ -135,6 +136,7 @@ class IMatchRule(BaseRule):
             newpvstate["alarm.severity"] = 0
             newpvstate["alarm.message"] = ""
         return RulesFlow.CONTINUE
+
 
 # Register it into the rule chain used by new SharedNT instances
 SharedNT.registered_handlers = [AlarmRule, ControlRule, ValueAlarmRule, IMatchRule, TimestampRule]
@@ -155,18 +157,23 @@ is simpler. From `examples/thread/hwinterface.py`:
 ```python
 from p4pillon.nthandlers import Handler
 
-class UserReportHandler(Handler):        # an auth handler: observe every put
+
+class UserReportHandler(Handler):  # an auth handler: observe every put
     def put(self, _pv, op):
         print(f"Operation by user {op.account()} on pv {op.name()}")
 
-class HWWriteHandler(Handler):           # a user handler: push writes to hardware
+
+class HWWriteHandler(Handler):  # a user handler: push writes to hardware
     def __init__(self, hardware):
         self.hardware = hardware
+
     def post(self, _pv, value):
         if value.changed("value"):
             self.hardware.value = value["value"]
+
     def put(self, pv, op):
-        pass                             # allow the put; NT rules do the rest
+        pass  # allow the put; NT rules do the rest
+
 
 pv = SharedNT(
     nt=NTScalar("d", control=True),

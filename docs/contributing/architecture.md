@@ -29,7 +29,9 @@ them with a mixin, `HandlerHooksMixin` in
 flavor by ordinary inheritance:
 
 ```python
-class SharedPV(HandlerHooksMixin, p4p.server.thread.SharedPV): ...   # server/thread.py
+class SharedPV(HandlerHooksMixin, p4p.server.thread.SharedPV): ...  # server/thread.py
+
+
 class SharedPV(HandlerHooksMixin, p4p.server.asyncio.SharedPV): ...  # server/asyncio.py
 ```
 

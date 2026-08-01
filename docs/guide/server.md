@@ -25,20 +25,20 @@ from p4pillon.definitions import PVTypes
 from p4pillon.thread.pvrecipe import PVScalarRecipe
 from p4pillon.thread.server import Server
 
-server = Server(prefix="DEV:")             # prepended to every PV name
+server = Server(prefix="DEV:")  # prepended to every PV name
 
 recipe = PVScalarRecipe(PVTypes.DOUBLE, "A pressure reading", initial_value=1.0)
 recipe.set_control_limits(low=0, high=10)
-server.add_pv("pressure", recipe)          # served as DEV:pressure
+server.add_pv("pressure", recipe)  # served as DEV:pressure
 
-server.start()                             # PVs are opened & timestamped here
+server.start()  # PVs are opened & timestamped here
 try:
     while True:
         time.sleep(1)
 except KeyboardInterrupt:
     pass
 finally:
-    server.stop()                          # closes PVs and stops the server
+    server.stop()  # closes PVs and stops the server
 ```
 
 ### What it gives you

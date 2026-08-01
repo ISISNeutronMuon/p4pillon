@@ -21,7 +21,7 @@ from p4pillon.server.records import IOCMimicServer
 #    it fills in timestamps (and, if you declare them, alarms/limits) for you.
 pvs = {
     "MYLAB:temperature": SharedNT(nt=NTScalar("d"), initial=21.5),
-    "MYLAB:status":      SharedNT(nt=NTScalar("s"), initial="idle"),
+    "MYLAB:status": SharedNT(nt=NTScalar("s"), initial="idle"),
 }
 
 # 2. Serve them. IOCMimicServer is a drop-in p4p Server that also answers
@@ -61,7 +61,7 @@ pvs = {"MYLAB:temperature": temperature}
 
 with IOCMimicServer(providers=[pvs]):
     while True:
-        temperature.post(read_my_sensor())   # your existing code
+        temperature.post(read_my_sensor())  # your existing code
         time.sleep(1)
 ```
 

@@ -66,7 +66,7 @@ nested lock entirely, hand the update to B's own worker thread with
 ```python
 class MirrorHandler(Handler):
     def post(self, pv, value):
-        other_pv.post_deferred(derive(value))   # NOT other_pv.post(...)
+        other_pv.post_deferred(derive(value))  # NOT other_pv.post(...)
 ```
 
 `post_deferred()` enqueues the update onto B's work queue and returns a
@@ -90,7 +90,7 @@ the loop, so posting to another PV inline is safe:
 ```python
 class MirrorHandler(Handler):
     def post(self, pv, value):
-        other_pv.post(derive(value))    # fine: on the loop, runs atomically
+        other_pv.post(derive(value))  # fine: on the loop, runs atomically
 ```
 
 The only requirement is affinity: `post()` must be on the loop, which inside a
@@ -105,7 +105,7 @@ asyncio PV would give. To update an asyncio PV from a genuinely different thread
 (a hardware poller, a thread-pool callback), use `post_deferred()`:
 
 ```python
-pv.post_deferred(new_value)              # marshals the post onto the loop
+pv.post_deferred(new_value)  # marshals the post onto the loop
 # pv.post_deferred(new_value).result()   # only if you must wait — and NEVER
 #                                         # from the loop thread itself
 ```
@@ -139,7 +139,7 @@ with server:
         await asyncio.sleep(1)
         current_city = pvs["demo:city"].value
         if current_city != previous_city:
-            await updater.update_weather(current_city)   # posts the other PVs
+            await updater.update_weather(current_city)  # posts the other PVs
             previous_city = current_city
 ```
 
@@ -148,19 +148,21 @@ that posts the other PVs:
 
 ```python
 class CitiesHandler(Handler):
-    def __init__(self, temperatures_pv, rainchance_pv, umbrella_pv):
-        ...
+    def __init__(self, temperatures_pv, rainchance_pv, umbrella_pv): ...
     async def update_weather(self, city):
         weather = await get_weather_forecast(city)
         self._temperatures_pv.post(list(temperatures.values()))
         self._rainchance_pv.post(max_rainchance)
         self._umbrella_pv.post(umbrella_needed)
+
     def post(self, pv, value):
         # schedule the async update on the loop
         asyncio.get_running_loop().create_task(self.post_async(pv, value))
 
-cities_pv = SharedNT(nt=NTEnum(), initial={"index": 0, "choices": cities},
-                     user_handlers={"city_change": cities_handler})
+
+cities_pv = SharedNT(
+    nt=NTEnum(), initial={"index": 0, "choices": cities}, user_handlers={"city_change": cities_handler}
+)
 ```
 
 The handler reacts immediately; polling reacts within one tick. Here **polling
