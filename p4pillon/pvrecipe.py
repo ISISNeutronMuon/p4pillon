@@ -81,7 +81,7 @@ class AlarmLimit(Generic[NumericTypeT]):
 
 
 @dataclass
-class BasePVRecipe(Generic[SharedPvT], ABC):
+class BasePVRecipe(ABC, Generic[SharedPvT]):
     """A description of how to build a PV"""
 
     pvtype: PVTypes

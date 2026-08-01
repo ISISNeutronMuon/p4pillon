@@ -57,6 +57,9 @@ class SharedNT(SharedPV, ABC):
     functionality to support Normative Type logic.
     """
 
+    # Deliberately mutable: it is the documented extension point for registering
+    # additional rules (see examples/custom_rule/public/imatch_alarm.py). ClassVar
+    # marks it as class-level, and does not prevent that.
     registered_handlers: ClassVar[list[type[BaseRule]]] = [
         AlarmRule,
         ControlRule,

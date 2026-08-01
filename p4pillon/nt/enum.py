@@ -4,7 +4,7 @@ Monkey patch in required changes to NTEnum
 
 # pylint: disable=unused-wildcard-import, wildcard-import
 from p4p import version as __p4p_version
-from p4p.nt.enum import *  # pyright: ignore[reportWildcardImportFromLibrary] # noqa: F403
+from p4p.nt.enum import *  # pyright: ignore[reportWildcardImportFromLibrary]
 from p4p.nt.enum import NTEnum
 from p4p.nt.scalar import ntwrappercommon
 from p4p.wrapper import Value

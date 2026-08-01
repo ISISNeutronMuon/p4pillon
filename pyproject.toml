@@ -7,6 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "p4p>=4.2.1",
     "pyyaml>=6.0.3",
+    "simpleeval>=1.0.3",
 ]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
@@ -35,8 +36,8 @@ Documentation = "https://isisneutronmuon.github.io/p4pillon/"
 
 [dependency-groups]
 test = [
-  "ruff>=0.15.21",
-  "coverage>=7.15.1",
+  "ruff>=0.16.1",
+  "coverage>=7.15.2",
   "pytest>=9.1.1",
 ]
 dist = [
