@@ -1,14 +1,16 @@
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
-from p4p import Value
 from p4p.nt import NTScalar
 from simpleeval import InvalidExpression
 
 from p4pillon.rules import CalcRule
 from p4pillon.rules.rules import RulesFlow
+
+if TYPE_CHECKING:
+    from p4p import Value
 
 
 def make_calc_rule(calc_str: str, variables: str | list[str], pv_values: list[Any]) -> tuple[CalcRule, MagicMock]:

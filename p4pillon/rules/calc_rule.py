@@ -8,12 +8,13 @@ import logging
 import math as m
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from p4p import Value
 from simpleeval import ModuleWrapper, SimpleEval
 
 from .rules import BaseScalarRule, RulesFlow, SupportedNTTypes
 
 if TYPE_CHECKING:
+    from p4p import Value
+
     from p4pillon.server.server import Server
 
 logger = logging.getLogger(__name__)
