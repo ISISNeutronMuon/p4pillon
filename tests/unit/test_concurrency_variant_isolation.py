@@ -19,8 +19,12 @@ from p4pillon.definitions import PVTypes
 
 
 def _run(script: str) -> subprocess.CompletedProcess:
-    # script is always a hardcoded literal from this module, never untrusted input.
-    return subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)  # noqa: S603
+    # S603: script is always a hardcoded literal from this module, never untrusted input.
+    # check=False: callers assert on returncode so the script's own output
+    # reaches the assertion message.
+    return subprocess.run(  # noqa: S603
+        [sys.executable, "-c", script], capture_output=True, text=True, check=False
+    )
 
 
 def test_asyncio_sharednt_is_not_the_thread_sharednt():
