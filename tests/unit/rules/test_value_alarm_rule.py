@@ -42,7 +42,7 @@ up, which is the signal to remove the marker.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy
 import pytest
@@ -86,6 +86,10 @@ SAMPLE_SCALAR_CODES = ["i", "d"]
 SAMPLE_ARRAY_CODES = ["ai", "ad"]
 SAMPLE_CODES = SAMPLE_SCALAR_CODES + SAMPLE_ARRAY_CODES
 
+#: Every float type, scalar and array. Used where the behaviour under test is
+#: specific to floating point (infinities, NaN, fractional limits).
+FLOAT_AND_ARRAY_CODES = FLOAT_CODES + ["a" + code for code in FLOAT_CODES]
+
 # Inclusive (min, max) of each integer type, used to check the rule behaves at the
 # extremes of the value's own type rather than only in the middle of its range.
 INTEGER_RANGES: dict[str, tuple[int, int]] = {
@@ -98,6 +102,9 @@ INTEGER_RANGES: dict[str, tuple[int, int]] = {
     "l": (-(2**63), 2**63 - 1),
     "L": (0, 2**64 - 1),
 }
+
+#: Every integer type, scalar and array, alongside :data:`INTEGER_RANGES`.
+INTEGER_AND_ARRAY_CODES = [*INTEGER_RANGES, *["a" + code for code in INTEGER_RANGES]]
 
 # --------------------------------------------------------------------------------------
 # Shared limits
@@ -304,39 +311,15 @@ class TestLimitChecks:
 class TestTypeExtremes:
     """Values at the extremes of each type's own range still classify correctly."""
 
-    @pytest.mark.parametrize("code", [*INTEGER_RANGES, *["a" + c for c in INTEGER_RANGES]])
-    def test_integer_minimum_is_low_alarm(self, code):
-        minimum = INTEGER_RANGES[code.lstrip("a")][0]
-        _flow, state = run_post(code, embed(code, minimum))
+    @pytest.mark.parametrize("code", INTEGER_AND_ARRAY_CODES)
+    @pytest.mark.parametrize(("bound", "message"), [(0, "lowAlarm"), (1, "highAlarm")])
+    def test_integer_extremes_are_in_alarm(self, code, bound, message):
+        extreme = INTEGER_RANGES[code.lstrip("a")][bound]
+        _flow, state = run_post(code, embed(code, extreme))
 
-        assert_alarm(state, MAJOR, "lowAlarm")
+        assert_alarm(state, MAJOR, message)
 
-    @pytest.mark.parametrize(
-        "code",
-        [
-            *INTEGER_RANGES,
-            *[
-                pytest.param(
-                    "a" + c,
-                    marks=pytest.mark.xfail(
-                        reason="ScalarToArrayWrapperRule hands numpy.uint64 elements back to p4p, "
-                        "which rejects them for a uint64 scalar field ('an integer is required')",
-                        strict=True,
-                    ),
-                )
-                if c == "L"
-                else "a" + c
-                for c in INTEGER_RANGES
-            ],
-        ],
-    )
-    def test_integer_maximum_is_high_alarm(self, code):
-        maximum = INTEGER_RANGES[code.lstrip("a")][1]
-        _flow, state = run_post(code, embed(code, maximum))
-
-        assert_alarm(state, MAJOR, "highAlarm")
-
-    @pytest.mark.parametrize("code", ["f", "d", "af", "ad"])
+    @pytest.mark.parametrize("code", FLOAT_AND_ARRAY_CODES)
     @pytest.mark.parametrize(
         ("value", "severity", "message"),
         [
@@ -349,7 +332,7 @@ class TestTypeExtremes:
 
         assert_alarm(state, severity, message)
 
-    @pytest.mark.parametrize("code", ["f", "d", "af", "ad"])
+    @pytest.mark.parametrize("code", FLOAT_AND_ARRAY_CODES)
     def test_float_nan_is_undefined(self, code):
         """NaN satisfies no limit, so the specification's fall-through would clear
         the alarm. EPICS base instead treats an undefined value as UDF_ALARM at
@@ -357,10 +340,10 @@ class TestTypeExtremes:
         (``aiRecord.c``), and p4pillon follows base."""
         _flow, state = run_post(code, embed(code, float("nan")))
 
-        assert_alarm(state, INVALID, "UDF")
+        assert_alarm(state, INVALID, ValueAlarmRule.UDF_MESSAGE)
         assert state["alarm.status"] == AlarmStatus.UNDEFINED_STATUS
 
-    @pytest.mark.parametrize("code", ["f", "d", "af", "ad"])
+    @pytest.mark.parametrize("code", FLOAT_AND_ARRAY_CODES)
     def test_leaving_nan_clears_the_undefined_alarm(self, code):
         """The rule undoes the status it set itself once the value is defined again."""
         _flow, state = run_post(
@@ -369,7 +352,7 @@ class TestTypeExtremes:
             old_value=embed(code, float("nan")),
             old_alarm={
                 "severity": INVALID.value,
-                "message": "UDF",
+                "message": ValueAlarmRule.UDF_MESSAGE,
                 "status": AlarmStatus.UNDEFINED_STATUS.value,
             },
         )
@@ -392,7 +375,7 @@ class TestFractionalLimits:
         highAlarmLimit=90.25,
     )
 
-    @pytest.mark.parametrize("code", ["f", "d", "af", "ad"])
+    @pytest.mark.parametrize("code", FLOAT_AND_ARRAY_CODES)
     @pytest.mark.parametrize(
         ("value", "severity", "message"),
         [
@@ -441,16 +424,18 @@ class TestSeverityZeroDisablesCheck:
 
         assert_alarm(state, severity, message)
 
+    #: Every limit check switched off.
+    ALL_OFF = limits(
+        lowAlarmSeverity=0,
+        lowWarningSeverity=0,
+        highWarningSeverity=0,
+        highAlarmSeverity=0,
+    )
+
     @pytest.mark.parametrize("code", SAMPLE_CODES)
     @pytest.mark.parametrize("value", [0, 15, 50, 85, 100])
     def test_all_severities_zero_raises_nothing(self, code, value):
-        all_off = limits(
-            lowAlarmSeverity=0,
-            lowWarningSeverity=0,
-            highWarningSeverity=0,
-            highAlarmSeverity=0,
-        )
-        _flow, state = run_post(code, embed(code, value), all_off)
+        _flow, state = run_post(code, embed(code, value), self.ALL_OFF)
 
         assert_alarm(state, NO_ALARM, "")
 
@@ -468,13 +453,7 @@ class TestSeverityZeroDisablesCheck:
     def test_configured_severity_is_used_verbatim(self, code, severity_field, value, message, severity):
         """Whatever severity is configured for a limit is the severity raised,
         including INVALID_ALARM -- the rule does not clamp or reinterpret it."""
-        configured = limits(
-            lowAlarmSeverity=0,
-            lowWarningSeverity=0,
-            highWarningSeverity=0,
-            highAlarmSeverity=0,
-        )
-        configured[severity_field] = severity.value
+        configured = {**self.ALL_OFF, severity_field: severity.value}
 
         _flow, state = run_post(code, embed(code, value), configured)
 
@@ -637,24 +616,10 @@ class TestAlarmClearing:
 
         assert_alarm(state, to_severity, to_message)
 
-    @pytest.mark.parametrize("code", SAMPLE_SCALAR_CODES)
+    @pytest.mark.parametrize("code", SAMPLE_CODES)
     def test_no_change_when_already_clear(self, code):
         """Moving within the no-alarm band when no alarm is set must not mark the
         alarm fields as changed -- a needless post to every monitoring client."""
-        _flow, state = run_post(code, embed(code, 60), old_value=embed(code, NEUTRAL))
-
-        assert_alarm(state, NO_ALARM, "")
-        assert not state.changed("alarm.severity")
-        assert not state.changed("alarm.message")
-
-    @pytest.mark.parametrize("code", SAMPLE_ARRAY_CODES)
-    @pytest.mark.xfail(
-        reason="ValueAlarmRule.gather_init unconditionally writes alarm.severity and "
-        "alarm.message, so an array marks them changed on every update even when "
-        "the alarm state did not move",
-        strict=True,
-    )
-    def test_no_change_when_already_clear_array(self, code):
         _flow, state = run_post(code, embed(code, 60), old_value=embed(code, NEUTRAL))
 
         assert_alarm(state, NO_ALARM, "")
@@ -869,24 +834,11 @@ class TestArrayAggregation:
         assert state["alarm.message"] == message
 
     @pytest.mark.parametrize("code", SAMPLE_ARRAY_CODES)
-    @pytest.mark.parametrize(("old_length", "new_length"), [(2, 5), (1, 4), (3, 3)])
-    def test_array_grows_or_keeps_length(self, code, old_length, new_length):
-        """A resized array is evaluated on the elements it now has."""
-        values = [NEUTRAL] * (new_length - 1) + [100]
-        _flow, state = run_post(code, values, old_value=[NEUTRAL] * old_length)
-
-        assert_alarm(state, MAJOR, "highAlarm")
-        assert_value(state, values)
-
-    @pytest.mark.parametrize("code", SAMPLE_ARRAY_CODES)
-    @pytest.mark.parametrize(("old_length", "new_length"), [(5, 2), (4, 1)])
-    @pytest.mark.xfail(
-        reason="ScalarToArrayWrapperRule.post_rule zips old and new with "
-        "itertools.zip_longest, so a shrinking array yields a None new value and "
-        "raises TypeError; see the TODO in rules.py",
-        strict=True,
+    @pytest.mark.parametrize(
+        ("old_length", "new_length"),
+        [(2, 5), (1, 4), (3, 3), (5, 2), (4, 1)],  # grown, unchanged, shrunk
     )
-    def test_array_shrinks(self, code, old_length, new_length):
+    def test_a_resized_array_is_evaluated_on_the_elements_it_now_has(self, code, old_length, new_length):
         values = [NEUTRAL] * (new_length - 1) + [100]
         _flow, state = run_post(code, values, old_value=[NEUTRAL] * old_length)
 
@@ -902,11 +854,6 @@ class TestArrayAggregation:
         assert_alarm(state, MAJOR, "highAlarm")
 
     @pytest.mark.parametrize("code", SAMPLE_ARRAY_CODES)
-    @pytest.mark.xfail(
-        reason="ScalarToArrayWrapperRule iterates value directly, and p4p represents "
-        "an empty array as None, so an empty array raises TypeError",
-        strict=True,
-    )
     def test_empty_array_raises_no_alarm(self, code):
         """No elements means no element is in alarm."""
         flow, state = run_init(code, [])
@@ -961,123 +908,53 @@ class TestHysteresis:
 
         assert_alarm(state, severity, message)
 
+    # Each latched limit, the value and alarm the PV was holding while latched, and
+    # values on either side of that limit's hysteresis band. HYSTERESIS is 5.
+    LATCHED: ClassVar = (
+        # limit, latched at, held alarm,  held values, released value, released alarm
+        ("highAlarm", 100, (MAJOR, "highAlarm"), (89, 85), 84, (MINOR, "highWarning")),
+        ("lowAlarm", 0, (MAJOR, "lowAlarm"), (11, 15), 16, (MINOR, "lowWarning")),
+        ("highWarning", 85, (MINOR, "highWarning"), (79, 76), 74, (NO_ALARM, "")),
+        ("lowWarning", 15, (MINOR, "lowWarning"), (21, 25), 26, (NO_ALARM, "")),
+    )
+
     @pytest.mark.parametrize("code", SAMPLE_CODES)
     @pytest.mark.parametrize(
-        ("value", "held_message"),
-        [
-            # highAlarmLimit is 90; held until the value drops below 90 - 5.
-            (89, "highAlarm"),
-            (85, "highAlarm"),
-        ],
+        ("old_value", "old_alarm", "value"),
+        [(old, alarm, held) for _, old, alarm, helds, _, _ in LATCHED for held in helds],
     )
     @pytest.mark.xfail(reason="hysteresis is not implemented; see the TODO in ValueAlarmRule", strict=True)
-    def test_high_alarm_is_held_within_hysteresis(self, code, value, held_message):
+    def test_a_latched_limit_is_held_within_hysteresis(self, code, old_value, old_alarm, value):
+        """Inside the hysteresis band the latched limit keeps its severity and message."""
+        severity, message = old_alarm
         _flow, state = run_post(
             code,
             embed(code, value),
             self.HYST_LIMITS,
-            old_value=embed(code, 100),
-            old_alarm={"severity": MAJOR.value, "message": "highAlarm", "status": 0},
+            old_value=embed(code, old_value),
+            old_alarm={"severity": severity.value, "message": message, "status": 0},
         )
 
-        assert_alarm(state, MAJOR, held_message)
+        assert_alarm(state, severity, message)
 
     @pytest.mark.parametrize("code", SAMPLE_CODES)
-    def test_high_alarm_is_released_beyond_hysteresis(self, code):
-        """84 is below highAlarmLimit - hysteresis (85), so the high alarm drops --
-        to highWarning, since 84 is still above highWarningLimit."""
-        _flow, state = run_post(
-            code,
-            embed(code, 84),
-            self.HYST_LIMITS,
-            old_value=embed(code, 100),
-            old_alarm={"severity": MAJOR.value, "message": "highAlarm", "status": 0},
-        )
-
-        assert_alarm(state, MINOR, "highWarning")
-
-    @pytest.mark.parametrize("code", SAMPLE_CODES)
-    @pytest.mark.parametrize("value", [11, 15])
-    @pytest.mark.xfail(reason="hysteresis is not implemented; see the TODO in ValueAlarmRule", strict=True)
-    def test_low_alarm_is_held_within_hysteresis(self, code, value):
-        """lowAlarmLimit is 10; held until the value rises above 10 + 5."""
+    @pytest.mark.parametrize(
+        ("old_value", "old_alarm", "value", "released"),
+        [(old, alarm, value, released) for _, old, alarm, _, value, released in LATCHED],
+    )
+    def test_a_latched_limit_is_released_beyond_hysteresis(self, code, old_value, old_alarm, value, released):
+        """Beyond the hysteresis band the latched limit drops to whatever the plain
+        limits then say -- the next limit down, or no alarm at all."""
+        old_severity, old_message = old_alarm
         _flow, state = run_post(
             code,
             embed(code, value),
             self.HYST_LIMITS,
-            old_value=embed(code, 0),
-            old_alarm={"severity": MAJOR.value, "message": "lowAlarm", "status": 0},
+            old_value=embed(code, old_value),
+            old_alarm={"severity": old_severity.value, "message": old_message, "status": 0},
         )
 
-        assert_alarm(state, MAJOR, "lowAlarm")
-
-    @pytest.mark.parametrize("code", SAMPLE_CODES)
-    def test_low_alarm_is_released_beyond_hysteresis(self, code):
-        """16 is above lowAlarmLimit + hysteresis (15), so the low alarm drops --
-        to lowWarning, since 16 is still at or below lowWarningLimit."""
-        _flow, state = run_post(
-            code,
-            embed(code, 16),
-            self.HYST_LIMITS,
-            old_value=embed(code, 0),
-            old_alarm={"severity": MAJOR.value, "message": "lowAlarm", "status": 0},
-        )
-
-        assert_alarm(state, MINOR, "lowWarning")
-
-    @pytest.mark.parametrize("code", SAMPLE_CODES)
-    @pytest.mark.parametrize("value", [79, 76])
-    @pytest.mark.xfail(reason="hysteresis is not implemented; see the TODO in ValueAlarmRule", strict=True)
-    def test_high_warning_is_held_within_hysteresis(self, code, value):
-        """highWarningLimit is 80; held until the value drops below 80 - 5."""
-        _flow, state = run_post(
-            code,
-            embed(code, value),
-            self.HYST_LIMITS,
-            old_value=embed(code, 85),
-            old_alarm={"severity": MINOR.value, "message": "highWarning", "status": 0},
-        )
-
-        assert_alarm(state, MINOR, "highWarning")
-
-    @pytest.mark.parametrize("code", SAMPLE_CODES)
-    def test_high_warning_is_released_beyond_hysteresis(self, code):
-        _flow, state = run_post(
-            code,
-            embed(code, 74),
-            self.HYST_LIMITS,
-            old_value=embed(code, 85),
-            old_alarm={"severity": MINOR.value, "message": "highWarning", "status": 0},
-        )
-
-        assert_alarm(state, NO_ALARM, "")
-
-    @pytest.mark.parametrize("code", SAMPLE_CODES)
-    @pytest.mark.parametrize("value", [21, 25])
-    @pytest.mark.xfail(reason="hysteresis is not implemented; see the TODO in ValueAlarmRule", strict=True)
-    def test_low_warning_is_held_within_hysteresis(self, code, value):
-        """lowWarningLimit is 20; held until the value rises above 20 + 5."""
-        _flow, state = run_post(
-            code,
-            embed(code, value),
-            self.HYST_LIMITS,
-            old_value=embed(code, 15),
-            old_alarm={"severity": MINOR.value, "message": "lowWarning", "status": 0},
-        )
-
-        assert_alarm(state, MINOR, "lowWarning")
-
-    @pytest.mark.parametrize("code", SAMPLE_CODES)
-    def test_low_warning_is_released_beyond_hysteresis(self, code):
-        _flow, state = run_post(
-            code,
-            embed(code, 26),
-            self.HYST_LIMITS,
-            old_value=embed(code, 15),
-            old_alarm={"severity": MINOR.value, "message": "lowWarning", "status": 0},
-        )
-
-        assert_alarm(state, NO_ALARM, "")
+        assert_alarm(state, *released)
 
     @pytest.mark.parametrize("code", SAMPLE_CODES)
     def test_escalating_severity_ignores_hysteresis(self, code):

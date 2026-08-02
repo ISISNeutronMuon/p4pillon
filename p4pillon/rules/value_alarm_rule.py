@@ -30,7 +30,7 @@ class ValueAlarmRule(BaseGatherableRule):
     ``prec->nsev < new_sevr``, so the highest severity contributed during a
     processing cycle wins and the first contributor at that severity keeps the
     message. ``recGblResetAlarms`` then zeroes ``nsev``, so nothing latches across
-    cycles. This rule follows base: see :meth:`contributed_severity`.
+    cycles. This rule follows base: see :meth:`incoming_severity`.
 
     TODO: Implement hysteresis. Base does it with ``LALM``, which holds the *limit
     value* that was latched, not the previous severity::
@@ -68,47 +68,33 @@ class ValueAlarmRule(BaseGatherableRule):
         """Evaluate alarm value limits"""
         logger.debug("Evaluating %s.init_rule", self.name)
 
-        severity, message, status = self.__verdict(newpvstate)
-        contributed = self.contributed_severity(newpvstate)
+        limit_severity, limit_message, status = self.__alarm_from_limits(newpvstate)
+        incoming_severity = self.incoming_severity(newpvstate)
 
-        # As in base: the highest severity contributed this cycle wins, and on a tie
-        # the earlier contributor keeps its message. Whatever supplied the value got
-        # there first, so its alarm survives a limit verdict of equal severity.
-        if contributed and contributed >= severity:
-            logger.debug("\tupdate supplied severity %i; leaving the alarm alone", contributed)
+        # Maximise against what the update brought with it, as base does; see the
+        # class docstring. Whatever supplied the value contributed first, so on a tie
+        # its alarm keeps the message.
+        if incoming_severity and incoming_severity >= limit_severity:
+            logger.debug("\tupdate supplied severity %i; leaving the alarm alone", incoming_severity)
             return RulesFlow.CONTINUE
 
         self.__set_status(newpvstate, status)
 
-        if severity:
-            newpvstate["alarm.severity"] = severity
-            newpvstate["alarm.message"] = message
-            logger.debug("Setting to severity %i with message '%s'", severity, message)
+        if limit_severity:
+            newpvstate["alarm.severity"] = limit_severity
+            newpvstate["alarm.message"] = limit_message
+            logger.debug("Setting to severity %i with message '%s'", limit_severity, limit_message)
             return RulesFlow.CONTINUE
 
         # If we made it here then there are no alarms or warnings and we need to indicate that
         # possibly by resetting any existing ones
-        alarms_changed = False
-        if newpvstate["alarm.severity"]:
-            newpvstate["alarm.severity"] = 0
-            alarms_changed = True
-        if newpvstate["alarm.message"]:
-            newpvstate["alarm.message"] = ""
-            alarms_changed = True
-
-        if alarms_changed:
-            logger.debug(
-                "Setting to severity %i with message '%s'",
-                newpvstate["alarm.severity"],
-                newpvstate["alarm.message"],
-            )
-        else:
+        if not self.__clear_alarm(newpvstate):
             logger.debug("Made no automatic changes to alarm state.")
 
         return RulesFlow.CONTINUE
 
     @staticmethod
-    def contributed_severity(pvstate: Value) -> int:
+    def incoming_severity(pvstate: Value) -> int:
         """The alarm severity this update brought with it, if any.
 
         This is base's ``prec->nsev``: the severity contributed during the current
@@ -121,7 +107,7 @@ class ValueAlarmRule(BaseGatherableRule):
         return int(pvstate["alarm.severity"]) if pvstate.changed("alarm.severity") else AlarmSeverity.NO_ALARM
 
     @classmethod
-    def __verdict(cls, pvstate: Value) -> tuple[int, str, AlarmStatus | None]:
+    def __alarm_from_limits(cls, pvstate: Value) -> tuple[int, str, AlarmStatus | None]:
         """What this rule alone makes of the value.
 
         Returns the severity, the message, and the status to set -- ``None`` where
@@ -152,6 +138,27 @@ class ValueAlarmRule(BaseGatherableRule):
         return AlarmSeverity.NO_ALARM, "", None
 
     @classmethod
+    def __clear_alarm(cls, pvstate: Value) -> bool:
+        """Clear any alarm this rule raised earlier, reporting whether anything moved.
+
+        Both writes are guarded, because assigning to a p4p ``Value`` marks the field
+        changed even when the value is identical. On the array path ``_apply_gather``
+        copies the marked fields back onto the array, so an unconditional write would
+        re-post the alarm to every monitoring client on every update, whether or not
+        the alarm state moved.
+        """
+        cleared = False
+        if pvstate["alarm.severity"] != AlarmSeverity.NO_ALARM:
+            logger.debug("\tclearing severity %i", pvstate["alarm.severity"])
+            pvstate["alarm.severity"] = AlarmSeverity.NO_ALARM
+            cleared = True
+        if pvstate["alarm.message"]:
+            logger.debug("\tclearing message '%s'", pvstate["alarm.message"])
+            pvstate["alarm.message"] = ""
+            cleared = True
+        return cleared
+
+    @classmethod
     def __set_status(cls, pvstate: Value, status: AlarmStatus | None) -> None:
         """Apply the verdict's status, undoing the rule's own previous status if any.
 
@@ -159,20 +166,24 @@ class ValueAlarmRule(BaseGatherableRule):
         rule only ever writes the one status it sets itself.
         """
         if status is not None:
+            logger.debug("\tsetting status %s", status.name)
             pvstate["alarm.status"] = status
         elif pvstate["alarm.status"] == AlarmStatus.UNDEFINED_STATUS:
+            logger.debug("\tclearing status %s", AlarmStatus.UNDEFINED_STATUS.name)
             pvstate["alarm.status"] = AlarmStatus.NO_STATUS
 
     def gather_init(self, gathered_value: Value) -> None:
-        if not self.contributed_severity(gathered_value):
-            gathered_value["alarm.severity"] = AlarmSeverity.NO_ALARM
-            gathered_value["alarm.message"] = ""
-            self.__set_status(gathered_value, None)
+        """Clear the accumulator so each element's verdict can be maximised into it."""
+        if self.incoming_severity(gathered_value):
+            return
+
+        self.__clear_alarm(gathered_value)
+        self.__set_status(gathered_value, None)
 
     def gather(self, scalar_value: Value, gathered_value: Value) -> None:
         # Strictly greater, so the first element at the winning severity supplies the
-        # message -- base's rule (recGblSetSevrVMsg writes only when nsev < new_sevr).
-        # Status travels with the severity it was raised alongside, as base's nsta does.
+        # message -- the same maximisation the class docstring describes. Status
+        # travels with the severity it was raised alongside, as base's nsta does.
         if scalar_value["alarm.severity"] > gathered_value["alarm.severity"]:
             gathered_value["alarm.severity"] = scalar_value["alarm.severity"]
             gathered_value["alarm.message"] = scalar_value["alarm.message"]

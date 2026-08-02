@@ -7,7 +7,6 @@ are implementations of the logic of Normative Type
 # TODO: Consider adding Authentication class / callback for puts
 from __future__ import annotations
 
-import itertools
 import logging
 from abc import ABC, abstractmethod
 from enum import IntEnum, auto
@@ -410,6 +409,22 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
 
         return val_dict
 
+    @staticmethod
+    def _elements(arrayval: Value) -> list[Any]:
+        """The elements of an NTScalarArray's value as plain Python scalars.
+
+        Two p4p quirks make this necessary. An array with no elements comes back
+        as ``None`` rather than an empty sequence, so iterating it directly raises
+        ``TypeError``. And the elements are numpy scalars, which p4p will not
+        always accept back into a scalar field of the same type -- assigning a
+        ``numpy.uint64`` to a ``uint64`` field raises "an integer is required".
+        ``tolist()`` converts to the Python built-ins p4p does accept.
+        """
+        values = arrayval["value"]
+        if values is None:
+            return []
+        return values.tolist() if hasattr(values, "tolist") else list(values)
+
     def scalarise(self, arrayval: Value, index: int | None = None) -> Value:
         """
         Convert the NTScalarArray into an NTScalar with the value of the
@@ -435,67 +450,49 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
         if self.fields and all(x in array_value for x in self.fields):
             overwrite_marked(array_value, scalar_value, self.fields)
 
-    @check_applicable_init
-    def init_rule(self, newpvstate: Value) -> RulesFlow:
-        # Convert the new Value into scalar versions
-        scalared_new_state = self.scalarise(newpvstate)
-
-        gathered_value = self.scalarise(newpvstate)
-        if isinstance(self._wrapped, BaseGatherableRule):
-            self._wrapped.gather_init(gathered_value)
-
-        # Loop through the array values applying the rules to each individual value
-        newvals = []  # Use Ajit's trick to bypass the readonly value
-        net_rule_flow = RulesFlow.CONTINUE
-        for new_value in newpvstate["value"]:
-            scalared_new_state["value"] = new_value
-
-            rule_flow = self._wrapped.init_rule(scalared_new_state)
-            if rule_flow == RulesFlow.ABORT:
-                return RulesFlow.ABORT
-
-            net_rule_flow = max(net_rule_flow, rule_flow)
-
-            if isinstance(self._wrapped, BaseGatherableRule):
-                self._wrapped.gather(scalared_new_state, gathered_value)
-
-            newvals.append(scalared_new_state["value"])
-
-        # Apply what was gathered
-        newpvstate["value"] = newvals
-        self._apply_gather(newpvstate, gathered_value)
-
-        return net_rule_flow
-
     # NOTE: Performance will be terrible! Every rule and every value has to be iterated every time!
-    # TODO: What's the correct behaviour if the new and old PV states have different lengths?
     # TODO: What is the correct behaviour for a Control Rule if the array size increases?
     # TODO: What if the Value["value"] has not changed?
-    @check_applicable_post
-    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
+    def _apply_elementwise(self, newpvstate: Value, oldpvstate: Value | None = None) -> RulesFlow:
+        """Run the wrapped scalar rule over every element of the array.
+
+        With no ``oldpvstate`` the wrapped rule's ``init_rule`` is applied to each
+        element; otherwise its ``post_rule`` is, paired with the element that was
+        previously at the same index. Either way each element's verdict is gathered
+        into a single result for the array and the net flow is the strongest any
+        element returned.
+        """
         # Convert the current Value and new Value into scalar versions
-        scalared_current_state = self.scalarise(oldpvstate)
+        scalared_current_state = self.scalarise(oldpvstate) if oldpvstate is not None else None
         scalared_new_state = self.scalarise(newpvstate)
 
         gathered_value = self.scalarise(newpvstate)
         if isinstance(self._wrapped, BaseGatherableRule):
             self._wrapped.gather_init(gathered_value)
 
+        # The new array decides how many elements there are: one that has grown has
+        # no previous value for its new elements, and one that has shrunk has nothing
+        # left to check at the indices it dropped.
+        old_values = self._elements(oldpvstate) if oldpvstate is not None else []
+
         # Loop through the array values applying the rules to each individual value
         newvals = []  # Use Ajit's trick to bypass the readonly value
         net_rule_flow = RulesFlow.CONTINUE
-        for old_value, new_value in itertools.zip_longest(oldpvstate["value"], newpvstate["value"]):
-            if old_value is not None:
-                scalared_current_state["value"] = old_value
-            else:
-                scalared_current_state = None
-
+        for index, new_value in enumerate(self._elements(newpvstate)):
             scalared_new_state["value"] = new_value
 
-            rule_flow = self._wrapped.post_rule(scalared_current_state, scalared_new_state)
+            if scalared_current_state is None:
+                rule_flow = self._wrapped.init_rule(scalared_new_state)
+            else:
+                current_state = None
+                if index < len(old_values):
+                    scalared_current_state["value"] = old_values[index]
+                    current_state = scalared_current_state
+                rule_flow = self._wrapped.post_rule(current_state, scalared_new_state)
 
             if rule_flow == RulesFlow.ABORT:
                 return RulesFlow.ABORT
+
             net_rule_flow = max(net_rule_flow, rule_flow)
 
             if isinstance(self._wrapped, BaseGatherableRule):
@@ -508,3 +505,11 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
         self._apply_gather(newpvstate, gathered_value)
 
         return net_rule_flow
+
+    @check_applicable_init
+    def init_rule(self, newpvstate: Value) -> RulesFlow:
+        return self._apply_elementwise(newpvstate)
+
+    @check_applicable_post
+    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
+        return self._apply_elementwise(newpvstate, oldpvstate)
