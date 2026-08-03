@@ -21,7 +21,7 @@ from .fields import (
     _build_one_field,
     _field_applies,
     _field_shared_pv,
-    _resolve_registry_description,
+    _resolve_registry_desc_and_timestamp,
     _resolve_valtype_and_description,
     _should_serve_record_fields,
     _validate_fields,
@@ -136,13 +136,15 @@ class DynamicRecordFields:
         if found is None:
             return None
         basename, field, entry = found
+        description, timestamp = _resolve_registry_desc_and_timestamp(entry)
         value = _build_one_field(
             field,
             basename,
             entry["valtype"],
             entry.get("dtyp_choices"),
             entry.get("fields") or {},
-            _resolve_registry_description(entry),
+            description,
+            timestamp,
         )
         return _field_shared_pv(value, self._pv_factory)
 
@@ -249,7 +251,7 @@ class IOCMimicProvider(_KeysContainerMixin):
             "fields": fields,
             # 'description' is only the add()-time fallback; 'pv_ref' lets
             # makeChannel() re-read display.description live per connection
-            # (see _resolve_registry_description). Weak so the registry never
+            # (see _resolve_registry_desc_and_timestamp). Weak so the registry never
             # extends the base PV's lifetime beyond the StaticProvider's own
             # strong reference.
             "description": description,
@@ -260,14 +262,15 @@ class IOCMimicProvider(_KeysContainerMixin):
         """Override DESC/DESC$ for `name` with an explicit value, picked up
         by any *new* connection from this point on (see the class docstring).
         This also stops DESC tracking the base PV's ``display.description``
-        for `name` -- the explicit override wins from here onward.
+        for `name` -- the explicit override wins from here onward. The fields'
+        timeStamps go on tracking the base PV either way (see `RegistryEntry`).
 
         :raises KeyError: if `name` was never added, or was added with
                           `record_fields=False`.
         """
         entry = self._registry[name]
         entry["description"] = description
-        entry.pop("pv_ref", None)
+        entry["desc_explicit"] = True
 
     def remove(self, name: str) -> None:
         """Remove a PV, and stop offering its "<name>.<FIELD>" sub-PVs to

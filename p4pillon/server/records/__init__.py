@@ -69,6 +69,38 @@ Field defaults are taken from EPICS Base wherever it defines one:
    connections and stops the automatic tracking for that record (the
    explicit value wins from then on). Absent a display.description field
    entirely, DESC is always "".
+
+Every field's timeStamp is taken from the base PV's own timeStamp, mirroring a
+real IOC, where "RECORD.FIELD" reports the record's process time. Where the
+base PV has no timeStamp to give -- it has no such structure member, isn't
+`open()` yet, or is a plain `~p4pillon.server.thread.SharedPV` running no
+`~p4pillon.rules.timestamp_rule.TimestampRule`, and so sits at the unset 0s
+0ns -- the field is stamped with the time it was built instead. Either way it
+is never left at the 0s 0ns `NTScalar.wrap`/`NTEnum.wrap` produce, which a
+client renders as 1970-01-01 (see
+`~p4pillon.server.records.fields._stamp`).
+
+That stamp is read when the field value is built and the field is static
+thereafter, so an open channel's value never changes -- which is also what a
+real IOC does. A monitor on "RECORD.ADEL" yields one value and then stays
+silent as the record goes on processing: `db_post_events` delivers only to
+subscriptions whose channel is on the field that changed
+(``dbChannelField(pevent->chan) == pField``, dbEvent.c), and processing posts
+against VAL, not ADEL. Both QSRV1 (verified empirically against a live IOC)
+and pvxs behave this way -- pvxs subscribes with a plain ``db_add_event`` on
+the field's own dbChannel (ioc/subscriptionctx.h, ioc/singlesource.cpp), so it
+adds nothing that would widen that. (It couldn't work otherwise here anyway: a
+get is served inside pvxs without ever calling Python, so there's no hook to
+recompute on demand, and pushing updates would mean `post()`-ing to all 47
+sub-PVs from the base PV's handler, which p4pillon's documented handler lock
+ordering forbids.)
+
+Which stamp an open channel is frozen at does differ by path. The eager path
+(`StaticRecordProvider`) takes one snapshot at `add()` time, shared by every
+client for the life of the sub-PV. The lazy path (`IOCMimicProvider`,
+`IOCMimicServer`) re-reads it on every `makeChannel()`, so each new connection
+sees the record's process time as of when it connected.
+
 Any of these except DESC (see above) can be overridden via the 'fields' dict
 accepted by `build_record_fields`, `StaticRecordProvider.add`, and
 `IOCMimicProvider.add`, e.g. {"SCAN": "1 second", "RTYP": "ai"}.

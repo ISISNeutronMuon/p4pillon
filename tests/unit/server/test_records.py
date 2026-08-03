@@ -9,7 +9,11 @@ thread flavor elsewhere in this file.
 
 import asyncio
 import gc
+import io
+import time
 import warnings
+from contextlib import redirect_stderr
+from functools import cache
 
 import numpy
 import pytest
@@ -36,6 +40,15 @@ from p4pillon.server.records.fields import _ENUM_VALTYPE
 from p4pillon.server.records.server import _expand_providers
 from p4pillon.server.thread import SharedPV
 from p4pillon.thread.sharednt import SharedNT
+
+
+def _stamp_of(value) -> float:
+    """A raw Value's timeStamp as a float, for comparison against time.time().
+
+    Only for bare `p4p.Value`s (what `build_record_fields` returns); anything
+    that came back from a `current()`/`get()` wrapper already has `.timestamp`.
+    """
+    return value["timeStamp.secondsPastEpoch"] + value["timeStamp.nanoseconds"] / 1e9
 
 
 class TestInferRtyp:
@@ -201,6 +214,41 @@ class TestBuildRecordFields:
         built = build_record_fields("PV:NAME", "d", pv=img, fields={"RTYP": "waveform"})
         assert built["RTYP"]["value"] == "waveform"
 
+    def test_every_field_is_stamped_with_the_build_time_without_a_pv(self):
+        # NTScalar/NTEnum.wrap() leaves timeStamp at 0s 0ns, which a client
+        # renders as 1970-01-01. With no `pv` there's no record process time
+        # to mirror, so every field is stamped "now" instead.
+        before = time.time()
+        built = build_record_fields("PV:NAME", "d", description="hello")
+        after = time.time()
+
+        assert set(built) == FIELD_NAMES  # no field escapes the loop below
+        for fieldname, value in built.items():
+            stamped = _stamp_of(value)
+            assert before <= stamped <= after, f"{fieldname} stamped {stamped}, expected {before}..{after}"
+
+    def test_every_field_takes_the_base_pv_timestamp(self):
+        # Like a real IOC, where "RECORD.FIELD" reports the record's process
+        # time: a SharedNT runs TimestampRule, so it has one to mirror.
+        base = SharedNT(nt=NTScalar("d"), initial=1.0)
+        expected = base.current().timestamp
+
+        time.sleep(0.01)  # so a "now" stamp would be distinguishable
+        built = build_record_fields("PV:NAME", "d", pv=base, description="hello")
+
+        assert set(built) == FIELD_NAMES
+        for fieldname, value in built.items():
+            assert _stamp_of(value) == expected, f"{fieldname} stamped {_stamp_of(value)}, expected {expected}"
+
+    def test_falls_back_to_now_for_an_unstamped_base_pv(self):
+        # A plain SharedPV runs no TimestampRule, so its own timeStamp is the
+        # unset 0s 0ns -- mirroring that would put the 1970 back.
+        before = time.time()
+        built = build_record_fields("PV:NAME", "d", pv=_pv())
+        after = time.time()
+
+        assert before <= _stamp_of(built["RTYP"]) <= after
+
 
 class TestRecordFieldOverridesTyping:
     """Drift guard keeping the hand-written `RecordFieldOverrides` TypedDict
@@ -289,6 +337,46 @@ class TestStaticRecordProvider:
         with Server(providers=[self.P], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
             assert c.get("PV:NAME.RTYP") == "ai"
             assert "PV:NAME.ADEL" in self.P
+
+    def test_served_field_carries_a_live_timestamp(self):
+        # End-to-end: a field used to reach the client stamped 1970-01-01
+        # (0s 0ns). This base PV is a plain SharedPV with no timeStamp of its
+        # own, so the fields fall back to their build ("now") time.
+        before = time.time()
+        self.P.add("PV:NAME", _pv_with_description("hello"))
+
+        with Server(providers=[self.P], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            for field in ("DESC", "RTYP", "NAME", "SCAN"):
+                stamped = c.get(f"PV:NAME.{field}").timestamp
+                assert before <= stamped <= time.time(), f"{field} stamped {stamped}"
+
+    def test_served_field_reports_the_base_pv_timestamp(self):
+        # The IOC-like case: the base record has a process time, so its
+        # fields report that rather than their own build time.
+        base = SharedNT(nt=NTScalar("d"), initial=1.0)
+        expected = base.current().timestamp
+
+        time.sleep(0.01)
+        self.P.add("PV:NAME", base)
+
+        with Server(providers=[self.P], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            for field in ("RTYP", "NAME", "SCAN"):
+                assert c.get(f"PV:NAME.{field}").timestamp == expected, field
+
+    def test_set_desc_record_stamps_the_update(self):
+        # post()ing a bare wrap() would send the client 0s 0ns -- i.e. a DESC
+        # update that lands stamped 1970-01-01.
+        self.P.add("PV:NAME", _pv_with_description("hello"))
+
+        with Server(providers=[self.P], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            before = time.time()
+            self.P.set_desc_record("PV:NAME", "goodbye")
+            after = time.time()
+
+            for field in ("DESC", "DESC$"):
+                got = c.get(f"PV:NAME.{field}")
+                assert got == "goodbye"
+                assert before <= got.timestamp <= after, f"{field} stamped {got.timestamp}"
 
     def test_remove_cleans_up_fields(self):
         self.P.add("PV:NAME", _pv(), valtype="d")
@@ -394,10 +482,13 @@ class TestStaticRecordProvider:
 
         scalar_pv = _CountingCurrentPV(nt=NTScalar("d"), initial=1.234)
         self.P.add("EXAMPLE:FASTSCALAR", scalar_pv, valtype="d")
-        assert scalar_pv.current_calls == 0
+        # Exactly one, and not for the RTYP check: build_record_fields reads
+        # the base PV's timeStamp to stamp the fields with (see _stamp), which
+        # pv.nt can't answer. Once per add(), shared by every field.
+        assert scalar_pv.current_calls == 1
 
-        # A non-record NTNDArray is served base-only (no fields) -- still
-        # resolved from pv.nt alone, without an expensive current() probe.
+        # A non-record NTNDArray is served base-only (no fields at all, so
+        # nothing to stamp) -- resolved from pv.nt alone, with no current().
         ndarray_pv = _CountingCurrentPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))
         self.P.add("EXAMPLE:FASTIMG", ndarray_pv, valtype="d")
         assert ndarray_pv.current_calls == 0
@@ -710,6 +801,45 @@ def _effective_order(entry):
 _MAKECHANNEL_NOISE = "must return SharedPV"
 
 
+@cache
+def _p4p_declines_none_silently() -> bool:
+    """Whether this p4p lets a `makeChannel` handler decline by returning None.
+
+    Feature-detected rather than version-gated: the fix exists upstream as
+    epics-base/p4p#138 (a `Py_None` branch in `DynamicSource::onCreate`) but is
+    unmerged and unmilestoned, so no version number implies it either way.
+
+    Probes with a plain p4p server -- a DynamicProvider that claims nothing,
+    named to sort ahead of the StaticProvider actually serving the PV so it is
+    offered, and has to decline, the base name. `redirect_stderr` rather than
+    `capfd` because this runs once per session, not per test: p4p reports the
+    decline via `PyErr_Print`, which writes to the `sys.stderr` object.
+    """
+
+    class _ClaimsNothing:
+        # Suppressions below: N802 because the names are mandated by the p4p
+        # DynamicProvider protocol, ARG002 because the whole point of this
+        # handler is that it ignores the name and declines regardless.
+        def testChannel(self, name: str) -> bool:  # noqa: N802, ARG002
+            return False
+
+        def makeChannel(self, name: str, peer: str) -> None:  # noqa: N802, ARG002
+            return None
+
+    static = StaticProvider("probe-b-static")
+    static.add("PROBE:PV", _pv())
+    dynamic = DynamicProvider("probe-a-dynamic", _ClaimsNothing())
+
+    stderr = io.StringIO()
+    with (
+        redirect_stderr(stderr),
+        Server(providers=[static, dynamic], isolate=True) as s,
+        Context("pva", conf=s.conf(), useenv=False) as c,
+    ):
+        c.get("PROBE:PV")
+    return _MAKECHANNEL_NOISE not in stderr.getvalue()
+
+
 class TestFieldProviderOrdering:
     """The lazy path's `~p4p.server.DynamicProvider` serves only
     "<name>.<FIELD>", so every base PV name it is offered it must decline.
@@ -801,13 +931,19 @@ class TestFieldProviderOrdering:
 
         assert _MAKECHANNEL_NOISE not in capfd.readouterr().err
 
-    @pytest.mark.xfail(
-        reason="ordering cannot fix this case: with two field providers in one server they share a "
-        "rung, so each is offered the other's sub-PV names and must decline. Only serving every "
-        "registry from a single field provider would avoid it",
-        strict=True,
-    )
     def test_two_field_providers_in_one_server_do_not_decline_each_others_names(self, capfd):
+        # The one case ordering cannot fix: two field providers in one server
+        # share a rung, so each is offered the other's sub-PV names and must
+        # decline, whichever rung either sits on. Only serving every registry
+        # from a single field provider would avoid it p4pillon-side.
+        #
+        # So this is xfailed on a p4p where declining is noisy -- but *run*,
+        # not skipped, on one where it isn't, which is the point: the day
+        # epics-base/p4p#138 lands this starts asserting the fix rather than
+        # rotting. Feature-detected, so no red suite the day it does.
+        if not _p4p_declines_none_silently():
+            pytest.xfail("this p4p has no way for makeChannel to decline (epics-base/p4p#138 unmerged)")
+
         provider = IOCMimicProvider("zzz")
         provider.add("EXAMPLE:PV", _pv())
 
@@ -957,6 +1093,59 @@ class TestIOCMimicProvider:
 
             with pytest.raises(TimeoutError):
                 c.get("PV:NAME.NOSUCHFIELD", timeout=0.2)
+
+    def test_served_field_is_stamped_at_connection_time(self):
+        # This base PV is a plain SharedPV with no timeStamp of its own, so
+        # the fields fall back to their build time -- which on the lazy path
+        # is makeChannel(), i.e. when the client connected. Strictly after
+        # add() here, and never the 1970-01-01 an unstamped wrap() would give.
+        self.P.add("PV:NAME", _pv(), valtype="d")
+        added = time.time()
+
+        with (
+            Server(providers=[*self.P.providers], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            for field in ("DESC", "RTYP", "NAME", "SCAN"):
+                stamped = c.get(f"PV:NAME.{field}").timestamp
+                assert added <= stamped <= time.time(), f"{field} stamped {stamped}"
+
+    def test_served_field_tracks_the_base_pv_timestamp(self):
+        # makeChannel() re-reads the base PV's timeStamp per connection, so
+        # unlike the eager path a *new* connection sees the record's current
+        # process time -- not a snapshot from add().
+        base = SharedNT(nt=NTScalar("d"), initial=1.0)
+        self.P.add("PV:NAME", base)
+
+        with Server(providers=[*self.P.providers], isolate=True) as s:
+            with Context("pva", conf=s.conf(), useenv=False) as c:
+                first = c.get("PV:NAME.RTYP").timestamp
+                assert first == base.current().timestamp
+
+            time.sleep(0.01)
+            base.post(2.0)  # TimestampRule re-stamps the record
+            processed = base.current().timestamp
+            assert processed > first
+
+            # A fresh Context, so p4p can't hand back the cached channel.
+            with Context("pva", conf=s.conf(), useenv=False) as c:
+                assert c.get("PV:NAME.RTYP").timestamp == processed
+
+    def test_set_desc_record_keeps_tracking_the_base_pv_timestamp(self):
+        # An explicit DESC stops DESC tracking display.description, but must
+        # not also stop the fields' timeStamps tracking the base PV (they're
+        # separate concerns -- see RegistryEntry's 'desc_explicit').
+        base = SharedNT(nt=NTScalar("d", display=True), initial={"value": 1.0, "display": {"description": "hello"}})
+        self.P.add("PV:NAME", base)
+        self.P.set_desc_record("PV:NAME", "goodbye")
+
+        with (
+            Server(providers=[*self.P.providers], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            got = c.get("PV:NAME.DESC")
+            assert got == "goodbye"
+            assert got.timestamp == base.current().timestamp
 
     def test_record_fields_false_opts_out(self):
         self.P.add("PV:NAME", _pv(), record_fields=False)
