@@ -8,6 +8,7 @@ here to actually serve these as "RECORD.FIELD" sub-PVs.
 """
 
 import functools
+import time
 import warnings
 from typing import TYPE_CHECKING, Any, NoReturn, TypedDict
 
@@ -16,7 +17,7 @@ from p4p.server.raw import SharedPV as _SharedPVBase
 
 from p4pillon.nt import NTEnum, NTScalar
 from p4pillon.nt.identify import NTType, id_nttype_type
-from p4pillon.utils import as_raw
+from p4pillon.utils import as_raw, time_in_seconds_and_nanoseconds
 
 if TYPE_CHECKING:
     import weakref
@@ -214,18 +215,26 @@ class RegistryEntry(_RegistryEntryRequired, total=False):
     Only 'valtype' is required; 'dtyp_choices', 'fields', and 'description'
     are optional, same as the corresponding `build_record_fields` parameters.
 
-    DESC is resolved per `makeChannel()` call: from the base PV's live
-    ``display.description`` when 'pv_ref' (a `weakref.ref` to the base PV) is
-    present and still alive, else from 'description'. `IOCMimicProvider.add`
-    and `IOCMimicServer`'s plain-dict shorthand set 'pv_ref' so DESC tracks
-    the base PV automatically for new connections; a hand-built registry can
-    instead update 'description' in place. See the package docstring's DESC
-    note.
+    'pv_ref' (a `weakref.ref` to the base PV) is what makes a `makeChannel()`
+    call track the live record rather than an `add()`-time snapshot: DESC is
+    re-read from its ``display.description``, and every field's timeStamp from
+    its ``timeStamp``. `IOCMimicProvider.add` and `IOCMimicServer`'s
+    plain-dict shorthand set it; without it (or once the referent has been
+    collected) DESC falls back to the 'description' snapshot and the fields
+    are stamped "now". A hand-built registry can instead update 'description'
+    in place.
+
+    'desc_explicit' opts DESC alone out of that tracking, in favour of
+    'description' -- what `IOCMimicProvider.set_desc_record` sets. It
+    deliberately does not disturb the timeStamp tracking, which is why it is a
+    separate flag rather than dropping 'pv_ref'. See the package docstring's
+    DESC note.
     """
 
     dtyp_choices: list[str] | None
     fields: RecordFieldOverrides
     description: str
+    desc_explicit: bool
     pv_ref: "weakref.ref[_SharedPVBase]"
 
 
@@ -307,6 +316,56 @@ def _scalar_nt(valtype: str) -> NTScalar:
     return NTScalar(valtype)
 
 
+def _stamp(value: Value, timestamp: tuple[int, int] | None) -> Value:
+    """Set `value`'s timeStamp to `timestamp` (or to the current time when it
+    is `None`), and return it.
+
+    `NTScalar.wrap`/`NTEnum.wrap` leave the timeStamp unset, i.e. 0s 0ns, which
+    a client renders as 1970-01-01 -- so every field value would otherwise
+    arrive at the client apparently 56 years stale.
+
+    A real IOC reports a field with the record's own process time, so
+    `timestamp` is normally the base PV's current timeStamp (see
+    `_timestamp_of_pv`). It falls back to "now" when the base PV has none to
+    give -- a plain `~p4pillon.server.thread.SharedPV` runs no
+    `~p4pillon.rules.timestamp_rule.TimestampRule` and so sits at 0s 0ns,
+    which would put the 1970 back. "Now" is defensible in that case: the value
+    is built at the moment it starts being served
+    (`StaticRecordProvider.add` eagerly, `DynamicRecordFields.makeChannel` per
+    connection). Same seconds/nanoseconds split as `TimestampRule` uses for a
+    posted value.
+    """
+    if "timeStamp" not in value:
+        return value
+    seconds, nanoseconds = timestamp if timestamp is not None else time_in_seconds_and_nanoseconds(time.time())
+    value["timeStamp.secondsPastEpoch"] = seconds
+    value["timeStamp.nanoseconds"] = nanoseconds
+    return value
+
+
+def _timestamp_of_raw(raw: Value | None) -> tuple[int, int] | None:
+    """`raw`'s timeStamp as ``(seconds, nanoseconds)``, or `None` when it has
+    none to offer -- no `raw` at all, no timeStamp in its structure, or an
+    unset 0s stamp. `None` means the caller should stamp "now" instead; see
+    `_stamp`.
+    """
+    if raw is None or "timeStamp" not in raw:
+        return None
+    seconds = raw.get("timeStamp.secondsPastEpoch", 0)
+    if not seconds:
+        # 0s is the unset sentinel, not a genuine 1970-01-01 process time.
+        return None
+    return int(seconds), int(raw.get("timeStamp.nanoseconds", 0) or 0)
+
+
+def _timestamp_of_pv(pv: _SharedPVBase) -> tuple[int, int] | None:
+    """`pv`'s current timeStamp, or `None` -- `_timestamp_of_raw` of whatever
+    `pv.current()` can give (nothing when never `open()`-ed, or an ``unwrap=``
+    with no ``.raw``).
+    """
+    return _timestamp_of_raw(_raw_current_or_none(pv))
+
+
 def _menu_pv(choices: list[str], default_name: str, override: str | None) -> Value:
     # A fresh NTEnum per call, not a shared module-level instance: unlike
     # NTScalar, NTEnum is stateful (wrap() caches value.choices on the
@@ -319,6 +378,14 @@ def _scalar_pv(valtype: str, default: Any, override: Any) -> Value:
     # default/override's type depends on valtype (str, int, float, bool, ...)
     # -- not worth a union that has to track every valtype this supports.
     return _scalar_nt(valtype).wrap(default if override is None else override)
+
+
+def _desc_field_value(description: str) -> Value:
+    """The (unstamped) DESC/DESC$ field value for `description`. One recipe,
+    shared by the `add()`-time build (`_build_one_field_value`) and the later
+    `StaticRecordProvider.set_desc_record` post, so the two cannot drift.
+    """
+    return _scalar_nt("s").wrap(description)
 
 
 # The NT flavors infer_rtyp() has a plausible guess for: a scalar, scalar
@@ -351,15 +418,23 @@ def _raw_current_or_none(pv: _SharedPVBase) -> Value | None:
     return raw if isinstance(raw, Value) else None
 
 
-def _description_of_pv(pv: _SharedPVBase) -> str:
+def _pv_declares_description(pv: _SharedPVBase) -> bool:
+    # A declared NT without display.description can never carry one, so the
+    # current() read can be skipped entirely.
     nt = getattr(pv, "nt", None)
-    if nt is not None and "display.description" not in nt.type:
-        return ""
+    return nt is None or "display.description" in nt.type
 
-    raw = _raw_current_or_none(pv)
+
+def _description_of_raw(raw: Value | None) -> str:
     if raw is None or "display.description" not in raw:
         return ""
     return raw.get("display.description", "") or ""
+
+
+def _description_of_pv(pv: _SharedPVBase) -> str:
+    if not _pv_declares_description(pv):
+        return ""
+    return _description_of_raw(_raw_current_or_none(pv))
 
 
 def _rtyp_inferrable(pv: _SharedPVBase) -> bool:
@@ -460,7 +535,7 @@ def _validate_fields(fields: RecordFieldOverrides, name: str, dtyp_choices: list
             raise ValueError(msg)
 
 
-def _build_one_field(
+def _build_one_field_value(
     fieldname: str,
     name: str,
     valtype: str,
@@ -468,9 +543,11 @@ def _build_one_field(
     fields: RecordFieldOverrides,
     description: str,
 ) -> Value:
+    # Unstamped -- _build_one_field stamps whatever this returns, so a new
+    # branch here can't forget to and ship a 1970-01-01 value.
     if fieldname.endswith("$"):
         # '<FIELD>$' is a long-string alias -- same value as '<FIELD>'.
-        return _build_one_field(fieldname[:-1], name, valtype, dtyp_choices, fields, description)
+        return _build_one_field_value(fieldname[:-1], name, valtype, dtyp_choices, fields, description)
 
     if fieldname == "DTYP":
         choices = _dtyp_choices(dtyp_choices)
@@ -487,7 +564,7 @@ def _build_one_field(
 
     if fieldname == "DESC":
         # Mirrors display.description -- not overridable, same as NAME.
-        return _scalar_nt("s").wrap(description)
+        return _desc_field_value(description)
 
     if fieldname in ("ADEL", "MDEL"):
         # Same DBF/valtype as VAL itself. Caller must have already checked
@@ -499,6 +576,20 @@ def _build_one_field(
     if "choices" in spec:
         return _menu_pv(spec["choices"], spec["default"], override)
     return _scalar_pv(spec["valtype"], spec["default"], override)
+
+
+def _build_one_field(
+    fieldname: str,
+    name: str,
+    valtype: str,
+    dtyp_choices: list[str] | None,
+    fields: RecordFieldOverrides,
+    description: str,
+    timestamp: tuple[int, int] | None = None,
+) -> Value:
+    """The initial `~p4p.Value` for "<name>.<fieldname>", stamped with
+    `timestamp` (or "now" when it is `None`; see `_stamp`)."""
+    return _stamp(_build_one_field_value(fieldname, name, valtype, dtyp_choices, fields, description), timestamp)
 
 
 def build_record_fields(
@@ -522,8 +613,12 @@ def build_record_fields(
                         or a choice name (str) for menu-kind fields including DTYP
                         and RTYP.  An unknown key is ignored and emits a `UserWarning`.
     :param pv: The base PV, if available -- used to check whether RTYP can
-              plausibly be inferred; raises `ValueError` if not, unless
-              `fields` gives ``"RTYP"`` explicitly.
+              plausibly be inferred (raises `ValueError` if not, unless
+              `fields` gives ``"RTYP"`` explicitly), and as the source of every
+              built field's timeStamp, mirroring an IOC reporting a field with
+              its record's process time.  Without a `pv`, or with one carrying
+              no timeStamp of its own, the fields are stamped "now" (see
+              `_stamp`).
     :param str description: The value for DESC/DESC$.  Not settable via `fields`
                         (same as NAME).  Defaults to ``""``.
     :returns: dict mapping field name to an initial `~p4p.Value`, suitable to pass
@@ -535,8 +630,12 @@ def build_record_fields(
         # pv is None from DynamicRecordFields.makeChannel() (no live PV to
         # check). Checked once here, not per-field -- pv.current() isn't free.
         _check_rtyp_inferrable(pv)
+    # Likewise resolved once and shared by every field, so they all agree on
+    # the record's process time rather than each sampling current() (or, in
+    # the "now" fallback, the clock) separately.
+    timestamp = (_timestamp_of_pv(pv) if pv is not None else None) or time_in_seconds_and_nanoseconds(time.time())
     return {
-        fieldname: _build_one_field(fieldname, name, valtype, dtyp_choices, fields, description)
+        fieldname: _build_one_field(fieldname, name, valtype, dtyp_choices, fields, description, timestamp)
         for fieldname in FIELD_NAMES
         if _field_applies(fieldname, valtype)
     }
@@ -576,16 +675,32 @@ def _flavor_matched_pv_factory(pv: _SharedPVBase) -> type[_SharedPVBase]:
     return _default_pv_factory()
 
 
-def _resolve_registry_description(entry: RegistryEntry) -> str:
-    """The DESC value for a `RegistryEntry`: the base PV's live
-    ``display.description`` when 'pv_ref' is present and alive, else the
-    'description' snapshot. See `RegistryEntry`'s docstring."""
+def _resolve_registry_desc_and_timestamp(entry: RegistryEntry) -> tuple[str, tuple[int, int] | None]:
+    """The DESC value and field timeStamp for a `RegistryEntry`.
+
+    DESC is the base PV's live ``display.description`` when 'pv_ref' is present
+    and alive and 'desc_explicit' is unset, else the 'description' snapshot
+    (see `RegistryEntry`'s docstring). The timeStamp is that same PV's live one
+    when it has one to give, else `None` for "now" (see `_timestamp_of_pv` /
+    `_stamp`).
+
+    Both come from a single `current()` read, so the DESC a client receives and
+    the timeStamp describing it are the same snapshot -- and `makeChannel()`
+    pays one read per connection, not two. This is the lazy counterpart to what
+    `build_record_fields` reads from its `pv` argument; unlike the eager path's
+    one-shot snapshot it is re-read on every `makeChannel()`, so a new
+    connection sees the record's *current* process time.
+    """
     pv_ref = entry.get("pv_ref")
-    if pv_ref is not None:
-        pv = pv_ref()
-        if pv is not None:
-            return _description_of_pv(pv)
-    return entry.get("description") or ""
+    pv = pv_ref() if pv_ref is not None else None
+    if pv is None:
+        return entry.get("description") or "", None
+    raw = _raw_current_or_none(pv)
+    if entry.get("desc_explicit"):
+        description = entry.get("description") or ""
+    else:
+        description = _description_of_raw(raw) if _pv_declares_description(pv) else ""
+    return description, _timestamp_of_raw(raw)
 
 
 def _resolve_valtype_and_description(pv: _SharedPVBase, valtype: str | None) -> tuple[str, str]:

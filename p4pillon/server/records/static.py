@@ -11,11 +11,12 @@ from p4p.server.raw import SharedPV as _SharedPVBase
 from ._util import _KeysContainerMixin
 from .fields import (
     RecordFieldOverrides,
+    _desc_field_value,
     _field_shared_pv,
     _flavor_matched_pv_factory,
     _resolve_valtype_and_description,
-    _scalar_nt,
     _should_serve_record_fields,
+    _stamp,
     build_record_fields,
 )
 
@@ -58,6 +59,12 @@ class StaticRecordProvider(_KeysContainerMixin, StaticProvider):
     DESC/DESC$ are seeded from the base PV's ``display.description`` at
     `add()` time and not tracked afterward; call `set_desc_record` to push
     an update.
+
+    Every sub-PV's timeStamp is likewise a one-time `add()`-time snapshot of
+    the base PV's own (falling back to `add()` time itself for a base PV
+    carrying no stamp), shared by every client for the life of the sub-PV.
+    `IOCMimicProvider` re-reads it per connection instead -- see the
+    `p4pillon.server.records` package docstring.
     """
 
     def __init__(self, name: str | None = None) -> None:
@@ -129,7 +136,11 @@ class StaticRecordProvider(_KeysContainerMixin, StaticProvider):
                           `record_fields=False`.
         """
         field_pvs = self._field_pvs[name]
-        wrapped = _scalar_nt("s").wrap(description)
+        # Stamped "now", not from the base PV: this is a DESC change in its own
+        # right, and the record hasn't processed. Without it the posted value
+        # would carry wrap()'s unset 0s 0ns and land on the client as
+        # 1970-01-01 (see `~p4pillon.server.records.fields._stamp`).
+        wrapped = _stamp(_desc_field_value(description), None)
         field_pvs["DESC"].post(wrapped)
         field_pvs["DESC$"].post(wrapped)
 
