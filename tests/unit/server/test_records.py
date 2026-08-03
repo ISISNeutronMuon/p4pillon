@@ -8,6 +8,7 @@ thread flavor elsewhere in this file.
 """
 
 import asyncio
+import gc
 import warnings
 
 import numpy
@@ -15,7 +16,7 @@ import pytest
 from p4p.client.asyncio import Context as AsyncContext
 from p4p.client.thread import Context, RemoteError, TimeoutError
 from p4p.nt import NTEnum, NTNDArray, NTScalar, NTTable
-from p4p.server import DynamicProvider, Server
+from p4p.server import DynamicProvider, Server, StaticProvider
 from p4p.server.asyncio import SharedPV as RawAsyncSharedPV
 
 from p4pillon.server.asyncio import SharedPV as AsyncSharedPV
@@ -32,6 +33,7 @@ from p4pillon.server.records import (
     infer_rtyp,
 )
 from p4pillon.server.records.fields import _ENUM_VALTYPE
+from p4pillon.server.records.server import _expand_providers
 from p4pillon.server.thread import SharedPV
 from p4pillon.thread.sharednt import SharedNT
 
@@ -514,6 +516,18 @@ class TestStaticRecordProvider:
             with pytest.raises(TimeoutError):
                 c.get("EXAMPLE:STR.MDEL", timeout=0.2)
 
+    def test_keys_is_the_inherited_one_and_does_not_recurse(self):
+        # _KeysContainerMixin builds the container dunders on self.keys(), which
+        # this class inherits from p4p's StaticProvider. Giving the mixin a real
+        # keys() rather than the TYPE_CHECKING-only declaration it has would put
+        # one ahead of StaticProvider in this class's MRO, shadowing the
+        # inherited one -- and, being a forwarder, recursing until RecursionError.
+        self.P.add("EXAMPLE:PV", _pv())
+
+        keys = self.P.keys()  # the inherited StaticProvider.keys(), called explicitly
+        assert "EXAMPLE:PV" in keys
+        assert sorted(keys) == sorted(self.P)
+
 
 class TestIOCMimicServer:
     """`IOCMimicServer`: gives a plain `{name: pv}` dict `providers=` entry
@@ -621,7 +635,7 @@ class TestIOCMimicServer:
         # (an empty registry -> None from _dynamic_fields_provider).
         pvs = {"EXAMPLE:IMG": SharedPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))}
         with IOCMimicServer(providers=[pvs], isolate=True) as s:
-            assert s._field_providers == []
+            assert s._keep_alive == []
 
     def test_dict_provider_enum_infers_mbbi_rtyp(self):
         # An NTEnum is inferrable through the dict shorthand too (valtype
@@ -652,6 +666,159 @@ class TestIOCMimicServer:
             assert c.get("EXAMPLE:PV.RTYP") == "ai"
             assert c.get("EXAMPLE:PV.DTYP").raw["value.choices"] == ["Soft Channel", "Raw Soft Channel"]
             assert c.get("EXAMPLE:PV2.RTYP") == "ai"
+
+    def test_unpacked_ioc_record_provider_is_kept_alive(self):
+        # p4p.server.Server only keeps a provider alive itself for the
+        # StaticProvider it builds from a bare dict; an IOCMimicProvider we
+        # unpack is ours to retain. If the caller drops their reference the
+        # base PVs keep working (the C++ Server holds the StaticProvider) but
+        # every "<name>.<FIELD>" sub-PV silently stops resolving, because
+        # nothing holds the DynamicProvider or the registry behind it.
+        base = IOCMimicProvider("base")
+        base.add("EXAMPLE:PV", _pv())
+
+        with IOCMimicServer(providers=[base], isolate=True) as s:
+            del base
+            gc.collect()
+
+            with Context("pva", conf=s.conf(), useenv=False) as c:
+                assert c.get("EXAMPLE:PV") == 1.234
+                assert c.get("EXAMPLE:PV.RTYP") == "ai"
+
+    def test_unpacked_ioc_record_provider_is_retained_whole(self):
+        # The object-level counterpart to the test above, without the gc round
+        # trip: what's retained is the whole IOCMimicProvider, not just its
+        # DynamicProvider -- that also pins its StaticProvider, its registry,
+        # and the base PVs the registry's weak 'pv_ref's point at.
+        base = IOCMimicProvider("base")
+        base.add("EXAMPLE:PV", _pv())
+
+        _, keep_alive = _expand_providers([base])
+
+        assert any(kept is base for kept in keep_alive)
+
+
+def _effective_order(entry):
+    # The order p4p.server.Server.__init__ will resolve for a providers=
+    # entry: an explicit (provider, order) tuple, else an `order` attribute
+    # on the provider, else 0.
+    if isinstance(entry, tuple):
+        return entry[1]
+    return getattr(entry, "order", 0)
+
+
+_MAKECHANNEL_NOISE = "must return SharedPV"
+
+
+class TestFieldProviderOrdering:
+    """The lazy path's `~p4p.server.DynamicProvider` serves only
+    "<name>.<FIELD>", so every base PV name it is offered it must decline.
+    pvxs offers channel creation to *every* source in (order, name) sequence
+    regardless of which one claimed the search -- declining is a documented,
+    first-class response (pvxs `src/pvxs/source.h`) -- but p4p has no way to
+    express it other than returning None from `makeChannel`, and prints
+    ``TypeError: makeChannel("...") must return SharedPV, not NoneType`` to
+    `sys.stderr` when it does.
+
+    p4pillon therefore sorts its field provider onto an absolute rung
+    (`_FIELD_PROVIDER_ORDER`) behind every other entry, so it is never offered
+    a base PV name in the first place. Without that the diagnostic is written
+    once per base-PV connection, and which way it falls is decided by the
+    field provider's (random) name.
+    """
+
+    def test_field_provider_sorts_after_its_own_static(self):
+        provider = IOCMimicProvider("example")
+        static, dynamic = provider.providers
+
+        assert _effective_order(dynamic) > _effective_order(static)
+
+    @pytest.mark.parametrize(
+        "make_entry", [IOCMimicProvider, lambda _: {"EXAMPLE:PV": _pv()}], ids=["provider", "dict"]
+    )
+    @pytest.mark.parametrize("order", [None, 0, 5])
+    def test_expansion_sorts_field_provider_after_the_base_pvs(self, make_entry, order):
+        # Whatever order the caller asks for, the field provider has to end up
+        # behind the entry it belongs to -- including when an explicit
+        # (provider, order) tuple is given, which p4p resolves in preference
+        # to any `order` attribute on the provider itself.
+        entry = make_entry("example")
+        if isinstance(entry, IOCMimicProvider):
+            entry.add("EXAMPLE:PV", _pv())
+        if order is not None:
+            entry = (entry, order)
+
+        wrapped, _ = _expand_providers([entry])
+
+        base, fields = wrapped
+        assert _effective_order(fields) > _effective_order(base)
+
+    # Each case builds a server a different way and asks for the base PV as
+    # well as a sub-PV: connecting to the *base* name is what offers it to the
+    # field provider, and so what would trigger the diagnostic. "zzz" as the
+    # provider name rather than something realistic keeps this deterministic
+    # -- the field provider's name is random, and unordered it would sort
+    # before the static provider only for most names, not all.
+    @pytest.mark.parametrize(
+        ("make_server", "base_name"),
+        [
+            pytest.param(lambda p: IOCMimicServer(providers=[p], isolate=True), "EXAMPLE:PV", id="provider"),
+            # An explicit (provider, order) tuple used to defeat the ordering
+            # entirely, back when the field provider took the entry's order + 1.
+            pytest.param(lambda p: IOCMimicServer(providers=[(p, 0)], isolate=True), "EXAMPLE:PV", id="tuple-order"),
+            # The dict shorthand's own field provider, built by the expansion
+            # rather than by the IOCMimicProvider -- hence ignoring `p`.
+            pytest.param(lambda _: IOCMimicServer(providers=[{"DICT:PV": _pv()}], isolate=True), "DICT:PV", id="dict"),
+            # Unpacked into a plain p4p Server, the way the IOCMimicProvider
+            # docstring tells callers who aren't using IOCMimicServer to.
+            pytest.param(lambda p: Server(providers=[*p.providers], isolate=True), "EXAMPLE:PV", id="plain-server"),
+        ],
+    )
+    def test_serves_without_makechannel_noise(self, capfd, make_server, base_name):
+        provider = IOCMimicProvider("zzz")
+        provider.add("EXAMPLE:PV", _pv())
+
+        with make_server(provider) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            assert c.get(base_name) == 1.234
+            assert c.get(f"{base_name}.RTYP") == "ai"
+
+        assert _MAKECHANNEL_NOISE not in capfd.readouterr().err
+
+    def test_no_noise_when_a_foreign_provider_is_ordered_later(self, capfd):
+        # The absolute rung, rather than an offset from the entry's own order,
+        # is what makes this work: a caller ordering their own provider behind
+        # p4pillon's still lands in front of the field provider.
+        provider = IOCMimicProvider("zzz")
+        provider.add("EXAMPLE:PV", _pv())
+        foreign = StaticProvider("foreign")
+        foreign.add("OTHER:PV", _pv())
+
+        with (
+            IOCMimicServer(providers=[provider, (foreign, 5)], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            assert c.get("OTHER:PV") == 1.234
+
+        assert _MAKECHANNEL_NOISE not in capfd.readouterr().err
+
+    @pytest.mark.xfail(
+        reason="ordering cannot fix this case: with two field providers in one server they share a "
+        "rung, so each is offered the other's sub-PV names and must decline. Only serving every "
+        "registry from a single field provider would avoid it",
+        strict=True,
+    )
+    def test_two_field_providers_in_one_server_do_not_decline_each_others_names(self, capfd):
+        provider = IOCMimicProvider("zzz")
+        provider.add("EXAMPLE:PV", _pv())
+
+        with (
+            IOCMimicServer(providers=[provider, {"DICT:PV": _pv()}], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            assert c.get("EXAMPLE:PV.RTYP") == "ai"
+            assert c.get("DICT:PV.RTYP") == "ai"
+
+        assert _MAKECHANNEL_NOISE not in capfd.readouterr().err
 
 
 class TestDynamicRecordFields:
@@ -910,6 +1077,17 @@ class TestIOCMimicProvider:
 
     def test_providers_property(self):
         assert self.P.providers == (self.P._static, self.P._dynamic)
+
+    def test_keys_lists_base_pv_names(self):
+        # p4p's StaticProvider has keys(); StaticRecordProvider subclasses it
+        # and so inherits one, but this class only mixes in the container
+        # dunders -- it needs its own to match. Base PV names only, sub-PVs
+        # aren't enumerable on the lazy path (see the class docstring).
+        self.P.add("PV:ONE", _pv())
+        self.P.add("PV:TWO", _pv(), record_fields=False)
+
+        assert sorted(self.P.keys()) == ["PV:ONE", "PV:TWO"]
+        assert sorted(self.P.keys()) == sorted(self.P)
 
     def test_set_desc_record_updates_registry_for_new_connections_only(self):
         # No live sub-PV channel here (unlike StaticRecordProvider) -- an
