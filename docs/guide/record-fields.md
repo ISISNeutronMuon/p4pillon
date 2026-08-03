@@ -50,6 +50,13 @@ Every string-valued field is *also* servable with a `$` suffix
 is simply an identical-valued alias (pvAccess has no 40-character string limit
 to work around), provided for tools that ask for it.
 
+Each field channel delivers its *complete* structure — `value`, `alarm` and
+`timeStamp` — on the first get or monitor update, the way a real IOC does.
+(pvAccess sends only fields marked as changed, and a field sub-PV is opened
+once and never posted again. Sending a partial structure is invisible to p4p
+and pvxs clients, which zero-fill what they didn't receive, but the Java
+`org.epics.pva` client leaves an untransmitted string as `null`.)
+
 Verified against `examples/asyncio/ioc_fields_server.py`:
 
 ```console

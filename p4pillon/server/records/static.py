@@ -8,6 +8,8 @@ registry-driven alternative, `.server` for `IOCMimicServer` (which uses
 from p4p.server import StaticProvider
 from p4p.server.raw import SharedPV as _SharedPVBase
 
+from p4pillon.utils import mark_all
+
 from ._util import _KeysContainerMixin
 from .fields import (
     RecordFieldOverrides,
@@ -140,7 +142,7 @@ class StaticRecordProvider(_KeysContainerMixin, StaticProvider):
         # right, and the record hasn't processed. Without it the posted value
         # would carry wrap()'s unset 0s 0ns and land on the client as
         # 1970-01-01 (see `~p4pillon.server.records.fields._stamp`).
-        wrapped = _stamp(_desc_field_value(description), None)
+        wrapped = mark_all(_stamp(_desc_field_value(description), None))
         field_pvs["DESC"].post(wrapped)
         field_pvs["DESC$"].post(wrapped)
 

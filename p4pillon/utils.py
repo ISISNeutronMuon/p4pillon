@@ -17,6 +17,32 @@ def time_in_seconds_and_nanoseconds(timestamp: float) -> tuple[int, int]:
     return seconds, nanoseconds
 
 
+def mark_all(value: Value) -> Value:
+    """Mark every field of a Value as changed, in place, and return it.
+
+    pvAccess only puts *marked* fields on the wire, and a SharedPV's stored
+    change mask is the union of everything marked since open() -- so a field
+    that is never marked is never sent to a client at all. Clients that
+    zero-fill what they did not receive (pvxs, p4p) hide this; the Java
+    ``org.epics.pva`` client leaves an untransmitted string as null, which is
+    what makes the EPICS Archiver Appliance throw an NPE on ``alarm.message``.
+    A real IOC sends the complete structure on a first get/monitor update.
+
+    Use this on a value that is `open()`-ed once and not subsequently
+    `post()`-ed, where nothing else will ever widen the mask -- the record
+    field sub-PVs of `p4pillon.server.records` are the case this exists for.
+    It is not for ordinary posts: narrowing an update to its genuinely
+    changed fields (see `overwrite_unmarked`) is what keeps monitor deltas
+    small.
+
+    `~p4p.Value.mark` with no field name marks only the root, hence the loop;
+    marking a top-level substructure marks its children too.
+    """
+    for fieldname in value:
+        value.mark(fieldname)
+    return value
+
+
 def recurse_values(value1: Value, value2: Value, func: Callable[[Value, Value, str], None], keys=None) -> bool:
     """Recurse through two Values with the same structure and apply a supplied to the leaf nodes"""
     if not keys:
