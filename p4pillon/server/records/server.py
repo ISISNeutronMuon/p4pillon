@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from p4p.server import DynamicProvider as _DynamicProvider
 from p4p.server import Server as _Server
 
-from .dynamic import DynamicRecordFields, IOCMimicProvider, _anonymous_dynamic_provider
+from .dynamic import DynamicRecordFields, IOCMimicProvider, _make_field_provider
 from .fields import RegistryEntry, _resolve_valtype_and_description, _should_serve_record_fields
 
 if TYPE_CHECKING:
@@ -55,7 +55,47 @@ def _dynamic_fields_provider(provider: object) -> _DynamicProvider | None:
         # See RegistryEntry's docstring.
         registry[name] = {"valtype": valtype, "description": description, "pv_ref": weakref.ref(pv)}
     # No record-like entries -> no field provider to add at all.
-    return _anonymous_dynamic_provider(DynamicRecordFields(registry)) if registry else None
+    return _make_field_provider(DynamicRecordFields(registry)) if registry else None
+
+
+def _expand_providers(providers: list[Any]) -> tuple[list[Any], list[Any]]:
+    # Expand an IOCMimicServer providers= list into the flat list
+    # p4p.server.Server takes, plus the objects the caller must keep alive for
+    # the Server's lifetime -- Server does that itself only for the
+    # StaticProvider it builds from a bare dict, not for the field providers we
+    # build nor for an IOCMimicProvider we take apart. Without it, a caller
+    # dropping their provider leaves the base PVs working (the C++ Server holds
+    # the StaticProvider) while every sub-PV silently stops resolving.
+    # Split out of __init__ so the expansion -- especially each entry's
+    # resulting provider *order* -- is testable without starting a server.
+    # A field provider is always appended bare, never as a (provider, order)
+    # tuple: it carries _FIELD_PROVIDER_ORDER as its own `order` attribute,
+    # and p4p.server.Server prefers a tuple's order to that attribute -- so
+    # reattaching the entry's order to the field half would undo it.
+    wrapped: list[Any] = []
+    keep_alive: list[Any] = []
+    for entry in providers:
+        provider, order = entry if isinstance(entry, tuple) else (entry, None)
+        if isinstance(provider, IOCMimicProvider):
+            # Backed by its own static + DynamicRecordFields provider pair
+            # -- unpack it rather than treat it as one provider or a dict.
+            # An isinstance check, not duck typing on a `.providers`
+            # attribute: any other provider that happens to carry one must
+            # be passed through to p4p.server.Server untouched.
+            static_provider, fields_provider = provider.providers
+            wrapped.append(_with_order(static_provider, order))
+            wrapped.append(fields_provider)
+            # The whole IOCMimicProvider, not just the half p4p would
+            # otherwise drop: that also pins its StaticProvider, its registry,
+            # and the base PVs the registry's weak 'pv_ref's point at.
+            keep_alive.append(provider)
+            continue
+        wrapped.append(_with_order(provider, order))
+        fields_provider = _dynamic_fields_provider(provider)
+        if fields_provider is not None:
+            keep_alive.append(fields_provider)
+            wrapped.append(fields_provider)
+    return wrapped, keep_alive
 
 
 class IOCMimicServer(_Server):
@@ -98,24 +138,7 @@ class IOCMimicServer(_Server):
 
     def __init__(self, providers: list[Any], isolate: bool = False, **kws: Any) -> None:
         # **kws is forwarded verbatim to Server.__init__; its signature isn't ours to narrow.
-        # self._field_providers keeps each DynamicProvider built here alive for the
-        # Server's lifetime -- Server only does that itself for StaticProviders it
-        # builds from a bare dict, not for provider instances we hand it directly.
-        self._field_providers: list[_DynamicProvider] = []
-        wrapped: list[Any] = []
-        for entry in providers:
-            provider, order = entry if isinstance(entry, tuple) else (entry, None)
-            if isinstance(provider, IOCMimicProvider):
-                # Backed by its own static + DynamicRecordFields provider pair
-                # -- unpack it rather than treat it as one provider or a dict.
-                # An isinstance check, not duck typing on a `.providers`
-                # attribute: any other provider that happens to carry one must
-                # be passed through to p4p.server.Server untouched.
-                wrapped.extend(_with_order(sub_provider, order) for sub_provider in provider.providers)
-                continue
-            wrapped.append(_with_order(provider, order))
-            fields_provider = _dynamic_fields_provider(provider)
-            if fields_provider is not None:
-                self._field_providers.append(fields_provider)
-                wrapped.append(_with_order(fields_provider, order))
+        # self._keep_alive is where _expand_providers' second return value has to live:
+        # for the Server's lifetime, since nothing else references those objects then.
+        wrapped, self._keep_alive = _expand_providers(providers)
         super().__init__(wrapped, isolate=isolate, **kws)

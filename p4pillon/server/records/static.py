@@ -5,8 +5,6 @@ registry-driven alternative, `.server` for `IOCMimicServer` (which uses
 `p4pillon.server.records` package docstring for the overall rationale.
 """
 
-from collections.abc import Collection
-
 from p4p.server import StaticProvider
 from p4p.server.raw import SharedPV as _SharedPVBase
 
@@ -142,6 +140,3 @@ class StaticRecordProvider(_KeysContainerMixin, StaticProvider):
             for fieldname in field_pvs:
                 super().remove(f"{name}.{fieldname}")
         super().remove(name)
-
-    def _keys(self) -> Collection[str]:
-        return self.keys()

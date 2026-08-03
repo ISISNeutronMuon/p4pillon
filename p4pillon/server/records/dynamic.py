@@ -29,6 +29,25 @@ from .fields import (
 
 __all__ = ("DynamicRecordFields", "IOCMimicProvider")
 
+#: Provider order for every field provider p4pillon builds. A field provider
+#: serves only "<name>.<FIELD>", so every base PV name it is offered it has to
+#: decline -- and pvxs offers channel creation to *every* source in (order,
+#: name) sequence, independently of which one claimed the search (see
+#: `Source::onCreate` in pvxs's source.h, where declining is one of four
+#: documented responses). p4p has no way to express that decline other than
+#: returning None from `makeChannel`, and writes ``TypeError:
+#: makeChannel("...") must return SharedPV, not NoneType`` to stderr when it
+#: does. Sorting the field provider behind the providers serving the base PVs
+#: means it is never offered them, so never has to.
+#:
+#: An absolute rung rather than an offset from whatever order the entry it
+#: belongs to was given: a field provider claims no base PV name, so it has no
+#: ordering *relationship* to express -- it just needs to be last, behind every
+#: other entry in the same server and not merely its own. Far enough out
+#: (p4p's own default is 0) that a caller ordering their providers by hand
+#: still lands in front.
+_FIELD_PROVIDER_ORDER = 2**15
+
 
 class DynamicRecordFields:
     """A `~p4p.server.DynamicProvider` handler serving "<name>.<FIELD>" for base PV
@@ -47,6 +66,14 @@ class DynamicRecordFields:
             "EXAMPLE:PV": {"valtype": "d", "dtyp_choices": ["Soft Channel"], "fields": {}},
         }
         field_provider = DynamicProvider("recfields", DynamicRecordFields(registry))
+        field_provider.order = 1  # any rung behind your base PVs' providers
+
+    Give a hand-built field provider an `order` behind the providers serving
+    the base PVs, as above -- `IOCMimicProvider` and `IOCMimicServer` do this
+    for the providers they build, but a `~p4p.server.DynamicProvider` you
+    construct yourself is yours to order. Skipping it costs a ``TypeError:
+    makeChannel(...) must return SharedPV, not NoneType`` on stderr per base
+    PV connection; see `_FIELD_PROVIDER_ORDER` for why.
 
     :param registry: A mapping of base PV name to a dict with keys 'valtype'
                      (required), 'dtyp_choices', 'fields', and 'description'
@@ -176,7 +203,7 @@ class IOCMimicProvider(_KeysContainerMixin):
         # DynamicRecordFields keeps this dict by reference, so add()/remove()
         # mutations are visible to testChannel()/makeChannel() immediately --
         # no separate sync step needed.
-        self._dynamic = _anonymous_dynamic_provider(DynamicRecordFields(self._registry, pv_factory))
+        self._dynamic = _make_field_provider(DynamicRecordFields(self._registry, pv_factory), name)
 
     @property
     def providers(self) -> tuple[_StaticProvider, _DynamicProvider]:
@@ -248,18 +275,24 @@ class IOCMimicProvider(_KeysContainerMixin):
         self._registry.pop(name, None)
         self._static.remove(name)
 
-    def _keys(self) -> Collection[str]:
-        """Base PV names -- mirrors the internal `StaticProvider`, not the
-        "<name>.<FIELD>" registry (see the class docstring: those sub-PVs
-        aren't enumerable here, only servable)."""
+    def keys(self) -> Collection[str]:
+        """Base PV names, mirroring `~p4p.server.StaticProvider.keys` -- not
+        the "<name>.<FIELD>" registry (see the class docstring: those sub-PVs
+        aren't enumerable here, only servable). Also what `_KeysContainerMixin`
+        builds this class's container dunders on.
+        """
         return self._static.keys()
 
 
-def _anonymous_dynamic_provider(handler: DynamicRecordFields) -> _DynamicProvider:
-    # DynamicProvider (unlike StaticProvider) requires an explicit name; a
-    # random uuid stands in for callers with none (IOCMimicProvider and
-    # IOCMimicServer's plain-dict shorthand both build one anonymously).
-    return _DynamicProvider(str(uuid.uuid4()), handler)
+def _make_field_provider(handler: DynamicRecordFields, name: str | None = None) -> _DynamicProvider:
+    # DynamicProvider (unlike StaticProvider) requires an explicit name, and
+    # callers here have none to give (IOCMimicProvider and IOCMimicServer's
+    # plain-dict shorthand both build one implicitly) -- so generate one, but
+    # a legible one: a bare uuid tells you nothing when it shows up in a pvxs
+    # log or as an ordering tie-break.
+    provider = _DynamicProvider(f"{name or 'p4pillon'}-recfields-{uuid.uuid4().hex[:8]}", handler)
+    provider.order = _FIELD_PROVIDER_ORDER
+    return provider
 
 
 def _split_field_name(name: str) -> tuple[str, str | None]:
