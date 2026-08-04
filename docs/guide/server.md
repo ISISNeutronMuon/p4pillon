@@ -79,6 +79,44 @@ Verified: serving `examples/basic_server_recipe.yaml` this way makes
 `DEV:RW:INT`, `DEV:RW:INT1`, and the computed `DEV:RW:DOUBLECALC` reachable, and
 the `calc` rule recomputes on input changes.
 
+## What a client's first update contains
+
+pvAccess sends only the fields a value has *marked* as changed, and a PV's mask
+is the union of everything marked since `open()`. `NTScalar(...).wrap(v)` marks
+only `value`, so a PV that is opened and never posted to serves a structure in
+which `alarm.*`, `display.*` and `valueAlarm.*` never reach the client at all.
+A real IOC (QSRV) instead sends the complete structure and signals "unset"
+in-band.
+
+You usually never notice: pvxs and p4p clients zero-fill what they didn't
+receive. The Java `org.epics.pva` client behind Phoebus/CS-Studio and the EPICS
+Archiver Appliance does not — it leaves an untransmitted string as `null`, which
+is enough to make the archiver throw an NPE on `alarm.message` when it saves a
+channel's metadata. **If an archiver or Phoebus reports nulls or missing metadata
+for a PV that looks fine from Python, this is why.**
+
+`initial_update=` picks the behaviour per PV:
+
+```python
+from p4pillon.server.raw import InitialUpdate
+from p4pillon.server.thread import SharedPV
+
+pv = SharedPV(nt=NTScalar("d", display=True), initial={"value": 1.0}, initial_update=InitialUpdate.COMPLETE)
+```
+
+| State | Meaning |
+| ----- | ------- |
+| `DEFAULT` | defer to whatever serves this PV *(the default)* |
+| `COMPLETE` | the whole structure, as a real IOC does |
+| `AS_POSTED` | only the fields marked since `open()` — p4p's own behaviour |
+
+`DEFAULT` is resolved to `COMPLETE` by everything in
+[`p4pillon.server.records`](record-fields.md) — `StaticRecordProvider`,
+`IOCMimicProvider` and `IOCMimicServer` — since those exist to mimic an IOC.
+Everywhere else, including p4pillon's own `Server` above, `DEFAULT` falls back
+to `AS_POSTED`, so nothing changes for existing code unless you ask. An explicit
+`COMPLETE` or `AS_POSTED` is always honoured: your choice outranks the server's.
+
 ## Where to go next
 
 - [Building PVs](building-pvs.md) — the recipes this server builds.

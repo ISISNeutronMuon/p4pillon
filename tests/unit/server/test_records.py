@@ -17,6 +17,7 @@ from functools import cache
 
 import numpy
 import pytest
+from p4p import Value
 from p4p.client.asyncio import Context as AsyncContext
 from p4p.client.thread import Context, RemoteError, TimeoutError
 from p4p.nt import NTEnum, NTNDArray, NTScalar, NTTable
@@ -24,6 +25,7 @@ from p4p.server import DynamicProvider, Server, StaticProvider
 from p4p.server.asyncio import SharedPV as RawAsyncSharedPV
 
 from p4pillon.server.asyncio import SharedPV as AsyncSharedPV
+from p4pillon.server.raw import InitialUpdate
 from p4pillon.server.records import (
     FIELD_NAMES,
     STRING_FIELDS,
@@ -49,6 +51,21 @@ def _stamp_of(value) -> float:
     that came back from a `current()`/`get()` wrapper already has `.timestamp`.
     """
     return value["timeStamp.secondsPastEpoch"] + value["timeStamp.nanoseconds"] / 1e9
+
+
+def _leaves(value) -> set[str]:
+    """Every leaf field path in a raw Value, dotted ("alarm.message", ...).
+
+    Compared against `changedSet(expand=True)` to assert a value is *fully*
+    marked; see `TestFieldValuesAreFullyMarked`.
+    """
+    leaves = set()
+    for name, sub in value.items():
+        if isinstance(sub, Value):
+            leaves |= {f"{name}.{leaf}" for leaf in _leaves(sub)}
+        else:
+            leaves.add(name)
+    return leaves
 
 
 class TestInferRtyp:
@@ -248,6 +265,153 @@ class TestBuildRecordFields:
         after = time.time()
 
         assert before <= _stamp_of(built["RTYP"]) <= after
+
+
+class TestFieldValuesAreFullyMarked:
+    """Every field value must have its *whole* structure marked as changed.
+
+    pvAccess only puts marked fields on the wire, and a field sub-PV is
+    open()'d once and never post()'d -- so an unmarked alarm/timeStamp is
+    simply never sent. p4p and pvxs clients zero-fill what they didn't
+    receive, which hides it; the Java org.epics.pva client leaves an
+    untransmitted string as null, and the EPICS Archiver Appliance then
+    NPEs flattening alarm.message into its metadata map. A real IOC sends
+    the complete structure on a first get/monitor update.
+    """
+
+    # The leaves that used to go missing. alarm.message is the one that
+    # actually crashed the archiver; the others share the same cause.
+    UNSENT = frozenset({"alarm.message", "alarm.severity", "alarm.status", "timeStamp.userTag"})
+
+    def test_every_built_field_is_fully_marked(self):
+        built = build_record_fields("PV:NAME", "d", description="hello")
+
+        assert set(built) == FIELD_NAMES  # no field escapes the loop below
+        for fieldname, value in built.items():
+            marked = value.changedSet(expand=True)
+            assert _leaves(value) <= marked, f"{fieldname} has unmarked leaves"
+            assert marked >= self.UNSENT, fieldname
+
+    def test_enum_backed_field_is_fully_marked(self):
+        # DTYP is an NTEnum, so its "value" is a substructure (value.index,
+        # value.choices) rather than a leaf -- marking must reach into it.
+        built = build_record_fields("PV:NAME", "d")
+
+        marked = built["DTYP"].changedSet(expand=True)
+        assert {"value.index", "value.choices"} <= marked
+        assert marked >= self.UNSENT
+
+    def test_static_provider_sends_the_whole_structure(self):
+        # The assertion that reproduces the archiver failure: a builder-only
+        # check would pass even if the value lost its marks before open().
+        provider = StaticRecordProvider("test")
+        provider.add("PV:NAME", _pv(), valtype="d")
+
+        with Server(providers=[provider], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            for field in ("RTYP", "DESC", "NAME", "SCAN", "DTYP"):
+                received = c.get(f"PV:NAME.{field}").raw.changedSet()
+                assert received >= self.UNSENT, f"{field} arrived missing {sorted(self.UNSENT - received)}"
+
+    def test_dynamic_provider_sends_the_whole_structure(self):
+        # Same, for the lazy path -- makeChannel() builds per connection.
+        provider = IOCMimicProvider("test")
+        provider.add("PV:NAME", _pv(), valtype="d")
+
+        with (
+            Server(providers=[*provider.providers], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            for field in ("RTYP", "DESC", "NAME", "SCAN", "DTYP"):
+                received = c.get(f"PV:NAME.{field}").raw.changedSet()
+                assert received >= self.UNSENT, f"{field} arrived missing {sorted(self.UNSENT - received)}"
+
+    def test_set_desc_record_posts_a_fully_marked_value(self):
+        # set_desc_record builds its value directly rather than through
+        # _build_one_field, so it needs the marking of its own.
+        provider = StaticRecordProvider("test")
+        provider.add("PV:NAME", _pv_with_description("hello"))
+
+        with Server(providers=[provider], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            provider.set_desc_record("PV:NAME", "goodbye")
+            for field in ("DESC", "DESC$"):
+                got = c.get(f"PV:NAME.{field}")
+                assert got == "goodbye"
+                assert got.raw.changedSet() >= self.UNSENT, field
+
+
+class TestBasePVSendsTheWholeStructure:
+    """The same wire-format requirement as `TestFieldValuesAreFullyMarked`, for
+    the *base* PV rather than its "<name>.<FIELD>" sub-PVs. Everything here
+    exists to mimic an IOC, and an IOC sends the complete structure on a first
+    get/monitor update -- so every entry point resolves a PV left on
+    `InitialUpdate.DEFAULT` to `~InitialUpdate.COMPLETE`.
+    """
+
+    # The string leaves an org.epics.pva client would otherwise see as null.
+    UNSENT = frozenset({"alarm.message", "display.description", "display.units"})
+
+    @staticmethod
+    def _base_pv(**kwargs):
+        return SharedPV(nt=NTScalar("d", display=True, valueAlarm=True), initial={"value": 1.234}, **kwargs)
+
+    def _assert_complete(self, context, name):
+        received = context.get(name).raw.changedSet(expand=True)
+        assert received >= self.UNSENT, f"{name} arrived missing {sorted(self.UNSENT - received)}"
+        assert "valueAlarm.highAlarmLimit" in received
+
+    def test_static_provider(self):
+        provider = StaticRecordProvider("test")
+        provider.add("PV:NAME", self._base_pv())
+
+        with Server(providers=[provider], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            self._assert_complete(c, "PV:NAME")
+
+    def test_static_provider_without_record_fields(self):
+        # The wire format is fixed for every PV served, not just record-like
+        # ones -- record_fields=False opts out of sub-PVs, not out of this.
+        provider = StaticRecordProvider("test")
+        provider.add("PV:NAME", self._base_pv(), record_fields=False)
+
+        with Server(providers=[provider], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            self._assert_complete(c, "PV:NAME")
+
+    def test_dynamic_provider(self):
+        provider = IOCMimicProvider("test")
+        provider.add("PV:NAME", self._base_pv())
+
+        with (
+            Server(providers=[*provider.providers], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            self._assert_complete(c, "PV:NAME")
+
+    def test_ioc_mimic_server_dict(self):
+        with (
+            IOCMimicServer(providers=[{"PV:NAME": self._base_pv()}], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            self._assert_complete(c, "PV:NAME")
+
+    def test_explicit_opt_out_is_respected(self):
+        # A caller who asked for p4p's own behaviour keeps it: their choice
+        # outranks the provider's.
+        provider = IOCMimicProvider("test")
+        provider.add("PV:NAME", self._base_pv(initial_update=InitialUpdate.AS_POSTED))
+
+        with (
+            Server(providers=[*provider.providers], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            assert c.get("PV:NAME").raw.changedSet() == {"value"}
+
+    def test_plain_p4p_server_is_unchanged(self):
+        # The negative control for the whole feature: outside
+        # p4pillon.server.records, DEFAULT still means p4p's behaviour.
+        provider = StaticProvider("test")
+        provider.add("PV:NAME", self._base_pv())
+
+        with Server(providers=[provider], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            assert c.get("PV:NAME").raw.changedSet() == {"value"}
 
 
 class TestRecordFieldOverridesTyping:
@@ -678,7 +842,7 @@ class TestIOCMimicServer:
         # A provider name string and an already-constructed provider instance
         # (including an explicit StaticRecordProvider) aren't dicts -- must be
         # forwarded to p4p.server.Server as-is, with no extra DynamicProvider
-        # built for them (see _dynamic_fields_provider).
+        # built for them (see _expand_mapping).
         explicit = StaticRecordProvider("explicit")
         explicit.add("EXPLICIT:PV", _pv())
 
@@ -723,7 +887,7 @@ class TestIOCMimicServer:
 
     def test_dict_provider_all_non_inferrable_adds_no_field_provider(self):
         # If no dict entry is record-like, no DynamicProvider is built at all
-        # (an empty registry -> None from _dynamic_fields_provider).
+        # (an empty registry -> None from _expand_mapping).
         pvs = {"EXAMPLE:IMG": SharedPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))}
         with IOCMimicServer(providers=[pvs], isolate=True) as s:
             assert s._keep_alive == []

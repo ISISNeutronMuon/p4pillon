@@ -8,7 +8,9 @@ registry-driven alternative, `.server` for `IOCMimicServer` (which uses
 from p4p.server import StaticProvider
 from p4p.server.raw import SharedPV as _SharedPVBase
 
-from ._util import _KeysContainerMixin
+from p4pillon.utils import mark_all
+
+from ._util import _apply_ioc_initial_update, _KeysContainerMixin
 from .fields import (
     RecordFieldOverrides,
     _desc_field_value,
@@ -107,23 +109,25 @@ class StaticRecordProvider(_KeysContainerMixin, StaticProvider):
             # the base PV alone, as with record_fields=False (see the docstring).
             record_fields = False
 
+        field_pvs: dict[str, _SharedPVBase] = {}
+        if record_fields:
+            # Validate and build everything *before* the first super().add() --
+            # a failure (e.g. a bad menu choice) must not leave the base PV
+            # half-added with no sub-PVs. That is also why the widening below
+            # sits here rather than at the top of add(): a raise must leave `pv`
+            # untouched.
+            valtype, description = _resolve_valtype_and_description(pv, valtype)
+            built = build_record_fields(
+                name, valtype, dtyp_choices=dtyp_choices, fields=fields, pv=pv, description=description
+            )
+            pv_factory = _flavor_matched_pv_factory(pv)
+            field_pvs = {fieldname: _field_shared_pv(value, pv_factory) for fieldname, value in built.items()}
+
+        _apply_ioc_initial_update(pv)
+        super().add(name, pv)
         if not record_fields:
-            super().add(name, pv)
             return
 
-        # Validate and build everything *before* the first super().add() --
-        # a failure (e.g. a bad menu choice) must not leave the base PV
-        # half-added with no sub-PVs.
-        valtype, description = _resolve_valtype_and_description(pv, valtype)
-        built = build_record_fields(
-            name, valtype, dtyp_choices=dtyp_choices, fields=fields, pv=pv, description=description
-        )
-        pv_factory = _flavor_matched_pv_factory(pv)
-        field_pvs: dict[str, _SharedPVBase] = {
-            fieldname: _field_shared_pv(value, pv_factory) for fieldname, value in built.items()
-        }
-
-        super().add(name, pv)
         for fieldname, field_pv in field_pvs.items():
             super().add(f"{name}.{fieldname}", field_pv)
         self._field_pvs[name] = field_pvs
@@ -140,7 +144,7 @@ class StaticRecordProvider(_KeysContainerMixin, StaticProvider):
         # right, and the record hasn't processed. Without it the posted value
         # would carry wrap()'s unset 0s 0ns and land on the client as
         # 1970-01-01 (see `~p4pillon.server.records.fields._stamp`).
-        wrapped = _stamp(_desc_field_value(description), None)
+        wrapped = mark_all(_stamp(_desc_field_value(description), None))
         field_pvs["DESC"].post(wrapped)
         field_pvs["DESC$"].post(wrapped)
 

@@ -6,9 +6,10 @@ from collections import OrderedDict
 
 import pytest
 from p4p import Type, Value
+from p4p._p4p import SharedPV as _RawSharedPV
 
 from p4pillon.nt import NTEnum, NTScalar
-from p4pillon.server.raw import Handler, SharedPV
+from p4pillon.server.raw import Handler, InitialUpdate, SharedPV
 from p4pillon.sharednt import SharedNT
 
 
@@ -197,6 +198,33 @@ def test_value_only():
     testpv = SharedNT(initial=value_for_test)
 
     assert isinstance(testpv.handler, SharedPV._DummyHandler)  # pylint: disable=W0212
+
+
+class TestInitialUpdatePassthrough:
+    """``initial_update=`` is a `HandlerHooksMixin` constructor argument, and
+    `SharedNTMixin.__init__` forwards its ``**kwargs`` -- so it must reach a
+    `SharedNT` unchanged, without the rules its handlers install interfering."""
+
+    @staticmethod
+    def _pv(**kwargs) -> SharedNT:
+        return SharedNT(nt=NTScalar("d", valueAlarm=True), initial={"value": 1.0}, **kwargs)
+
+    def test_complete_reaches_the_pv(self):
+        pv = self._pv(initial_update=InitialUpdate.COMPLETE)
+        mask = _RawSharedPV.current(pv).changedSet(expand=True)
+        assert {"alarm.message", "valueAlarm.highAlarmLimit"} <= mask
+
+    def test_default_leaves_the_mask_as_the_handlers_left_it(self):
+        pv = self._pv()
+        assert "alarm.message" not in _RawSharedPV.current(pv).changedSet(expand=True)
+
+    def test_no_rule_fires_at_open(self):
+        # Marking happens *after* the handler hook, so is_applicable() must not
+        # see the whole structure as changed. A rule that fired would raise the
+        # alarm on a value inside its (default, zero) limits.
+        complete = self._pv(initial_update=InitialUpdate.COMPLETE)
+        as_posted = self._pv(initial_update=InitialUpdate.AS_POSTED)
+        assert _RawSharedPV.current(complete)["alarm"].todict() == _RawSharedPV.current(as_posted)["alarm"].todict()
 
 
 class TestControl:
