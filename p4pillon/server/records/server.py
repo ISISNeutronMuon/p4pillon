@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from p4p.server import DynamicProvider as _DynamicProvider
 from p4p.server import Server as _Server
 
+from ._util import _apply_ioc_initial_update
 from .dynamic import DynamicRecordFields, IOCMimicProvider, _make_field_provider
 from .fields import RegistryEntry, _resolve_valtype_and_description, _should_serve_record_fields
 
@@ -32,10 +33,14 @@ def _with_order(item: _T, order: int | None) -> tuple[_T, int] | _T:
     return (item, order) if order is not None else item
 
 
-def _dynamic_fields_provider(provider: object) -> _DynamicProvider | None:
-    # Builds the extra DynamicRecordFields provider for a plain-dict entry's
-    # "<name>.<FIELD>" sub-PVs (see the class docstring); non-dict entries
-    # need none.
+def _expand_mapping(provider: object) -> _DynamicProvider | None:
+    # Prepares a plain-dict entry: gives every base PV in it an IOC's
+    # first-update wire behaviour, and builds the extra DynamicRecordFields
+    # provider for the record-like ones' "<name>.<FIELD>" sub-PVs (see the class
+    # docstring). Non-dict entries need neither.
+    #
+    # This is the only point that sees a dict's base PVs -- they are otherwise
+    # served by the StaticProvider p4p.server.Server builds for the dict.
     if not isinstance(provider, Mapping):
         return None
     # isinstance only narrows to a bare Mapping; the key/value types are our
@@ -43,6 +48,9 @@ def _dynamic_fields_provider(provider: object) -> _DynamicProvider | None:
     mapping = cast("Mapping[str, _SharedPVBase]", provider)
     registry: dict[str, RegistryEntry] = {}
     for name, pv in mapping.items():
+        # Before the skip below, not after: the wire format applies to every PV
+        # in the dict, record-like or not.
+        _apply_ioc_initial_update(pv)
         if not _should_serve_record_fields(pv, None):
             # Not record-like: the base PV is still served (by Server's own
             # StaticProvider for the dict), just with no sub-PVs, as an IOC
@@ -91,7 +99,7 @@ def _expand_providers(providers: list[Any]) -> tuple[list[Any], list[Any]]:
             keep_alive.append(provider)
             continue
         wrapped.append(_with_order(provider, order))
-        fields_provider = _dynamic_fields_provider(provider)
+        fields_provider = _expand_mapping(provider)
         if fields_provider is not None:
             keep_alive.append(fields_provider)
             wrapped.append(fields_provider)

@@ -25,6 +25,7 @@ from p4p.server import DynamicProvider, Server, StaticProvider
 from p4p.server.asyncio import SharedPV as RawAsyncSharedPV
 
 from p4pillon.server.asyncio import SharedPV as AsyncSharedPV
+from p4pillon.server.raw import InitialUpdate
 from p4pillon.server.records import (
     FIELD_NAMES,
     STRING_FIELDS,
@@ -336,6 +337,81 @@ class TestFieldValuesAreFullyMarked:
                 got = c.get(f"PV:NAME.{field}")
                 assert got == "goodbye"
                 assert got.raw.changedSet() >= self.UNSENT, field
+
+
+class TestBasePVSendsTheWholeStructure:
+    """The same wire-format requirement as `TestFieldValuesAreFullyMarked`, for
+    the *base* PV rather than its "<name>.<FIELD>" sub-PVs. Everything here
+    exists to mimic an IOC, and an IOC sends the complete structure on a first
+    get/monitor update -- so every entry point resolves a PV left on
+    `InitialUpdate.DEFAULT` to `~InitialUpdate.COMPLETE`.
+    """
+
+    # The string leaves an org.epics.pva client would otherwise see as null.
+    UNSENT = frozenset({"alarm.message", "display.description", "display.units"})
+
+    @staticmethod
+    def _base_pv(**kwargs):
+        return SharedPV(nt=NTScalar("d", display=True, valueAlarm=True), initial={"value": 1.234}, **kwargs)
+
+    def _assert_complete(self, context, name):
+        received = context.get(name).raw.changedSet(expand=True)
+        assert received >= self.UNSENT, f"{name} arrived missing {sorted(self.UNSENT - received)}"
+        assert "valueAlarm.highAlarmLimit" in received
+
+    def test_static_provider(self):
+        provider = StaticRecordProvider("test")
+        provider.add("PV:NAME", self._base_pv())
+
+        with Server(providers=[provider], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            self._assert_complete(c, "PV:NAME")
+
+    def test_static_provider_without_record_fields(self):
+        # The wire format is fixed for every PV served, not just record-like
+        # ones -- record_fields=False opts out of sub-PVs, not out of this.
+        provider = StaticRecordProvider("test")
+        provider.add("PV:NAME", self._base_pv(), record_fields=False)
+
+        with Server(providers=[provider], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            self._assert_complete(c, "PV:NAME")
+
+    def test_dynamic_provider(self):
+        provider = IOCMimicProvider("test")
+        provider.add("PV:NAME", self._base_pv())
+
+        with (
+            Server(providers=[*provider.providers], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            self._assert_complete(c, "PV:NAME")
+
+    def test_ioc_mimic_server_dict(self):
+        with (
+            IOCMimicServer(providers=[{"PV:NAME": self._base_pv()}], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            self._assert_complete(c, "PV:NAME")
+
+    def test_explicit_opt_out_is_respected(self):
+        # A caller who asked for p4p's own behaviour keeps it: their choice
+        # outranks the provider's.
+        provider = IOCMimicProvider("test")
+        provider.add("PV:NAME", self._base_pv(initial_update=InitialUpdate.AS_POSTED))
+
+        with (
+            Server(providers=[*provider.providers], isolate=True) as s,
+            Context("pva", conf=s.conf(), useenv=False) as c,
+        ):
+            assert c.get("PV:NAME").raw.changedSet() == {"value"}
+
+    def test_plain_p4p_server_is_unchanged(self):
+        # The negative control for the whole feature: outside
+        # p4pillon.server.records, DEFAULT still means p4p's behaviour.
+        provider = StaticProvider("test")
+        provider.add("PV:NAME", self._base_pv())
+
+        with Server(providers=[provider], isolate=True) as s, Context("pva", conf=s.conf(), useenv=False) as c:
+            assert c.get("PV:NAME").raw.changedSet() == {"value"}
 
 
 class TestRecordFieldOverridesTyping:
@@ -766,7 +842,7 @@ class TestIOCMimicServer:
         # A provider name string and an already-constructed provider instance
         # (including an explicit StaticRecordProvider) aren't dicts -- must be
         # forwarded to p4p.server.Server as-is, with no extra DynamicProvider
-        # built for them (see _dynamic_fields_provider).
+        # built for them (see _expand_mapping).
         explicit = StaticRecordProvider("explicit")
         explicit.add("EXPLICIT:PV", _pv())
 
@@ -811,7 +887,7 @@ class TestIOCMimicServer:
 
     def test_dict_provider_all_non_inferrable_adds_no_field_provider(self):
         # If no dict entry is record-like, no DynamicProvider is built at all
-        # (an empty registry -> None from _dynamic_fields_provider).
+        # (an empty registry -> None from _expand_mapping).
         pvs = {"EXAMPLE:IMG": SharedPV(nt=NTNDArray(), initial=numpy.zeros((4, 4)))}
         with IOCMimicServer(providers=[pvs], isolate=True) as s:
             assert s._keep_alive == []

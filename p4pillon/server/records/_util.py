@@ -1,9 +1,32 @@
-"""Shared internal helpers for `.static`/`.dynamic`'s record providers."""
+"""Shared internal helpers for `.static`/`.dynamic`/`.server`'s record providers."""
 
 from collections.abc import Collection, Iterator
 from typing import TYPE_CHECKING
 
+from p4pillon.server.raw import InitialUpdate, apply_initial_update
+
+if TYPE_CHECKING:
+    from p4p.server.raw import SharedPV as _SharedPVBase
+
 __all__ = ()
+
+
+def _apply_ioc_initial_update(pv: "_SharedPVBase") -> None:
+    """Give `pv` an IOC's first-update wire behaviour, unless its owner asked
+    for something else.
+
+    Everything in `p4pillon.server.records` exists to mimic an IOC, and a real
+    IOC sends the complete structure on a first get/monitor update rather than
+    only the fields that happen to have been marked -- so every entry point
+    here resolves a PV left on `~p4pillon.server.raw.InitialUpdate.DEFAULT` to
+    `~p4pillon.server.raw.InitialUpdate.COMPLETE`. A PV constructed with an
+    explicit ``initial_update=`` keeps it.
+
+    Applied to every base PV served, record-like or not: two record providers
+    differing on the wire would be a bug report of its own, and the fix is
+    about the wire format, not about record fields.
+    """
+    apply_initial_update(pv, InitialUpdate.COMPLETE)
 
 
 class _KeysContainerMixin:

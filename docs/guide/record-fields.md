@@ -57,6 +57,12 @@ once and never posted again. Sending a partial structure is invisible to p4p
 and pvxs clients, which zero-fill what they didn't receive, but the Java
 `org.epics.pva` client leaves an untransmitted string as `null`.)
 
+The **base** PV gets the same treatment: any of the three options below resolves
+a PV left on the default `InitialUpdate.DEFAULT` to `COMPLETE`, so it too sends
+its whole structure on a first update. Pass an explicit `initial_update=` to the
+PV to opt out — see
+[what a client's first update contains](server.md#what-a-clients-first-update-contains).
+
 Verified against `examples/asyncio/ioc_fields_server.py`:
 
 ```console
