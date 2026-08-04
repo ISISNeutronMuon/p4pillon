@@ -101,9 +101,7 @@ for a PV that looks fine from Python, this is why.**
 from p4pillon.server.raw import InitialUpdate
 from p4pillon.server.thread import SharedPV
 
-pv = SharedPV(nt=NTScalar("d", display=True),
-              initial={"value": 1.0},
-              initial_update=InitialUpdate.COMPLETE)
+pv = SharedPV(nt=NTScalar("d", display=True), initial={"value": 1.0}, initial_update=InitialUpdate.COMPLETE)
 ```
 
 | State | Meaning |
