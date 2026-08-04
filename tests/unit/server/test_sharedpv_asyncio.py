@@ -3,9 +3,13 @@ import asyncio
 import numpy
 import pytest
 import pytest_asyncio
+from p4p._p4p import SharedPV as _RawSharedPV
 from p4p.nt import NTNDArray, NTScalar
 
 from p4pillon.server.asyncio import Handler, SharedPV
+from p4pillon.server.raw import InitialUpdate, apply_initial_update
+
+_NULLABLE_LEAVES = frozenset({"alarm.message", "display.description", "display.units"})
 
 
 class TestAsyncioHandler:
@@ -109,4 +113,47 @@ class TestAsyncioPostDeferred:
         pv.open(0.0)
         with pytest.raises(RuntimeError, match="boom"):
             await asyncio.wrap_future(pv.post_deferred(1.0))
+        pv.close()
+
+
+class TestInitialUpdate:
+    """The asyncio flavor's half of the `InitialUpdate` tests -- see
+    ``test_sharedpv_thread.py`` for the shared behaviour. What is flavor-specific
+    here is that `apply_initial_update` must work *off* the event loop: a
+    provider's ``add()`` legitimately runs on another thread, and this flavor's
+    `_hook_guard` raises there."""
+
+    @staticmethod
+    def _pv(**kwargs) -> SharedPV:
+        return SharedPV(nt=NTScalar("d", display=True, valueAlarm=True), initial={"value": 1.0}, **kwargs)
+
+    @staticmethod
+    def _stored_mask(pv) -> set[str]:
+        return set(_RawSharedPV.current(pv).changedSet(expand=True))
+
+    async def test_complete_marks_every_leaf(self):
+        pv = self._pv(initial_update=InitialUpdate.COMPLETE)
+        assert self._stored_mask(pv) >= _NULLABLE_LEAVES
+        pv.close()
+
+    async def test_default_marks_only_what_was_posted(self):
+        pv = self._pv()
+        assert self._stored_mask(pv) == {"value"}
+        pv.close()
+
+    async def test_apply_initial_update_from_a_non_loop_thread(self):
+        pv = self._pv()
+        # A plain pv.post() here would raise: _hook_guard asserts event-loop
+        # affinity for anything but "close". apply_initial_update takes
+        # _hook_lock directly, so it doesn't.
+        await asyncio.to_thread(apply_initial_update, pv, InitialUpdate.COMPLETE)
+        assert self._stored_mask(pv) >= _NULLABLE_LEAVES
+        pv.close()
+
+    async def test_post_from_a_non_loop_thread_still_raises(self):
+        # Guards the test above against passing for the wrong reason -- if
+        # off-loop posting became legal, it would prove nothing.
+        pv = self._pv()
+        with pytest.raises(RuntimeError):
+            await asyncio.to_thread(pv.post, 2.0)
         pv.close()

@@ -16,7 +16,8 @@ import threading
 from abc import ABC
 from collections.abc import Callable
 from concurrent.futures import Future
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, nullcontext
+from enum import Enum
 from typing import Any
 
 from p4p import Value
@@ -24,7 +25,40 @@ from p4p._p4p import SharedPV as _RawSharedPV
 from p4p.server.raw import Handler as _P4PHandler
 from p4p.server.raw import SharedPV as _SharedPV
 
-__all__ = ("Handler", "HandlerHooksMixin", "SharedPV")
+from p4pillon.utils import mark_all
+
+__all__ = ("Handler", "HandlerHooksMixin", "InitialUpdate", "SharedPV", "apply_initial_update")
+
+# Stand-in for the lock a plain p4p SharedPV doesn't have; stateless and
+# re-entrant, so one shared instance serves every call.
+_NO_LOCK = nullcontext()
+
+
+class InitialUpdate(Enum):
+    """What a `SharedPV` puts on the wire for a client's first get/monitor update.
+
+    pvAccess transmits only the fields a `~p4p.Value` has *marked* as changed,
+    and a PV's stored mask is the union of everything marked since `open()`.
+    ``NTScalar(...).wrap(v)`` marks only ``value``, so a PV that is opened and
+    never posted to serves a structure in which ``alarm.*``, ``display.*`` and
+    ``valueAlarm.*`` never reach a client at all. A real IOC (QSRV) instead
+    sends the complete structure and signals "unset" in-band.
+
+    Clients which zero-fill what they did not receive (pvxs, p4p) hide the
+    difference; the Java ``org.epics.pva`` client behind Phoebus/CS-Studio and
+    the EPICS Archiver Appliance leaves an untransmitted string as ``null``.
+    """
+
+    DEFAULT = "default"
+    """Defer to whatever serves this PV. The providers and server of
+    `p4pillon.server.records` resolve this to `COMPLETE`; everywhere else it
+    falls back to `AS_POSTED`."""
+
+    COMPLETE = "complete"
+    """The whole structure, as a real IOC does."""
+
+    AS_POSTED = "as posted"
+    """Only the fields marked since `open()` -- p4p's own behaviour."""
 
 
 class Handler(_P4PHandler, ABC):
@@ -96,10 +130,14 @@ class HandlerHooksMixin:
     _wrap: Any
     _unwrap: Any
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        # The base __init__ calls self.open(initial), which acquires the
-        # lock, so it must exist first.
+    def __init__(self, *args: Any, initial_update: InitialUpdate = InitialUpdate.DEFAULT, **kwargs: Any) -> None:
+        """:param InitialUpdate initial_update: what to put on the wire for a
+        client's first update; see `InitialUpdate`.
+        """
+        # The base __init__ calls self.open(initial), which acquires the lock
+        # and reads _initial_update, so both must exist first.
         self._hook_lock = threading.RLock()
+        self._initial_update = initial_update
         super().__init__(*args, **kwargs)
 
     def _hook_guard(self, what: str) -> AbstractContextManager[Any]:  # noqa: ARG002 - `what` is the subclass seam (see asyncio flavor)
@@ -139,6 +177,12 @@ class HandlerHooksMixin:
             open_fn = getattr(self._handler, "open", None)
             if open_fn is not None:
                 open_fn(v)
+
+            # After the hook, never before: marking first would make every
+            # rule's is_applicable() see the whole structure as changed and
+            # fire at open (see `p4pillon.rules.rules.BaseRule.is_applicable`).
+            if self._initial_update is InitialUpdate.COMPLETE:
+                mark_all(v)
 
             # Bypass p4p.server.raw.SharedPV.open(), which would wrap() v a
             # second time.
@@ -272,3 +316,44 @@ class SharedPV(HandlerHooksMixin, _SharedPV):
     transform to/from :py:class:`Value` and more convienent Python types.
     See :ref:`unwrap`
     """
+
+
+def apply_initial_update(pv: _RawSharedPV, mode: InitialUpdate) -> None:
+    """Resolve `pv`'s `~InitialUpdate.DEFAULT` to `mode`, retroactively if it is
+    already open.
+
+    The seam every "decided by whatever serves this PV" opt-in point calls, just
+    before it starts serving `pv`. A PV constructed with an explicit
+    `~InitialUpdate.COMPLETE` or `~InitialUpdate.AS_POSTED` keeps it -- the
+    caller's choice outranks the server's -- and so is left untouched.
+
+    Retroactive because `p4p.server.raw.SharedPV.__init__` calls
+    ``self.open(initial)``: a PV built with ``initial=`` is already open, with
+    its change mask already fixed, before any provider sees it. Setting the
+    attribute alone would only take effect on a subsequent `open()`.
+
+    Accepts a plain p4p `~p4p.server.raw.SharedPV` too; that just can't carry
+    the setting across a `close()`/`open()`, since it has no `HandlerHooksMixin`
+    `open()` to read it.
+    """
+    if mode is InitialUpdate.DEFAULT:
+        return
+
+    # None distinguishes "no HandlerHooksMixin, so no attribute to carry the
+    # setting" from "has one, still on DEFAULT".
+    current = getattr(pv, "_initial_update", None)
+    if current is not None:
+        if current is not InitialUpdate.DEFAULT:
+            return  # explicitly set by the caller; not ours to override
+        pv._initial_update = mode  # the attribute this seam exists to set
+
+    if mode is not InitialUpdate.COMPLETE or not pv.isOpen():
+        return
+
+    # Deliberately bypasses the handlers: this corrects the wire format, it
+    # does not change a value, so no rule should re-stamp it or re-evaluate an
+    # alarm for it. _hook_lock rather than _hook_guard("post") -- the asyncio
+    # flavor's guard asserts event-loop affinity, and a provider's add()
+    # legitimately runs off-loop.
+    with getattr(pv, "_hook_lock", None) or _NO_LOCK:
+        _RawSharedPV.post(pv, mark_all(_RawSharedPV.current(pv)))

@@ -17,7 +17,7 @@ from p4p.server.raw import SharedPV as _SharedPVBase
 
 from p4pillon.nt import NTEnum, NTScalar
 from p4pillon.nt.identify import NTType, id_nttype_type
-from p4pillon.utils import as_raw, time_in_seconds_and_nanoseconds
+from p4pillon.utils import as_raw, mark_all, time_in_seconds_and_nanoseconds
 
 if TYPE_CHECKING:
     import weakref
@@ -588,8 +588,11 @@ def _build_one_field(
     timestamp: tuple[int, int] | None = None,
 ) -> Value:
     """The initial `~p4p.Value` for "<name>.<fieldname>", stamped with
-    `timestamp` (or "now" when it is `None`; see `_stamp`)."""
-    return _stamp(_build_one_field_value(fieldname, name, valtype, dtyp_choices, fields, description), timestamp)
+    `timestamp` (or "now" when it is `None`; see `_stamp`) and fully marked
+    (see `~p4pillon.utils.mark_all` -- a field sub-PV is `open()`-ed once and
+    never `post()`-ed, so nothing else would ever widen its change mask)."""
+    value = _build_one_field_value(fieldname, name, valtype, dtyp_choices, fields, description)
+    return mark_all(_stamp(value, timestamp))
 
 
 def build_record_fields(

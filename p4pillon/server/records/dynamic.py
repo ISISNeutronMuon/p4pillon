@@ -13,7 +13,7 @@ from p4p.server import DynamicProvider as _DynamicProvider
 from p4p.server import StaticProvider as _StaticProvider
 from p4p.server.raw import SharedPV as _SharedPVBase
 
-from ._util import _KeysContainerMixin
+from ._util import _apply_ioc_initial_update, _KeysContainerMixin
 from .fields import (
     FIELD_NAMES,
     RecordFieldOverrides,
@@ -235,16 +235,19 @@ class IOCMimicProvider(_KeysContainerMixin):
             # as with record_fields=False (see StaticRecordProvider.add).
             record_fields = False
 
+        if record_fields:
+            # Validate *before* the static add() -- a failure (e.g. a bad menu
+            # choice) must not leave the base PV served with add() having
+            # raised. That is also why the widening below sits here rather than
+            # at the top of add(): a raise must leave `pv` untouched.
+            valtype, description = _resolve_valtype_and_description(pv, valtype)
+            _validate_fields(fields, name, dtyp_choices)
+
+        _apply_ioc_initial_update(pv)
+        self._static.add(name, pv)
         if not record_fields:
-            self._static.add(name, pv)
             return
 
-        # Validate *before* the static add() -- a failure (e.g. a bad menu
-        # choice) must not leave the base PV served with add() having raised.
-        valtype, description = _resolve_valtype_and_description(pv, valtype)
-        _validate_fields(fields, name, dtyp_choices)
-
-        self._static.add(name, pv)
         self._registry[name] = {
             "valtype": valtype,
             "dtyp_choices": dtyp_choices,
