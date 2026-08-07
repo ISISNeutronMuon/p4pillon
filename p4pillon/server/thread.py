@@ -1,24 +1,79 @@
+"""Thread-flavored `SharedPV` with open()/post()/close() handler support:
+`p4p.server.thread.SharedPV` composed with
+`~p4pillon.server.raw.HandlerHooksMixin` (see that module's docstring).
 """
-Monkey patch in required changes to Handlers and SharedPVs
-"""
 
-####
-# First override the base class of p4pillon.server.thread.SharedPV with
-# p4pillon.server.raw.SharedPV. This requires us to perform the imports
-# in a very specific order, which means overriding Linter checks
-import p4p.server.raw
+from collections.abc import Callable
+from concurrent.futures import Future
+from typing import Any
 
-from p4pillon.server.raw import SharedPV as _SharedPV
+from p4p.server.thread import SharedPV as _ThreadSharedPV
+from p4p.util import WorkQueue
 
-p4p.server.raw.SharedPV = _SharedPV
+from p4pillon.server.raw import Handler, HandlerHooksMixin
 
-# pylint: disable=unused-import, wrong-import-order, wrong-import-position
-from p4p.server.thread import Handler, SharedPV  # noqa: F401
+__all__ = ("Handler", "SharedPV")
 
-#####
-# Monkey patching the Handler is a simpler operation as it's a straight
-# substitution with our new version.
-# pylint: disable=ungrouped-imports
-from p4pillon.server.raw import Handler as _Handler
 
-Handler = _Handler  # noqa: F811
+class SharedPV(HandlerHooksMixin, _ThreadSharedPV):
+    """`p4p.server.thread.SharedPV` plus the open()/post()/close() handler
+    callbacks -- see `~p4pillon.server.raw.HandlerHooksMixin` for their
+    semantics and locking. Because the C-extension store also happens under
+    the per-PV lock, a read-modify-write against ``pv.current()`` from
+    inside a handler is atomic.
+    """
+
+    # Set by p4p.server.thread.SharedPV.__init__ (the PV's own work queue).
+    _queue: WorkQueue
+
+    def post_deferred(self, value: Any, **kwargs: Any) -> Future[None]:
+        """Enqueue a `post` onto this PV's own work queue, returning a
+        `concurrent.futures.Future` that resolves once it has run there;
+        wrapping and handler exceptions propagate through it.
+
+        Unlike `post`, which runs synchronously on the caller's thread and
+        holds ``_hook_lock`` across the whole hook, ``post_deferred`` hands
+        the work to the queue. That lets a handler fan a change out to
+        *another* PV (``other.post_deferred(v)``) without nesting that PV's
+        lock inside its own -- the lock order forbidden by
+        `~p4pillon.server.raw.HandlerHooksMixin` -- and keeps a failure in
+        the deferred post from aborting the caller's own post: it surfaces on
+        the returned Future instead.
+
+        This is the thread-flavor counterpart of the asyncio flavor's
+        `~p4pillon.server.asyncio.SharedPV.post_deferred` (there, marshalling
+        onto the event loop); both return a `concurrent.futures.Future`, so a
+        handler can defer a post the same way regardless of flavor.
+        """
+        fut: Future[None] = Future()
+
+        # Mirrors asyncio post_deferred: post() is synchronous, so a plain
+        # queued callback suffices, and every exception is routed to the
+        # Future rather than logged-and-swallowed by the queue's _on_queue.
+        def _post() -> None:
+            if not fut.set_running_or_notify_cancel():
+                return
+            try:
+                self.post(value, **kwargs)
+            except BaseException as exc:
+                fut.set_exception(exc)
+                if not isinstance(exc, Exception):
+                    raise
+            else:
+                fut.set_result(None)
+
+        self._queue.push(_post)
+        return fut
+
+    def _exec(self, op: Any, fn: Callable[..., Any], *args: Any) -> None:
+        """Run ``fn`` on the PV's work queue under ``_hook_lock``, so
+        executor-side handlers serialize with the open()/post()/close() hooks.
+
+        ``_run_locked`` is a bound method rather than a closure: _exec is the
+        dispatch funnel for every put/rpc, and the base class already packs
+        extra args into the queued partial."""
+        super()._exec(op, self._run_locked, fn, *args)
+
+    def _run_locked(self, fn: Callable[..., Any], *args: Any) -> None:
+        with self._hook_lock:
+            fn(*args)

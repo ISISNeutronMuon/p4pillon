@@ -115,10 +115,15 @@ def test_server_check_thread():
     assert test_server._context == Context
 
 
-@pytest.mark.xfail(reason="Not sure why this is failing, but probably due to import paths or monkey-patching")
 def test_server_check_thread_isinstance():
+    # _context is the Context *class* the flavor selects; _ctxt is the
+    # instance Server.__init__ builds from it. This used to xfail for two
+    # stacked reasons: it tested isinstance on the class attribute, and
+    # Server.__init__ hard-bound Server._context (the base class attribute,
+    # always p4p.client.raw.Context) instead of self._context, so the
+    # thread flavor's override never took effect.
     test_server = Server(
         prefix="DEV:",
     )
 
-    assert isinstance(test_server._context, Context)
+    assert isinstance(test_server._ctxt, Context)
