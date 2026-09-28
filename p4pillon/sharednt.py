@@ -5,13 +5,12 @@ Wrapper to SharedPV in p4p to automatically create
 from __future__ import annotations
 
 import logging
-from collections import OrderedDict
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from p4p import Type, Value
 
 from p4pillon.composite_handler import CompositeHandler
-from p4pillon.nt.identify import id_nttype, is_scalararray
+from p4pillon.nt.identify import is_scalararray
 from p4pillon.nthandlers import ComposeableRulesHandler
 from p4pillon.rules import (
     AlarmNTEnumRule,
@@ -26,11 +25,15 @@ from p4pillon.rules.rules import (
     BaseRule,
     BaseScalarRule,
     ScalarToArrayWrapperRule,
-    SupportedNTTypes,
 )
 from p4pillon.server.raw import Handler, SharedPV
 
+if TYPE_CHECKING:
+    from collections import OrderedDict
+
 logger = logging.getLogger(__name__)
+
+_HANDLER_DECORATORS_UNSUPPORTED_MSG = "Handler decorators are not currently compatible with multiple handlers."
 
 
 def is_type_subset(fullset: Type, subset: Type) -> bool:
@@ -58,9 +61,10 @@ class SharedNTMixin:
     change its base, so the base has to be chosen via inheritance instead.
     """
 
-    # Deliberately a mutable class attribute: it is the documented extension point for
-    # registering additional rules (see examples/custom_rule/public/imatch_alarm.py).
-    registered_handlers: list[type[BaseRule]] = [  # noqa: RUF012
+    # Deliberately mutable: it is the documented extension point for registering
+    # additional rules (see examples/custom_rule/public/imatch_alarm.py). ClassVar
+    # marks it as class-level, and does not prevent that.
+    registered_handlers: ClassVar[list[type[BaseRule]]] = [
         AlarmRule,
         ControlRule,
         AlarmNTEnumRule,
@@ -99,8 +103,11 @@ class SharedNTMixin:
         if user_handlers:
             handler = handler | user_handlers
 
-        if "timestamp" in handler:
-            handler.move_to_end("timestamp", last=True)  # Ensure timestamp is last
+        # Move run_last rules (e.g. timestamp) to the end so they see the fully
+        # processed value, after both the NT rules and any user handlers.
+        for registered_handler in self.registered_handlers:
+            if registered_handler.run_last and registered_handler.name in handler:
+                handler.move_to_end(registered_handler.name, last=True)
 
         kwargs["handler"] = handler
 
@@ -117,7 +124,8 @@ class SharedNTMixin:
             try:
                 nttype = kwargs["nt"].type
             except AttributeError as exc:
-                raise NotImplementedError("Unable to determine Type of SharedNT") from exc
+                msg = "Unable to determine Type of SharedNT"
+                raise NotImplementedError(msg) from exc
         else:
             if isinstance(kwargs["initial"], Value):
                 nttype = kwargs["initial"].type()
@@ -129,11 +137,7 @@ class SharedNTMixin:
 
     def _setup_auth_handlers(self, auth_handlers) -> CompositeHandler:
         """If an auth_handler has been given then configure a CompositeHandler with it."""
-        if auth_handlers:
-            handler = CompositeHandler(auth_handlers)
-        else:
-            handler = CompositeHandler()
-        return handler
+        return CompositeHandler(auth_handlers) if auth_handlers else CompositeHandler()
 
     @property
     def handler(self) -> CompositeHandler:
@@ -147,32 +151,32 @@ class SharedNTMixin:
     # Re-enable when / if possible
 
     @property
-    def onFirstConnect(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+    def onFirstConnect(self):  # noqa: N802 - mandated by the p4p Handler protocol
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
-    def onLastDisconnect(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+    def onLastDisconnect(self):  # noqa: N802 - mandated by the p4p Handler protocol
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def on_open(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def on_post(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def put(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def rpc(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     @property
     def on_close(self):
-        raise NotImplementedError("Handler decorators are not currently compatible with multiple handlers.")
+        raise NotImplementedError(_HANDLER_DECORATORS_UNSUPPORTED_MSG)
 
     ## Alternative PEP 8 comaptible handler decorators
     # @property
@@ -228,53 +232,38 @@ class SharedNTMixin:
     def __setup_registered_rule(
         self, class_to_instantiate: type[BaseRule], nttype, **kwargs
     ) -> tuple[str | None, ComposeableRulesHandler | None, dict[str, Any]]:
-        """The existence of a single function that does everything suggests this is the wrong approach!"""
+        """Instantiate and wrap a registered rule if it applies to this PV.
 
-        # Examine the class member variables to determine how/whether to setup this Rule
+        Returns ``(name, handler, kwargs)``. ``handler`` is None when the rule
+        does not apply to this PV, in which case ``kwargs`` is unchanged.
+        """
         name = class_to_instantiate.name
-        supported_nttypes = class_to_instantiate.nttypes
-        required_fields = class_to_instantiate.fields
-        wrap_for_array = class_to_instantiate.wrap_for_array
-        auto_add = class_to_instantiate.add_automatically
 
-        # If we're not relying on the rule to provide enough information to configure itself then
-        if not auto_add and name not in kwargs:
+        # Opt-in rules (add_automatically=False) are only added when the caller
+        # supplies configuration for them under their name.
+        if not class_to_instantiate.add_automatically and name not in kwargs:
             return (name, None, kwargs)
 
-        # Perform tests on whether the rule is applicable to the nttype and/or the fields
-        if supported_nttypes:
-            if len(supported_nttypes) == 1 and supported_nttypes == [SupportedNTTypes.ALL]:
-                pass
-            else:
-                matchfound = False
-                type_id = id_nttype(nttype)
-                for supported_nttype in supported_nttypes:
-                    if supported_nttype == type_id:
-                        matchfound = True
-                if not matchfound:
-                    return (name, None, kwargs)
+        # Intrinsic applicability (Type and required fields) is owned by the rule.
+        if not class_to_instantiate.applies_to(nttype):
+            return (name, None, kwargs)
 
-        if required_fields:
-            for required_field in required_fields:
-                if required_field not in nttype:
-                    return (name, None, kwargs)
-
-        # See if there's an attempt to pass arguments to the constructor of this Rule
-        args = {}
-        if name:
-            args = kwargs.pop(name, {})
-
-        # We're clear to instantiate the Rule - it's needed!
+        # Pull any constructor arguments passed under the rule's name, build the
+        # rule, and adapt it to the Handler interface.
+        args = kwargs.pop(name, {}) if name else {}
         instance = class_to_instantiate(**args)
-
-        # Check if we need special handling for array data
-        if wrap_for_array and is_scalararray(nttype):
-            assert isinstance(instance, BaseScalarRule | BaseGatherableRule)
-            composed_instance = ComposeableRulesHandler(ScalarToArrayWrapperRule(instance))
-        else:
-            composed_instance = ComposeableRulesHandler(instance)
+        composed_instance = self.__compose_rule_handler(instance, nttype)
 
         return (name, composed_instance, kwargs)
+
+    def __compose_rule_handler(self, instance: BaseRule, nttype: Type) -> ComposeableRulesHandler:
+        """Adapt a rule instance to a `ComposeableRulesHandler`, inserting the
+        scalar->array adapter when the rule opts in via ``wrap_for_array`` and
+        the PV is an NTScalarArray."""
+        if instance.wrap_for_array and is_scalararray(nttype):
+            assert isinstance(instance, BaseScalarRule | BaseGatherableRule)  # noqa: S101
+            return ComposeableRulesHandler(ScalarToArrayWrapperRule(instance))
+        return ComposeableRulesHandler(instance)
 
 
 class SharedNT(SharedNTMixin, SharedPV):

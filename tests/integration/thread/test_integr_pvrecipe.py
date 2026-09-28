@@ -13,12 +13,15 @@ from pathlib import Path
 import pytest
 import yaml
 from helpers import put_different_value_scalar, put_metadata
+from p4p import Type, Value
 from p4p._p4p import RemoteError
 from p4p.client.thread import Context
+from p4p.nt import NTScalar
 
 from p4pillon.definitions import PVTypes
 from p4pillon.thread.pvrecipe import PVScalarArrayRecipe, PVScalarRecipe
 from p4pillon.thread.server import Server
+from p4pillon.thread.sharednt import SharedNT
 from tests.integration.thread.assertions import (
     assert_correct_alarm_config,
     assert_correct_control_config,
@@ -33,12 +36,12 @@ from tests.integration.thread.assertions import (
 root_dir = Path(__file__).parents[2]
 
 
-with open(f"{root_dir}/integration/ntscalar_config.yml") as f:
+with (root_dir / "integration" / "ntscalar_config.yml").open() as f:
     ntscalar_config = yaml.load(f, Loader=yaml.SafeLoader)
     f.close()
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
+@pytest.mark.parametrize(("pvname", "pv_config"), list(ntscalar_config.items()))
 def test_configs(pvname, yaml_server, pv_config, ctx):
     # NOTE by using pytest and parameterize here we run the test individually
     # per PV in the config file, helping us to identify which PVs are causing
@@ -72,7 +75,7 @@ def test_configs(pvname, yaml_server, pv_config, ctx):
         assert pv_state.get("valueAlarm") is None
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
+@pytest.mark.parametrize(("pvname", "pv_config"), list(ntscalar_config.items()))
 def test_value_change(pvname, yaml_server, pv_config, ctx):
     pvname = yaml_server.prefix + pvname
 
@@ -92,7 +95,7 @@ def test_value_change(pvname, yaml_server, pv_config, ctx):
         assert pvstate == current_state
 
 
-@pytest.mark.parametrize("pvname, pv_config", list(ntscalar_config.items()))
+@pytest.mark.parametrize(("pvname", "pv_config"), list(ntscalar_config.items()))
 def test_field_change(pvname, yaml_server, pv_config, ctx):
     pvname = yaml_server.prefix + pvname
 
@@ -275,27 +278,27 @@ class TestAlarms:
         test_list = [0] * 5
 
         # At start
-        ctx.put(pvname, [-10] + test_list)
+        ctx.put(pvname, [-10, *test_list])
         assert_pv_in_major_alarm_state(pvname, ctx)
-        ctx.put(pvname, [-5] + test_list)
+        ctx.put(pvname, [-5, *test_list])
         assert_pv_in_minor_alarm_state(pvname, ctx)
-        ctx.put(pvname, [0] + test_list)
+        ctx.put(pvname, [0, *test_list])
         assert_pv_not_in_alarm_state(pvname, ctx)
-        ctx.put(pvname, [5] + test_list)
+        ctx.put(pvname, [5, *test_list])
         assert_pv_in_minor_alarm_state(pvname, ctx)
-        ctx.put(pvname, [10] + test_list)
+        ctx.put(pvname, [10, *test_list])
         assert_pv_in_major_alarm_state(pvname, ctx)
 
         # At end
-        ctx.put(pvname, test_list + [-10])
+        ctx.put(pvname, [*test_list, -10])
         assert_pv_in_major_alarm_state(pvname, ctx)
-        ctx.put(pvname, test_list + [-5])
+        ctx.put(pvname, [*test_list, -5])
         assert_pv_in_minor_alarm_state(pvname, ctx)
-        ctx.put(pvname, test_list + [0])
+        ctx.put(pvname, [*test_list, 0])
         assert_pv_not_in_alarm_state(pvname, ctx)
-        ctx.put(pvname, test_list + [5])
+        ctx.put(pvname, [*test_list, 5])
         assert_pv_in_minor_alarm_state(pvname, ctx)
-        ctx.put(pvname, test_list + [10])
+        ctx.put(pvname, [*test_list, 10])
         assert_pv_in_major_alarm_state(pvname, ctx)
 
     @pytest.mark.parametrize("pvtype", [(PVTypes.DOUBLE), (PVTypes.INTEGER)])
@@ -312,7 +315,7 @@ class TestAlarms:
         test_list = [0] * 5
 
         for val in [-10, -5, 0, 5, 10]:
-            ctx.put(pvname, test_list + [val])
+            ctx.put(pvname, [*test_list, val])
             assert_pv_not_in_alarm_state(pvname, ctx)
 
 
@@ -321,7 +324,7 @@ class TestControl:
     of PV types"""
 
     @pytest.mark.parametrize(
-        "pvtype, put_val, expected_val",
+        ("pvtype", "put_val", "expected_val"),
         [
             (PVTypes.DOUBLE, -10, -9),
             (PVTypes.DOUBLE, 0, 0),
@@ -347,7 +350,7 @@ class TestControl:
         assert_value_changed(pvname, expected_val, timestamp, ctx)
 
     @pytest.mark.parametrize(
-        "pvtype, put_val",
+        ("pvtype", "put_val"),
         [
             (PVTypes.DOUBLE, -10),
             (PVTypes.DOUBLE, 0),
@@ -403,7 +406,7 @@ class TestControl:
         assert_value_changed(pvname, new_val, timestamp, ctx)
 
     @pytest.mark.parametrize(
-        "pvtype, put_val, expected_val",
+        ("pvtype", "put_val", "expected_val"),
         [
             (PVTypes.DOUBLE, -10, -9),
             (PVTypes.DOUBLE, 0, 0),
@@ -429,5 +432,58 @@ class TestControl:
         test_list = [0] * (array_length - 1)
 
         timestamp = time.time()
-        ctx.put(pvname, test_list + [put_val])
-        assert_value_changed(pvname, test_list + [expected_val], timestamp, ctx)
+        ctx.put(pvname, [*test_list, put_val])
+        assert_value_changed(pvname, [*test_list, expected_val], timestamp, ctx)
+
+
+class TestValueOnlyPutStampsFreshTimestamp:
+    """A value-only client put must land a *fresh* server timestamp and apply
+    the value, for both NT-typed PVs and hand-built (non-NT) structured types.
+
+    These exercise the put path where the value is re-applied via
+    ``pv.post(op.value())``: for an NT type ``op.value()`` is an unwrapped
+    value carrying ``.raw``, while for a hand-built Type it is a plain ``Value``
+    with no ``.raw``. Both must be processed without error and re-stamped.
+    """
+
+    # A structured Type with a timeStamp field but a non-NT id, so the client
+    # receives it un-unwrapped (ctx.get returns a raw Value, not an ntwrapper).
+    _HAND_BUILT_TYPE = Type(
+        [
+            ("value", "d"),
+            ("timeStamp", ("S", "time_t", [("secondsPastEpoch", "l"), ("nanoseconds", "i")])),
+        ],
+        id="hand:built/Custom",
+    )
+
+    @staticmethod
+    def _read_value_and_seconds(pvname: str, ctx: Context) -> tuple[float, int]:
+        state = ctx.get(pvname)
+        raw = state.raw if hasattr(state, "raw") else state
+        return raw["value"], raw["timeStamp.secondsPastEpoch"]
+
+    def test_nt_type(self, basic_server: Server, ctx: Context):
+        pvname = "TEST:PUTTS:NT"
+        basic_server.add_pv(pvname, SharedNT(nt=NTScalar("d"), initial=0.0))
+        basic_server.start()
+
+        before = int(time.time())
+        ctx.put(pvname, 7.0)
+        time.sleep(0.1)
+
+        value, seconds = self._read_value_and_seconds(pvname, ctx)
+        assert value == 7.0
+        assert seconds >= before
+
+    def test_hand_built_type(self, basic_server: Server, ctx: Context):
+        pvname = "TEST:PUTTS:HB"
+        basic_server.add_pv(pvname, SharedNT(initial=Value(self._HAND_BUILT_TYPE, {"value": 1.0})))
+        basic_server.start()
+
+        before = int(time.time())
+        ctx.put(pvname, 7.0)
+        time.sleep(0.1)
+
+        value, seconds = self._read_value_and_seconds(pvname, ctx)
+        assert value == 7.0
+        assert seconds >= before

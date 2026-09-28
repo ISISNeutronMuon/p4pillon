@@ -45,25 +45,11 @@ class SharedPV(HandlerHooksMixin, _ThreadSharedPV):
         onto the event loop); both return a `concurrent.futures.Future`, so a
         handler can defer a post the same way regardless of flavor.
         """
-        fut: Future[None] = Future()
-
-        # Mirrors asyncio post_deferred: post() is synchronous, so a plain
-        # queued callback suffices, and every exception is routed to the
-        # Future rather than logged-and-swallowed by the queue's _on_queue.
-        def _post() -> None:
-            if not fut.set_running_or_notify_cancel():
-                return
-            try:
-                self.post(value, **kwargs)
-            except BaseException as exc:
-                fut.set_exception(exc)
-                if not isinstance(exc, Exception):
-                    raise
-            else:
-                fut.set_result(None)
-
-        self._queue.push(_post)
-        return fut
+        # post() is synchronous, so a plain queued callback suffices; the
+        # shared Future plumbing (routing every exception to the Future rather
+        # than letting the queue's _on_queue log-and-swallow it) lives in
+        # HandlerHooksMixin._deferred_post.
+        return self._deferred_post(self._queue.push, value, kwargs)
 
     def _exec(self, op: Any, fn: Callable[..., Any], *args: Any) -> None:
         """Run ``fn`` on the PV's work queue under ``_hook_lock``, so

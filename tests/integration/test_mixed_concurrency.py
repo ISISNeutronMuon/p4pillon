@@ -1,7 +1,6 @@
 import asyncio
 import sys
 import unittest
-from asyncio import sleep
 
 from p4p.client.asyncio import Context as AsyncioContext
 from p4p.client.thread import Context as ThreadContext
@@ -12,12 +11,12 @@ from p4pillon.nt import NTScalar
 from p4pillon.thread.sharednt import SharedNT as ThreadSharedNT
 
 
-class testMixedConcurrency(unittest.IsolatedAsyncioTestCase):
+class TestMixedConcurrency(unittest.IsolatedAsyncioTestCase):
     async def start_server(self):
         a = AsyncioSharedNT(nt=NTScalar("d"), initial=5.5)
         b = ThreadSharedNT(nt=NTScalar("d"), initial=9.9)
 
-        self.running = True
+        self._stop_event = asyncio.Event()
         with Server(
             providers=[
                 {
@@ -26,17 +25,20 @@ class testMixedConcurrency(unittest.IsolatedAsyncioTestCase):
                 }
             ]
         ):
-            while self.running:
-                await sleep(0.1)
+            await self._stop_event.wait()
 
     async def asyncSetUp(self):
         if sys.version_info >= (3, 11, 0):
             async with asyncio.timeout(delay=2):
-                asyncio.create_task(self.start_server())
+                self._server_task = asyncio.create_task(self.start_server())
                 await asyncio.sleep(0.1)
         else:
-            asyncio.create_task(self.start_server())
+            self._server_task = asyncio.create_task(self.start_server())
             await asyncio.sleep(0.1)
+
+    async def asyncTearDown(self):
+        self._stop_event.set()
+        await self._server_task
 
     async def test_asyncio(self):
         context = AsyncioContext("pva")
@@ -48,12 +50,8 @@ class testMixedConcurrency(unittest.IsolatedAsyncioTestCase):
 
         assert value == 5.5
 
-        self.running = False
-
     def test_thread(self):
         context = ThreadContext("pva")
         value = context.get("demo:b", timeout=1)
 
         assert value == 9.9
-
-        self.running = False

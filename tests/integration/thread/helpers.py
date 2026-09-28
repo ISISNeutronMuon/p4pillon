@@ -28,10 +28,7 @@ def put_different_value_scalar(ctx: Context, pvname: str) -> tuple[str | Any, fl
     >>> print(f"New value: {new_value}, Updated at: {timestamp}")
     """
     current_val = ctx.get(pvname).raw.todict()["value"]
-    if isinstance(current_val, str):
-        put_val = current_val + "1"
-    else:
-        put_val = current_val + 1
+    put_val = current_val + "1" if isinstance(current_val, str) else current_val + 1
     put_timestamp = time.time()
     ctx.put(pvname, put_val)
     time.sleep(0.1)

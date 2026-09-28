@@ -8,7 +8,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import ClassVar, Generic, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Generic, TypeVar
 from typing import SupportsFloat as Numeric  # Hack to type hint number types
 
 from p4pillon.definitions import (
@@ -22,11 +22,15 @@ from p4pillon.definitions import (
 )
 from p4pillon.nt import NTEnum, NTScalar
 from p4pillon.server.raw import SharedPV
-from p4pillon.sharednt import SharedNTMixin
 from p4pillon.utils import time_in_seconds_and_nanoseconds
+
+if TYPE_CHECKING:
+    from p4pillon.sharednt import SharedNTMixin
 
 NumericTypeT = TypeVar("NumericTypeT", int, Numeric)
 SharedPvT = TypeVar("SharedPvT", bound=SharedPV)
+
+_UNKNOWN_PVTYPE_MSG = "Unknown pvtype"
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +120,7 @@ class BasePVRecipe(ABC, Generic[SharedPvT]):
         self.config_settings["descriptor"] = self.description
 
     @abstractmethod
-    def create_pv(self, pv_name: str | None = None) -> SharedPvT:
+    def create_pv(self) -> SharedPvT:
         """Turn the recipe into an NT object with an array"""
 
         raise NotImplementedError
@@ -148,9 +152,7 @@ class BasePVRecipe(ABC, Generic[SharedPvT]):
             + f" Config settings are:\n {self.config_settings} \n Initial value:\n {self.initial_value}\n"
         )
 
-        kwargs = {}
-        for name, config in self.rule_configs.items():
-            kwargs[name] = config
+        kwargs = dict(self.rule_configs)
 
         logger.debug(debug_str)
 
@@ -188,7 +190,7 @@ class BasePVRecipe(ABC, Generic[SharedPvT]):
 class PVScalarRecipe(BasePVRecipe):
     """Recipe to build an NTScalar"""
 
-    def create_pv(self, pv_name: str | None = None) -> SharedPV:
+    def create_pv(self) -> SharedPV:
         """Turn the recipe into an actual NTScalar, NTEnum, or
         other BasePV derived object"""
 
@@ -201,7 +203,8 @@ class PVScalarRecipe(BasePVRecipe):
     def __post_init__(self):
         super().__post_init__()
         if self.pvtype != PVTypes.DOUBLE and self.pvtype != PVTypes.INTEGER and self.pvtype != PVTypes.STRING:
-            raise ValueError(f"Unsupported pv type {self.pvtype} for class {{self.__class__.__name__}}")
+            msg = f"Unsupported pv type {self.pvtype} for class {self.__class__.__name__}"
+            raise ValueError(msg)
 
     def set_control_limits(self, low: Numeric | None = None, high: Numeric | None = None, min_step=0):
         """
@@ -221,9 +224,10 @@ class PVScalarRecipe(BasePVRecipe):
                 high = MAX_INT32
             self.control = Control[int](limit_low=low, limit_high=high, min_step=min_step)
         elif self.pvtype == PVTypes.STRING:
-            raise SyntaxError("Control limits not supported on string PVs")
+            msg = "Control limits not supported on string PVs"
+            raise SyntaxError(msg)
         else:
-            raise ValueError("Unknown pvtype")
+            raise ValueError(_UNKNOWN_PVTYPE_MSG)
 
     def set_display_limits(
         self,
@@ -245,7 +249,8 @@ class PVScalarRecipe(BasePVRecipe):
                 idx = choices.index(format.title())
                 format = list(Format)[idx]
             except ValueError as e:
-                raise ValueError(f"{format} not an available format, choices are: {choices}") from e
+                msg = f"{format} not an available format, choices are: {choices}"
+                raise ValueError(msg) from e
 
         if self.pvtype == PVTypes.DOUBLE:
             if low is None:
@@ -272,9 +277,10 @@ class PVScalarRecipe(BasePVRecipe):
                 precision=precision,
             )
         elif self.pvtype == PVTypes.STRING:
-            raise SyntaxError("Display limits not supported on string PVs")
+            msg = "Display limits not supported on string PVs"
+            raise SyntaxError(msg)
         else:
-            raise ValueError("Unknown pvtype")
+            raise ValueError(_UNKNOWN_PVTYPE_MSG)
 
     def set_alarm_limits(
         self,
@@ -318,9 +324,10 @@ class PVScalarRecipe(BasePVRecipe):
                 high_alarm_limit=high_alarm,
             )
         elif self.pvtype == PVTypes.STRING:
-            raise SyntaxError("Alarm limits not supported on string PVs")
+            msg = "Alarm limits not supported on string PVs"
+            raise SyntaxError(msg)
         else:
-            raise ValueError("Unknown pvtype")
+            raise ValueError(_UNKNOWN_PVTYPE_MSG)
 
     def _config_display(self):
         # we configure the display settings if a Display object is configured or if all of
@@ -366,7 +373,7 @@ class PVScalarArrayRecipe(PVScalarRecipe):
     allowing for the definition of initial values, descriptions, and other properties.
     """
 
-    def create_pv(self, pv_name: str | None = None) -> SharedPV:
+    def create_pv(self) -> SharedPV:
         """Turn the recipe into an actual NTScalar with an array"""
 
         self._config_display()
@@ -389,10 +396,11 @@ class PVEnumRecipe(BasePVRecipe):
 
     def __post_init__(self):
         super().__post_init__()
-        if not self.pvtype == PVTypes.ENUM:
-            raise ValueError(f"Unsupported pv type {self.pvtype} for class {{self.__class__.__name__}}")
+        if self.pvtype != PVTypes.ENUM:
+            msg = f"Unsupported pv type {self.pvtype} for class {self.__class__.__name__}"
+            raise ValueError(msg)
 
-    def create_pv(self, pv_name: str | None = None) -> SharedPV:
+    def create_pv(self) -> SharedPV:
         """Turn the recipe into an actual NTEnum"""
 
         return super().build_pv()

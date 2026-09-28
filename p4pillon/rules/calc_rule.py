@@ -8,12 +8,13 @@ import logging
 import math as m
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from p4p import Value
 from simpleeval import ModuleWrapper, SimpleEval
 
 from .rules import BaseScalarRule, RulesFlow, SupportedNTTypes
 
 if TYPE_CHECKING:
+    from p4p import Value
+
     from p4pillon.server.server import Server
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ class CalcRule(BaseScalarRule):
             self._server: Server = server
             self._pv_name: str = pv_name
 
-        def cb(self, v: Value) -> None:
+        def cb(self, _v: Value) -> None:
             """This callback "cb" is part of the context.monitor() functionality.
             See https://epics-base.github.io/p4p/client.html#monitor for further information."""
             self._server.put_pv_value(self._pv_name, {})
@@ -124,14 +125,14 @@ class CalcRule(BaseScalarRule):
                     logger.error("Failed to get pv %s", pv_name)
                     return None
                 pvs.append(val)
-            except Exception:
+            except Exception:  # noqa: PERF203 -- per-item error handling around I/O, returns on first failure
                 # If there's an error getting the value of a pv return None
                 logger.exception("Failed to get pv %s", pv_name)
                 return None
 
         return pvs
 
-    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
+    def post_rule(self, _oldpvstate: Value, newpvstate: Value) -> RulesFlow:
         """
         Evaluate the calculation.
           The syntax for using pvs in the calc string is to use the pv array, e.g. 'pv[0]' to use the first variable

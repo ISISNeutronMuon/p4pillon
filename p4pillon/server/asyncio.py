@@ -69,22 +69,8 @@ class SharedPV(HandlerHooksMixin, _AsyncioSharedPV):
         backed by its work queue, so a handler can defer a post the same way
         regardless of flavor.
         """
-        fut: Future[None] = Future()
-
         # post() is synchronous, so a plain callback suffices -- no need for
         # the coroutine + Task that run_coroutine_threadsafe would allocate
-        # per post on this (by design, high-frequency) path.
-        def _post() -> None:
-            if not fut.set_running_or_notify_cancel():
-                return
-            try:
-                self.post(value, **kwargs)
-            except BaseException as exc:
-                fut.set_exception(exc)
-                if not isinstance(exc, Exception):
-                    raise
-            else:
-                fut.set_result(None)
-
-        self.loop.call_soon_threadsafe(_post)
-        return fut
+        # per post on this (by design, high-frequency) path. The shared Future
+        # plumbing lives in HandlerHooksMixin._deferred_post.
+        return self._deferred_post(self.loop.call_soon_threadsafe, value, kwargs)

@@ -19,9 +19,12 @@ from p4pillon.definitions import PVTypes
 
 
 def _run(script: str) -> subprocess.CompletedProcess:
+    # S603: script is always a hardcoded literal from this module, never untrusted input.
     # check=False: callers assert on returncode so the script's own output
     # reaches the assertion message.
-    return subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False)
+    return subprocess.run(  # noqa: S603
+        [sys.executable, "-c", script], capture_output=True, text=True, check=False
+    )
 
 
 def test_asyncio_sharednt_is_not_the_thread_sharednt():
@@ -42,7 +45,7 @@ def test_thread_pvrecipe_builds_thread_sharedpv():
     backed by p4p's thread SharedPV, not the asyncio one."""
     from p4pillon.thread.pvrecipe import PVScalarRecipe
 
-    pv = PVScalarRecipe(PVTypes.DOUBLE, "test", 1.0).create_pv("X:test:thread")
+    pv = PVScalarRecipe(PVTypes.DOUBLE, "test", 1.0).create_pv()
 
     assert isinstance(pv, ThreadSharedPV)
     assert not isinstance(pv, AsyncioSharedPV)
@@ -54,10 +57,29 @@ async def test_asyncio_pvrecipe_builds_asyncio_sharedpv():
     coroutine since asyncio SharedPV construction needs a running loop."""
     from p4pillon.asyncio.pvrecipe import PVScalarRecipe
 
-    pv = PVScalarRecipe(PVTypes.DOUBLE, "test", 1.0).create_pv("X:test:asyncio")
+    pv = PVScalarRecipe(PVTypes.DOUBLE, "test", 1.0).create_pv()
 
     assert isinstance(pv, AsyncioSharedPV)
     assert not isinstance(pv, ThreadSharedPV)
+
+
+def test_records_asyncio_probe_does_not_disable_hooks():
+    """The former monkey-patch could even be defeated by p4pillon itself:
+    p4pillon.server.records.dynamic._check_pv_factory_is_safe imports
+    p4p.server.asyncio directly, which used to freeze the unpatched base
+    class if it ran before p4pillon.server.asyncio was first imported."""
+    script = """
+from p4pillon.server.records.dynamic import _check_pv_factory_is_safe
+class Dummy:
+    pass
+_check_pv_factory_is_safe(Dummy)
+from p4pillon.server.asyncio import SharedPV
+from p4pillon.server.raw import HandlerHooksMixin
+assert issubclass(SharedPV, HandlerHooksMixin)
+print('OK')
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_unflavored_pvrecipe_fails_loudly():
@@ -67,8 +89,8 @@ def test_unflavored_pvrecipe_fails_loudly():
     the flavors' serialization)."""
     from p4pillon.pvrecipe import PVScalarRecipe
 
-    with pytest.raises(TypeError, match="thread.pvrecipe"):
-        PVScalarRecipe(PVTypes.DOUBLE, "test", 1.0).create_pv("X:test:unflavored")
+    with pytest.raises(TypeError, match=r"thread\.pvrecipe"):
+        PVScalarRecipe(PVTypes.DOUBLE, "test", 1.0).create_pv()
 
 
 def test_handler_hooks_survive_p4p_imported_first():

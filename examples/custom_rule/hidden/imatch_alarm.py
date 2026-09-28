@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class IMatchRule(BaseRule):
     name = "imatch"
-    fields: ClassVar[list] = ["alarm"]
+    fields: ClassVar[list[str] | None] = ["alarm"]
 
     def __init__(self, imatch: int | None = None):
         self._imatch = imatch

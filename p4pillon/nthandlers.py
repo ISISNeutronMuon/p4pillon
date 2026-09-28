@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
-from p4p import Value
-from p4p.server import ServerOperation
-
-from p4pillon.composite_handler import AbortHandlerException
+from p4pillon.composite_handler import AbortHandlerError
 from p4pillon.rules import BaseRule, RulesFlow
 from p4pillon.server.raw import Handler, SharedPV
-from p4pillon.utils import overwrite_unmarked
+from p4pillon.utils import as_raw, overwrite_unmarked
+
+if TYPE_CHECKING:
+    from p4p import Value
+    from p4p.server import ServerOperation
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +35,7 @@ class ComposeableRulesHandler(Handler):
         """Handler call by a post operation, requires support from SharedPV derived class"""
         logger.debug("In handler post()")
 
-        try:
-            pv_value = pv.current().raw
-        except AttributeError:
-            pv_value = pv.current()
+        pv_value = as_raw(pv.current())
 
         overwrite_unmarked(pv_value, value)
 
@@ -49,20 +48,15 @@ class ComposeableRulesHandler(Handler):
         """
         logger.debug("In handler put()")
 
-        # Maybe risky to do the try except in this form, but presumably the
-        # types of pv and op will match?
-        try:
-            pv_value = pv.current().raw
-            op_value = op.value().raw
-        except AttributeError:
-            pv_value = pv.current()
-            op_value = op.value()
+        # Unwrap each of pv/op independently -- see as_raw().
+        pv_value = as_raw(pv.current())
+        op_value = as_raw(op.value())
 
         overwrite_unmarked(pv_value, op_value)
 
         rules_flow = self.rule.put_rule(pv_value, op_value, op)
         if rules_flow == RulesFlow.ABORT:
-            raise AbortHandlerException(rules_flow.error)
+            raise AbortHandlerError(rules_flow.error)
 
     @property
     def read_only(self) -> bool:

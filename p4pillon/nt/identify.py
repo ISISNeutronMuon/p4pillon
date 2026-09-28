@@ -99,9 +99,7 @@ def id_nttype_type(type_to_id: Type) -> NTType:
         (nttable_required, NTType.NTTABLE),
     ]
 
-    nttype = matchtype(type_to_id, tests)
-
-    return nttype
+    return matchtype(type_to_id, tests)
 
 
 def matchtype(type_to_id: Type, potential_matches: NTTypeIds) -> NTType:

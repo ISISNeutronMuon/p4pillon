@@ -36,7 +36,7 @@ class UserReportHandler(Handler):
     Simply prints the user account attempting to perform a put operation.
     """
 
-    def put(self, pv: SharedNT, op: ServerOperation):
+    def put(self, _pv: SharedNT, op: ServerOperation):
         print(f"Operation attempted by user {op.account()} on pv {op.name()}")
 
 
@@ -52,7 +52,7 @@ class HWWriteHandler(Handler):
     def __init__(self, hardware: SimulatedHardware):
         self.hardware = hardware
 
-    def post(self, pv: SharedNT, value: Value):
+    def post(self, _pv: SharedNT, value: Value):
         if value.changed("value"):
             self.hardware.value = value["value"]
 

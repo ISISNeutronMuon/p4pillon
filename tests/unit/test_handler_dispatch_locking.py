@@ -72,7 +72,7 @@ def _run_post_vs_worker_load(*, neutered: bool = False) -> MutexProbe:
     probe = MutexProbe()
 
     class ProbeHandler:
-        def post(self, pv: Any, value: Any) -> None:
+        def post(self, _pv: Any, _value: Any) -> None:
             probe.enter()
 
     pv = ThreadSharedPV(handler=ProbeHandler(), nt=NTScalar("d"), initial=0.0)
@@ -161,7 +161,7 @@ class TestCompositeHandlerSharedAcrossPVs:
         probe = MutexProbe()
 
         class ProbeRule(Handler):
-            def post(self, pv: Any, value: Any) -> None:
+            def post(self, _pv: Any, _value: Any) -> None:
                 probe.enter()
 
         shared = CompositeHandler()

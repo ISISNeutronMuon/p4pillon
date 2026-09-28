@@ -19,8 +19,8 @@ class AlarmNTEnumRule(AlarmRule):
     """
 
     name = "alarmNTEnum"
-    nttypes: ClassVar[list] = [SupportedNTTypes.NTENUM]
-    fields: ClassVar[list] = ["alarm"]
+    nttypes: ClassVar[list[SupportedNTTypes] | None] = [SupportedNTTypes.NTENUM]
+    fields: ClassVar[list[str] | None] = ["alarm"]
 
     def __init__(self, alarms: dict[str, AlarmDict] | None = None):
         super().__init__()

@@ -13,11 +13,11 @@ pv = SharedNT(
     initial={"value": 4.5, "valueAlarm.active": True, "valueAlarm.highAlarmLimit": 17},
 )  # setting initial value also open()'s
 
-myServer = Server(prefix="DEV:")
-myServer._pvs["demo:pv:name"] = pv
-myServer.start()
+my_server = Server(prefix="DEV:")
+my_server._pvs["demo:pv:name"] = pv
+my_server.start()
 
-print(myServer.pvlist)
+print(my_server.pvlist)
 
 try:
     while True:
@@ -28,4 +28,4 @@ try:
 except KeyboardInterrupt:
     pass
 finally:
-    myServer.stop()
+    my_server.stop()

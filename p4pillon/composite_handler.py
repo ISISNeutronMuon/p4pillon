@@ -9,18 +9,21 @@ from __future__ import annotations
 
 import threading
 from collections import OrderedDict
-
-from p4p import Value
-from p4p.server import ServerOperation
+from typing import TYPE_CHECKING
 
 from p4pillon.server.raw import Handler, SharedPV
+from p4pillon.utils import as_raw
+
+if TYPE_CHECKING:
+    from p4p import Value
+    from p4p.server import ServerOperation
 
 
-class HandlerException(Exception):
+class HandlerError(Exception):
     """Exception raised for errors in the handler operations."""
 
 
-class AbortHandlerException(HandlerException):
+class AbortHandlerError(HandlerError):
     """Exception raised to abort the current operation in the handler."""
 
     def __init__(self, message: str = "Operation aborted"):
@@ -56,14 +59,20 @@ class CompositeHandler(Handler, OrderedDict):
                 getattr(handler, hook)(*args)
 
     def _dispatch_abortable(self, hook: str, pv: SharedPV, op: ServerOperation) -> str | None:
-        """As `_dispatch`, but stop at the first `AbortHandlerException` and
+        """As `_dispatch`, but stop at the first `AbortHandlerError` and
         return its message (None if no handler aborted)."""
         with self._lock:
-            for handler in self.values():
-                try:
-                    getattr(handler, hook)(pv, op)
-                except AbortHandlerException as e:
-                    return e.message
+            return self._dispatch_abortable_locked(hook, pv, op)
+
+    def _dispatch_abortable_locked(self, hook: str, pv: SharedPV, op: ServerOperation) -> str | None:
+        """`_dispatch_abortable`'s body, assuming the handler lock is already
+        held -- `put` calls this directly under the lock it already holds
+        across the following `pv.post()`, avoiding a redundant re-entry."""
+        for handler in self.values():
+            try:
+                getattr(handler, hook)(pv, op)
+            except AbortHandlerError as e:  # noqa: PERF203 -- per-item error handling, breaks on first failure
+                return e.message
         return None
 
     def open(self, value: Value):
@@ -76,12 +85,20 @@ class CompositeHandler(Handler, OrderedDict):
             return
 
         with self._lock:
-            errmsg = self._dispatch_abortable("put", pv, op)
+            errmsg = self._dispatch_abortable_locked("put", pv, op)
 
             # pv.post() safely re-enters this lock; it must stay inside so
             # the handler rules and the store are one atomic unit.
             if errmsg is None:
-                pv.post(op.value())
+                # Post the raw Value, not the unwrapped op.value(). For an
+                # NT-typed PV op.value() is an ntwrappercommon carrying a
+                # `.timestamp`; re-wrapping it in pv.post() runs
+                # NTScalar.wrap -> _annotate, which re-marks timeStamp as
+                # changed even when the client only touched `value` (see
+                # TimestampRule.init_rule). Posting `.raw` keeps the client's
+                # own changed-set intact. as_raw() falls back to op.value()
+                # itself for a hand-built (non-NT) Type, which has no unwrapper.
+                pv.post(as_raw(op.value()))
 
         # op.done() touches no handler state, so it runs outside the lock.
         # error=None is the success case, matching rpc() below.
@@ -97,14 +114,14 @@ class CompositeHandler(Handler, OrderedDict):
         """Called when the first client connects to the PV."""
         self._dispatch("onFirstConnect", pv)
 
-    def onFirstConnect(self, pv: Value):
+    def onFirstConnect(self, pv: Value):  # noqa: N802 - mandated by the p4p Handler protocol
         self.on_first_connect(pv)
 
     def on_last_disconnect(self, pv: SharedPV):
         """Called when the last client channel is closed."""
         self._dispatch("onLastDisconnect", pv)
 
-    def onLastDisconnect(self, pv: Value):
+    def onLastDisconnect(self, pv: Value):  # noqa: N802 - mandated by the p4p Handler protocol
         self.on_last_disconnect(pv)
 
     def close(self, pv: SharedPV):

@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from p4pillon.definitions import PVTypes
-from p4pillon.pvrecipe import BasePVRecipe
-from p4pillon.server.server import Server
 from p4pillon.thread.pvrecipe import PVEnumRecipe, PVScalarArrayRecipe, PVScalarRecipe
+
+if TYPE_CHECKING:
+    from p4pillon.pvrecipe import BasePVRecipe
+    from p4pillon.server.server import Server
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +31,7 @@ def parse_config_file(filename: str, server: Server | None = None) -> dict[str, 
     Optionally add the pvs to a server if server != None
     """
     pvconfigs = {}
-    with open(filename, encoding="utf8") as f:
+    with Path(filename).open(encoding="utf8") as f:
         pvconfigs = yaml.load(f, yaml.SafeLoader)
 
     return parse_config(pvconfigs, server)
@@ -93,9 +96,11 @@ def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
 
     # Check that type and description are specified, absence is a syntax error
     if "type" not in pvdetails:
-        raise SyntaxError(f"'type' not specified in record {pvname}")
+        msg = f"'type' not specified in record {pvname}"
+        raise SyntaxError(msg)
     if "description" not in pvdetails:
-        raise SyntaxError(f"'description' not specified in record {pvname}")
+        msg = f"'description' not specified in record {pvname}"
+        raise SyntaxError(msg)
 
     initial = pvdetails.get("initial")
     array_size = pvdetails.get("array_size", 1)
@@ -104,17 +109,12 @@ def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
         # If it's a number set it to 0, if it's a string make it empty
         # If it's something else an initial value needs to be supplied
         if pvtype == "DOUBLE" or pvtype == "INTEGER":
-            if array_size > 1:
-                initial = [0] * array_size
-            else:
-                initial = 0
+            initial = [0] * array_size if array_size > 1 else 0
         elif pvtype == "STRING":
-            if array_size > 1:
-                initial = [""] * array_size
-            else:
-                initial = ""
+            initial = [""] * array_size if array_size > 1 else ""
         else:
-            raise SyntaxError(f"for PV {pvname} of type '{pvtype}' an initial value must be supplied")
+            msg = f"for PV {pvname} of type '{pvtype}' an initial value must be supplied"
+            raise SyntaxError(msg)
 
     if isinstance(initial, list):
         pvrecipe = PVScalarArrayRecipe(PVTypes[pvdetails["type"]], pvdetails["description"], initial)

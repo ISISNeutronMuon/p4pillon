@@ -7,20 +7,20 @@ are implementations of the logic of Normative Type
 # TODO: Consider adding Authentication class / callback for puts
 from __future__ import annotations
 
-import itertools
 import logging
 from abc import ABC, abstractmethod
-from copy import deepcopy
 from enum import IntEnum, auto
 from functools import wraps
-from typing import Any  # Hack to type hint number types
+from typing import TYPE_CHECKING, Any, ClassVar  # Hack to type hint number types
 
 from p4p import Type, Value
-from p4p.server import ServerOperation
 from p4p.server.raw import ServOpWrap
 
-from p4pillon.nt.identify import NTType
+from p4pillon.nt.identify import NTType, id_nttype
 from p4pillon.utils import overwrite_marked
+
+if TYPE_CHECKING:
+    from p4p.server import ServerOperation
 
 logger = logging.getLogger(__name__)
 
@@ -134,10 +134,12 @@ def check_applicable(func):
             elif isinstance(args[1], ServOpWrap):
                 newpvstate = args[1].value().raw
             else:
-                raise TypeError("Type of second argument must be either Value or ServerOperation, is", type(args[1]))
+                msg = f"Type of second argument must be either Value or ServerOperation, is {type(args[1])}"
+                raise TypeError(msg)
 
         else:
-            raise TypeError(f"Expected 1 or 2 arguments, received {len(args)}")
+            msg = f"Expected 1 or 2 arguments, received {len(args)}"
+            raise TypeError(msg)
 
         # Then check if applicable and if not return a CONTINUE to short-circuit this rule
         if not self.is_applicable(newpvstate):
@@ -163,22 +165,22 @@ class BaseRule(ABC):
     # These class variables are required to support introspection by NTScalar.
     # The intention is that they will be overridden in derived classes.
 
-    name: str | None = None
-    """ A string setting the name of the class. None is used to indicate it is unset. 
-        This name is used to access the Handler / Rule through the CompositeHandler. 
+    name: ClassVar[str | None] = None
+    """ A string setting the name of the class. None is used to indicate it is unset.
+        This name is used to access the Handler / Rule through the CompositeHandler.
         It also provides a human-readable name for the rule used in error and debug messages
         This variable MUST be set appropriately in each derived class."""
 
-    nttypes: list[SupportedNTTypes] | None = None
-    """ 
+    nttypes: ClassVar[list[SupportedNTTypes] | None] = None
+    """
     A list of SupportedNTTypes. This may be used to restict a Rule to only apply to the
     specified NTTypes, e.g. NTScalar and NTScalarArray. In general use of fields should be
-    preferred. At this time an empty list signal thats the Rule may apply to all types; 
-    this may be revised in future. This may be made more explicit through the use of 
+    preferred. At this time an empty list signal thats the Rule may apply to all types;
+    this may be revised in future. This may be made more explicit through the use of
     SupportedNTTypes.ALL.
     """
 
-    fields: list[str] | None = None
+    fields: ClassVar[list[str] | None] = None
     """
     Fields required to be present for the Rule to apply. For example, a timestamp Rule
     requires that there be a timeStamp field. Currently this is a list of strings, but
@@ -188,16 +190,23 @@ class BaseRule(ABC):
     have been changed.
     """
 
-    wrap_for_array = False
+    wrap_for_array: ClassVar[bool] = False
     """
     Signals that a Rule needs to use the ScalarToArrayWrapperRule class to make it applicable
     to an NTScalarArray.
     """
 
-    add_automatically = True
+    add_automatically: ClassVar[bool] = True
     """
     Signals that a Rule is able to fully automatically configure itself. Generally, if a
     Rule requires constructor settings to function it must set this to False.
+    """
+
+    run_last: ClassVar[bool] = False
+    """
+    Signals that this Rule must be ordered after every other handler in the
+    CompositeHandler, including user handlers. The timestamp rule sets this so
+    the stored value carries the time it was finalised.
     """
 
     # Often we want to make the fields associated with a rule readonly for put
@@ -210,7 +219,26 @@ class BaseRule(ABC):
     def __init__(self, **kwargs):
         pass
 
-    # TODO: Consider using lru_cache but be aware of https://rednafi.com/python/lru_cache_on_methods/
+    @classmethod
+    def applies_to(cls, nttype: Type) -> bool:
+        """Setup-time test: should this Rule be attached to a PV of this Type?
+
+        Evaluated once, when the PV is built, to decide whether the Rule is
+        added to the CompositeHandler at all. It considers only the Rule's
+        declared `nttypes` and `fields` against the PV's static `Type`. This is
+        distinct from `is_applicable`, which is the per-operation runtime check
+        against a concrete `Value`.
+        """
+        # `nttypes` restricts the Rule to particular Normative Types. An empty
+        # list (or one including SupportedNTTypes.ALL) means "any type".
+        if cls.nttypes and SupportedNTTypes.ALL not in cls.nttypes and id_nttype(nttype) not in cls.nttypes:
+            return False
+
+        # Every field the Rule declares must be present in the Type's structure.
+        return not cls.fields or all(field in nttype for field in cls.fields)
+
+    # Not cached: a fresh mutable Value arrives per operation, so there are no
+    # cache hits, and lru_cache on a method would leak self.
     def is_applicable(self, newpvstate: Value) -> bool:
         """Test whether the Rule should be applied."""
 
@@ -224,14 +252,14 @@ class BaseRule(ABC):
 
         # Then check if any of the fields required are changed
         # If they aren't changed then the rule shouldn't have anything to do!
-        test_fields = deepcopy(self.fields)
-        if "value" not in test_fields:
-            test_fields.append("value")
+        # `self.fields` is a list of strings; build a fresh list rather than
+        # deep-copying, and never mutate `self.fields` in place.
+        test_fields = self.fields if "value" in self.fields else [*self.fields, "value"]
 
         return any(newpvstate.changed(x) for x in test_fields)
 
     @check_applicable_init
-    def init_rule(self, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
+    def init_rule(self, _newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
         """
         Rule that only needs to consider the potential future state of a PV.
         Consider implementing if this rule could apply to a newly initialised PV.
@@ -241,7 +269,7 @@ class BaseRule(ABC):
         return RulesFlow.CONTINUE
 
     @check_applicable_post
-    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
+    def post_rule(self, _oldpvstate: Value, newpvstate: Value) -> RulesFlow:  # pylint: disable=unused-argument
         """
         Rule that needs to consider the current and potential future state of a PV.
         Usually this will involve a post where the oldpvstate is actually the current
@@ -356,9 +384,7 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
         val_aspy = arrayval.type().aspy()
         val_type = dict(val_aspy[2])  # extract the actual structure recipe
         val_type["value"] = val_type["value"][1:]  # change the value type to a scalar
-        val_type = list(val_type.items())  # back to a list
-
-        return val_type
+        return list(val_type.items())  # back to a list
 
     def _value_without_value(self, arrayval: Value, index: int | None = None) -> dict[str, Any]:
         # It would be straightforward to use arrayval.todict() but the value
@@ -382,6 +408,22 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
             pass
 
         return val_dict
+
+    @staticmethod
+    def _elements(arrayval: Value) -> list[Any]:
+        """The elements of an NTScalarArray's value as plain Python scalars.
+
+        Two p4p quirks make this necessary. An array with no elements comes back
+        as ``None`` rather than an empty sequence, so iterating it directly raises
+        ``TypeError``. And the elements are numpy scalars, which p4p will not
+        always accept back into a scalar field of the same type -- assigning a
+        ``numpy.uint64`` to a ``uint64`` field raises "an integer is required".
+        ``tolist()`` converts to the Python built-ins p4p does accept.
+        """
+        values = arrayval["value"]
+        if values is None:
+            return []
+        return values.tolist() if hasattr(values, "tolist") else list(values)
 
     def scalarise(self, arrayval: Value, index: int | None = None) -> Value:
         """
@@ -408,67 +450,49 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
         if self.fields and all(x in array_value for x in self.fields):
             overwrite_marked(array_value, scalar_value, self.fields)
 
-    @check_applicable_init
-    def init_rule(self, newpvstate: Value) -> RulesFlow:
-        # Convert the new Value into scalar versions
-        scalared_new_state = self.scalarise(newpvstate)
-
-        gathered_value = self.scalarise(newpvstate)
-        if isinstance(self._wrapped, BaseGatherableRule):
-            self._wrapped.gather_init(gathered_value)
-
-        # Loop through the array values applying the rules to each individual value
-        newvals = []  # Use Ajit's trick to bypass the readonly value
-        net_rule_flow = RulesFlow.CONTINUE
-        for new_value in newpvstate["value"]:
-            scalared_new_state["value"] = new_value
-
-            rule_flow = self._wrapped.init_rule(scalared_new_state)
-            if rule_flow == RulesFlow.ABORT:
-                return RulesFlow.ABORT
-
-            net_rule_flow = max(net_rule_flow, rule_flow)
-
-            if isinstance(self._wrapped, BaseGatherableRule):
-                self._wrapped.gather(scalared_new_state, gathered_value)
-
-            newvals.append(scalared_new_state["value"])
-
-        # Apply what was gathered
-        newpvstate["value"] = newvals
-        self._apply_gather(newpvstate, gathered_value)
-
-        return net_rule_flow
-
     # NOTE: Performance will be terrible! Every rule and every value has to be iterated every time!
-    # TODO: What's the correct behaviour if the new and old PV states have different lengths?
     # TODO: What is the correct behaviour for a Control Rule if the array size increases?
     # TODO: What if the Value["value"] has not changed?
-    @check_applicable_post
-    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
+    def _apply_elementwise(self, newpvstate: Value, oldpvstate: Value | None = None) -> RulesFlow:
+        """Run the wrapped scalar rule over every element of the array.
+
+        With no ``oldpvstate`` the wrapped rule's ``init_rule`` is applied to each
+        element; otherwise its ``post_rule`` is, paired with the element that was
+        previously at the same index. Either way each element's verdict is gathered
+        into a single result for the array and the net flow is the strongest any
+        element returned.
+        """
         # Convert the current Value and new Value into scalar versions
-        scalared_current_state = self.scalarise(oldpvstate)
+        scalared_current_state = self.scalarise(oldpvstate) if oldpvstate is not None else None
         scalared_new_state = self.scalarise(newpvstate)
 
         gathered_value = self.scalarise(newpvstate)
         if isinstance(self._wrapped, BaseGatherableRule):
             self._wrapped.gather_init(gathered_value)
 
+        # The new array decides how many elements there are: one that has grown has
+        # no previous value for its new elements, and one that has shrunk has nothing
+        # left to check at the indices it dropped.
+        old_values = self._elements(oldpvstate) if oldpvstate is not None else []
+
         # Loop through the array values applying the rules to each individual value
         newvals = []  # Use Ajit's trick to bypass the readonly value
         net_rule_flow = RulesFlow.CONTINUE
-        for old_value, new_value in itertools.zip_longest(oldpvstate["value"], newpvstate["value"]):
-            if old_value is not None:
-                scalared_current_state["value"] = old_value
-            else:
-                scalared_current_state = None
-
+        for index, new_value in enumerate(self._elements(newpvstate)):
             scalared_new_state["value"] = new_value
 
-            rule_flow = self._wrapped.post_rule(scalared_current_state, scalared_new_state)
+            if scalared_current_state is None:
+                rule_flow = self._wrapped.init_rule(scalared_new_state)
+            else:
+                current_state = None
+                if index < len(old_values):
+                    scalared_current_state["value"] = old_values[index]
+                    current_state = scalared_current_state
+                rule_flow = self._wrapped.post_rule(current_state, scalared_new_state)
 
             if rule_flow == RulesFlow.ABORT:
                 return RulesFlow.ABORT
+
             net_rule_flow = max(net_rule_flow, rule_flow)
 
             if isinstance(self._wrapped, BaseGatherableRule):
@@ -481,3 +505,11 @@ class ScalarToArrayWrapperRule(BaseArrayRule):
         self._apply_gather(newpvstate, gathered_value)
 
         return net_rule_flow
+
+    @check_applicable_init
+    def init_rule(self, newpvstate: Value) -> RulesFlow:
+        return self._apply_elementwise(newpvstate)
+
+    @check_applicable_post
+    def post_rule(self, oldpvstate: Value, newpvstate: Value) -> RulesFlow:
+        return self._apply_elementwise(newpvstate, oldpvstate)

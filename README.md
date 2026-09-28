@@ -39,32 +39,32 @@ p4p only allows a single `Handler` class to be associated with a `SharedPV`. To 
 The `config_reader` parses a YAML file in order to construct `SharedNT` PVs which are managed by the p4pillon `Server`. This is the simplest way to create and configure 
 
 ## Testing
-Install the extra dependencies required for testing using `pip install .[test]` or similar.
+Install the extra dependencies required for testing and development using `uv sync` (this installs the `dev` dependency group, which includes `test` and `dist`). To install only the `test` group, use `uv sync --group test`.
 
 To run tests invoke [pytest](https://docs.pytest.org/en/latest/):
 
 ```console
-$ python -m pytest tests
+$ uv run pytest
 ```
 or to run all tests and output a coverage report:
 ```
-$ uv run --extra=test python -m coverage run --source=. -m pytest -x tests
-$ uv run --extra=test python -m coverage report
+$ uv run coverage run -m pytest
+$ uv run coverage report
 ```
 
 ### Linting and Formatting
-This repository's CI/CD pipeling (using GitHub Actions) checks that source code meets PEP 8, and other more stringent, coding standards. This uses the [ruff](https://docs.astral.sh/ruff/) linter and code formatter. It is included in the `.[test] dependencies (see above) and may be manually invoked:
+This repository's CI/CD pipeling (using GitHub Actions) checks that source code meets PEP 8, and other more stringent, coding standards. This uses the [ruff](https://docs.astral.sh/ruff/) linter and code formatter. It is included in the `test` dependency group (see above) and may be manually invoked:
 
 ```console
-$ ruff check --fix
-$ ruff format
+$ uv run ruff check --fix
+$ uv run ruff format
 ```
 
 ## Releases
-The release process requires use of the `.[dist]` dependencies, which may be installed with `pip install .[dist]`. A build may then be triggered with `python -m build`. Alternatively, use:
+The release process requires use of the `dist` dependency group, which may be installed with `uv sync --group dist`. A build may then be triggered with `python -m build`. Alternatively, use:
 
 ```console
-$ uv run --extra=dist python -m build
+$ uv run --group=dist python -m build
 ```
 
 Publication to either PyPi or TestPyPI is performed automatically via CI/CD (i.e. GitHub Actions) and is driven by tags. Any commit intended for package publication must be tagged with a unique tag, and the semantic version must be greater than any existing tag. 
