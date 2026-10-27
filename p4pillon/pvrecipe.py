@@ -147,6 +147,11 @@ class BasePVRecipe(ABC, Generic[SharedPvT]):
             )
             raise TypeError(msg)
 
+        if hasattr(self, "open_in_error_state") and self.open_in_error_state is True:
+            self.config_settings["alarm.status"] = 1
+            self.config_settings["alarm.severity"] = 3
+            self.config_settings["alarm.message"] = "PV opened in an undefined state."
+
         debug_str = (
             f"Building pv\n Construct settings are: \n {self.construct_settings} \n"
             + f" Config settings are:\n {self.config_settings} \n Initial value:\n {self.initial_value}\n"

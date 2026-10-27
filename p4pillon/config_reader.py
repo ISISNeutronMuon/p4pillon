@@ -116,7 +116,10 @@ def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
             msg = f"for PV {pvname} of type '{pvtype}' an initial value must be supplied"
             raise SyntaxError(msg)
 
-    if isinstance(initial, list):
+    if isinstance(initial, list) or array_size > 1:
+        if not isinstance(initial, list):
+            # Assume same value for all array elements
+            initial = array_size * [initial]
         pvrecipe = PVScalarArrayRecipe(PVTypes[pvdetails["type"]], pvdetails["description"], initial)
     elif pvtype == "ENUM":
         pvrecipe = PVEnumRecipe(PVTypes[pvdetails["type"]], pvdetails["description"], initial)
@@ -141,6 +144,8 @@ def process_config(pvname: str, pvdetails: dict[str, Any]) -> BasePVRecipe:
         pvrecipe.set_display_limits(**get_field_config(pvdetails, "display"))
     if "valueAlarm" in pvdetails:
         pvrecipe.set_alarm_limits(**get_field_config(pvdetails, "valueAlarm"))
+    if "open_in_error_state" in pvdetails:
+        pvrecipe.open_in_error_state = pvdetails["open_in_error_state"]
 
     return pvrecipe
 
